@@ -1,7 +1,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Cloudflare терминирует HTTPS и ходит на origin по HTTP:80 (режим SSL «Flexible»),
-# поэтому слушаем ТОЛЬКО HTTP и НЕ запрашиваем сертификаты — ACME (Let's Encrypt)
-# из РФ-сети не проходит. HTTPS для посетителя обеспечивает Cloudflare.
+# Свой сертификат: Caddy сам получает и обновляет HTTPS (Let's Encrypt) для
+# каждого домена — без Cloudflare-прокси между посетителем и сервером. Домены
+# в Cloudflare должны стоять в режиме DNS only (серое облако), не Proxied,
+# иначе ACME-проверка (HTTP-01, порт 80) не дойдёт до этого сервера.
 #
 # Маршрутизация по имени хоста:
 #   chailand.org        → статический сайт-лендинг парка (репозиторий gabrileon)
@@ -10,8 +11,12 @@
 #   admin.chailand.org  → админ-панель / касса (Node-приложение app:4000)
 # ─────────────────────────────────────────────────────────────────────────────
 
+{
+	email Chailanddr.@mail.com
+}
+
 # Публичный сайт-лендинг парка (статические файлы из папки ./site).
-http://chailand.org {
+chailand.org {
 	encode gzip
 	# Заявки с форм сайта → в приложение (тот же origin, без CORS).
 	@publicapi path /api/public/*
@@ -24,17 +29,17 @@ http://chailand.org {
 }
 
 # Короткий адрес личного кабинета: lk.chailand.org → chailand.org/lk/
-http://lk.chailand.org {
+lk.chailand.org {
 	redir https://chailand.org/lk/ permanent
 }
 
 # www → без www
-http://www.chailand.org {
+www.chailand.org {
 	redir https://chailand.org{uri} permanent
 }
 
 # Админ-панель и касса.
-http://admin.chailand.org {
+admin.chailand.org {
 	encode gzip
 	reverse_proxy app:4000
 }
