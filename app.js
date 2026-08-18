@@ -1013,7 +1013,8 @@
       renderLocSettings();
       fillDashLocation();
       // Первый запуск на кассе: если ТЦ не выбран, а точки есть — просим выбрать.
-      if (LOCS.length && !deviceLoc()) openLocPicker(true);
+      // Владельца не просим: ему нужны данные сразу по обеим точкам, а не касса одного ТЦ.
+      if (LOCS.length && !deviceLoc() && (!ME || ME.role !== 'owner')) openLocPicker(true);
       return LOCS;
     }).catch(function () {});
   }
@@ -1031,7 +1032,9 @@
       host.appendChild(b);
     }
     var cur = deviceLoc();
-    b.innerHTML = '📍 ' + (cur ? locEsc(locName(cur) || 'ТЦ?') : '<span style="color:#dc2626">Выберите ТЦ</span>');
+    var label = cur ? locEsc(locName(cur) || 'ТЦ?')
+      : (ME && ME.role === 'owner' ? 'Все ТЦ' : '<span style="color:#dc2626">Выберите ТЦ</span>');
+    b.innerHTML = '📍 ' + label;
   }
 
   // Модалка выбора ТЦ для этой кассы
