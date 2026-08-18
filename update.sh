@@ -5,7 +5,7 @@
 # Данные (база в томе pgdata) при этом НЕ трогаются.
 set -e
 cd "$(dirname "$0")"
-BRANCH=claude/gabrileona-github-setup-rhlxn1
+BRANCH=main
 
 echo "==> 1/5 Забираю свежий код ($BRANCH)..."
 git fetch origin "$BRANCH"
