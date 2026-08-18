@@ -1,0 +1,46 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Cloudflare терминирует HTTPS и ходит на origin по HTTP:80 (режим SSL «Flexible»),
+# поэтому слушаем ТОЛЬКО HTTP и НЕ запрашиваем сертификаты — ACME (Let's Encrypt)
+# из РФ-сети не проходит. HTTPS для посетителя обеспечивает Cloudflare.
+#
+# Маршрутизация по имени хоста:
+#   chailand.org        → статический сайт-лендинг парка (репозиторий gabrileon)
+#   chailand.org/lk     → клиентское приложение «личный кабинет» (PWA, app:4000)
+#   lk.chailand.org     → короткий вход в личный кабинет (redirect на /lk)
+#   admin.chailand.org  → админ-панель / касса (Node-приложение app:4000)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Публичный сайт-лендинг парка (статические файлы из папки ./site).
+http://chailand.org {
+	encode gzip
+	# Заявки с форм сайта → в приложение (тот же origin, без CORS).
+	@publicapi path /api/public/*
+	reverse_proxy @publicapi app:4000
+	# Клиентское приложение (личный кабинет) и его API → приложение.
+	@lk path /lk /lk/* /api/client/*
+	reverse_proxy @lk app:4000
+	root * /srv/site
+	file_server
+}
+
+# Короткий адрес личного кабинета: lk.chailand.org → chailand.org/lk/
+http://lk.chailand.org {
+	redir https://chailand.org/lk/ permanent
+}
+
+# www → без www
+http://www.chailand.org {
+	redir https://chailand.org{uri} permanent
+}
+
+# Админ-панель и касса.
+http://admin.chailand.org {
+	encode gzip
+	reverse_proxy app:4000
+}
+
+# Доступ по IP-адресу сервера (диагностика) → админка.
+:80 {
+	encode gzip
+	reverse_proxy app:4000
+}

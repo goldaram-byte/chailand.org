@@ -1,0 +1,41 @@
+# Развёртывание с ВНЕШНЕЙ управляемой базой (например Yandex Managed PostgreSQL).
+# Здесь нет своего контейнера БД — приложение подключается к кластеру по DATABASE_URL.
+# Требуется CA-сертификат провайдера на хосте (см. DEPLOY.md, вариант B).
+#   docker compose -f docker-compose.managed-db.yml up -d --build
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?укажите DATABASE_URL на управляемый кластер}
+      DATABASE_CA: /certs/root.crt
+      JWT_SECRET: ${JWT_SECRET:?нужно задать JWT_SECRET в .env}
+      JWT_TTL: ${JWT_TTL:-12h}
+      NODE_ENV: production
+      PORT: "4000"
+      AUTO_MIGRATE: "1"
+    volumes:
+      # CA-сертификат провайдера (на хосте ~/.pg/root.crt) → внутрь контейнера
+      - ${DATABASE_CA_HOST:-~/.pg/root.crt}:/certs/root.crt:ro
+    expose:
+      - "4000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?нужно задать DOMAIN в .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

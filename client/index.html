@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="theme-color" content="#0b1026" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Чайлэнд" />
+<link rel="manifest" href="/lk/manifest.webmanifest" />
+<link rel="apple-touch-icon" href="/logo.png" />
+<title>Чайлэнд — личный кабинет</title>
+<style>
+  :root{
+    --bg:#0b1026; --bg2:#141a3a; --panel:#171d42; --panel2:#1f2657;
+    --gold:#ffcf5c; --gold2:#ffb638; --txt:#eaeeff; --muted:#9aa3d0;
+    --accent:#7b6cff; --accent2:#4f7bff; --ok:#39d98a; --bad:#ff6b6b;
+    --line:rgba(255,255,255,.09);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--txt);
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(123,108,255,.28), transparent 60%),
+      radial-gradient(900px 500px at -10% 20%, rgba(79,123,255,.22), transparent 55%),
+      linear-gradient(180deg,#0b1026,#0a0e22 60%,#080b1c);
+    background-attachment:fixed;
+    min-height:100%;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:520px;margin:0 auto;padding:0 16px calc(92px + env(safe-area-inset-bottom));min-height:100vh}
+  .safe-top{height:env(safe-area-inset-top)}
+  h1,h2,h3{margin:0}
+  button{font-family:inherit}
+  .muted{color:var(--muted)}
+  .center{text-align:center}
+  .hidden{display:none!important}
+
+  /* Header */
+  .topbar{display:flex;align-items:center;gap:12px;padding:16px 4px 8px}
+  .topbar img{height:40px;width:auto;filter:drop-shadow(0 4px 12px rgba(123,108,255,.5))}
+  .topbar .ttl{font-weight:800;font-size:19px;letter-spacing:.3px}
+  .topbar .sub{font-size:12px;color:var(--muted);margin-top:-2px}
+
+  /* Cards / panels */
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:20px;padding:18px;margin:14px 0;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .panel h2{font-size:16px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+
+  /* Loyalty card */
+  .loyalty{
+    position:relative;overflow:hidden;border-radius:24px;padding:22px;margin:16px 0;
+    background:linear-gradient(135deg,#6a4bff 0%,#4f7bff 55%,#7b6cff 100%);
+    box-shadow:0 18px 40px rgba(79,90,255,.4);
+  }
+  .loyalty::after{content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.35),transparent 70%)}
+  .loyalty .lname{font-weight:700;font-size:17px}
+  .loyalty .lcard{font-family:ui-monospace,Menlo,monospace;letter-spacing:2px;font-size:15px;opacity:.92;margin-top:2px}
+  .loyalty .bonus{display:flex;align-items:baseline;gap:8px;margin-top:16px}
+  .loyalty .bonus .n{font-size:40px;font-weight:800;line-height:1}
+  .loyalty .bonus .u{font-size:14px;opacity:.9}
+  .qrbox{background:#fff;border-radius:16px;padding:12px;width:180px;height:180px;margin:14px auto 4px;display:flex;align-items:center;justify-content:center}
+  .qrbox svg{width:100%;height:100%}
+  .qrhint{text-align:center;color:var(--muted);font-size:12.5px;margin-top:2px}
+
+  /* Buttons */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 16px;border:0;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;transition:transform .06s ease, filter .15s}
+  .btn:active{transform:scale(.98)}
+  .btn.primary{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#3a2600}
+  .btn.ghost{background:rgba(255,255,255,.07);color:var(--txt);border:1px solid var(--line)}
+  .btn.mini{width:auto;padding:9px 14px;font-size:14px;border-radius:11px}
+  .btn.link{background:none;color:var(--accent);width:auto;padding:6px;font-weight:600}
+
+  /* Inputs */
+  label.fld{display:block;margin:12px 0 0}
+  label.fld .lbl{font-size:13px;color:var(--muted);margin-bottom:6px;display:block}
+  input,textarea,select{
+    width:100%;padding:14px;border-radius:13px;border:1px solid var(--line);
+    background:rgba(255,255,255,.05);color:var(--txt);font-size:16px;outline:none
+  }
+  input:focus,textarea:focus{border-color:var(--accent)}
+  textarea{min-height:84px;resize:vertical}
+
+  /* Lists */
+  .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:0}
+  .row .r-t{font-size:15px}
+  .row .r-s{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .amt{font-weight:800;font-size:15px;white-space:nowrap}
+  .amt.plus{color:var(--ok)}
+  .amt.minus{color:var(--bad)}
+  .empty{color:var(--muted);text-align:center;padding:22px 8px;font-size:14px}
+
+  /* Chips / stats */
+  .stats{display:flex;gap:10px;margin:12px 0}
+  .stat{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center}
+  .stat .n{font-size:22px;font-weight:800;color:var(--gold)}
+  .stat .l{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .codebox{display:flex;gap:8px;align-items:center;background:rgba(255,255,255,.06);border:1px dashed var(--accent);border-radius:14px;padding:12px 14px;margin:10px 0}
+  .codebox .code{font-family:ui-monospace,monospace;font-weight:800;font-size:20px;letter-spacing:2px;flex:1}
+
+  /* Tabbar */
+  .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:20;
+    background:rgba(10,13,30,.92);backdrop-filter:blur(14px);border-top:1px solid var(--line);
+    display:flex;max-width:520px;margin:0 auto;padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+  .tab{flex:1;background:none;border:0;color:var(--muted);padding:8px 2px 6px;font-size:11px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
+  .tab .ic{font-size:22px;line-height:1}
+  .tab.active{color:var(--gold)}
+
+  /* Auth */
+  .authwrap{max-width:440px;margin:0 auto;padding:0 20px calc(30px + env(safe-area-inset-bottom));min-height:100vh;display:flex;flex-direction:column;justify-content:center}
+  .brand{text-align:center;margin-bottom:6px}
+  .brand img{height:76px;filter:drop-shadow(0 8px 24px rgba(123,108,255,.6))}
+  .brand .t{font-weight:800;font-size:24px;margin-top:8px}
+  .brand .s{color:var(--muted);font-size:13.5px;margin-top:4px}
+  .seg{display:flex;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:14px;padding:4px;margin:18px 0 4px}
+  .seg button{flex:1;background:none;border:0;color:var(--muted);padding:11px;border-radius:11px;font-weight:700;font-size:15px;cursor:pointer}
+  .seg button.on{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+
+  /* Toast */
+  #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom));z-index:60;
+    background:#20264f;border:1px solid var(--line);color:var(--txt);padding:12px 18px;border-radius:12px;font-size:14px;
+    box-shadow:0 12px 30px rgba(0,0,0,.5);opacity:0;transition:opacity .25s, transform .25s;pointer-events:none;max-width:90vw;text-align:center}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+  #toast.bad{border-color:var(--bad)}
+
+  .kid{display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0}
+  .x{background:none;border:0;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px}
+  .howto{font-size:13.5px;color:var(--muted);line-height:1.5}
+  .howto b{color:var(--gold)}
+  /* Новости */
+  .newsitem{padding:16px}
+  .newsitem .n-img{width:100%;border-radius:14px;margin-bottom:12px;display:block}
+  .newsitem .n-head{display:flex;gap:12px;align-items:flex-start}
+  .newsitem .n-emoji{font-size:30px;line-height:1;flex:0 0 auto}
+  .newsitem .n-ttl{font-weight:800;font-size:16px;line-height:1.25}
+  .newsitem .n-pin{font-size:10.5px;font-weight:700;color:#3a2600;background:var(--gold);padding:2px 7px;border-radius:8px;vertical-align:middle;white-space:nowrap}
+  .newsitem .n-date{font-size:12px;color:var(--muted);margin-top:3px}
+  .newsitem .n-body{font-size:14.5px;line-height:1.55;color:#d7ddff;margin-top:12px}
+  .spin{width:26px;height:26px;border:3px solid rgba(255,255,255,.2);border-top-color:var(--gold);border-radius:50%;animation:sp 1s linear infinite;margin:20px auto}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<!-- ============ ЭКРАН ВХОДА / РЕГИСТРАЦИИ ============ -->
+<section id="authScreen">
+  <div class="safe-top"></div>
+  <div class="authwrap">
+    <div class="brand">
+      <img src="/logo.png" alt="Чайлэнд" />
+      <div class="t">Чайлэнд</div>
+      <div class="s">Бонусы, карта и приглашения друзей</div>
+    </div>
+
+    <div class="seg">
+      <button id="segLogin" class="on" onclick="setMode('login')">Вход</button>
+      <button id="segReg" onclick="setMode('reg')">Регистрация</button>
+    </div>
+
+    <div class="panel">
+      <label class="fld" id="fldName">
+        <span class="lbl">Как вас зовут</span>
+        <input id="aName" type="text" placeholder="Имя" autocomplete="name" />
+      </label>
+      <label class="fld">
+        <span class="lbl">Телефон</span>
+        <input id="aPhone" type="tel" inputmode="tel" placeholder="+7 900 000-00-00" autocomplete="tel" />
+      </label>
+      <label class="fld">
+        <span class="lbl">Пароль</span>
+        <input id="aPass" type="password" placeholder="Минимум 4 символа" autocomplete="current-password" />
+      </label>
+      <label class="fld hidden" id="fldRef">
+        <span class="lbl">Код друга (необязательно)</span>
+        <input id="aRef" type="text" placeholder="GB0001" autocomplete="off" />
+      </label>
+      <div style="margin-top:18px">
+        <button id="authBtn" class="btn primary" onclick="doAuth()">Войти</button>
+      </div>
+      <p class="howto center" style="margin:14px 0 0" id="authHint">
+        Нет аккаунта? Нажмите «Регистрация» — заведём карту и подарим бонусы.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ПРИЛОЖЕНИЕ ============ -->
+<section id="appScreen" class="hidden">
+  <div class="wrap">
+    <div class="safe-top"></div>
+    <div class="topbar">
+      <img src="/logo.png" alt="" />
+      <div>
+        <div class="ttl">Чайлэнд</div>
+        <div class="sub" id="hiName">Личный кабинет</div>
+      </div>
+    </div>
+
+    <!-- ВКЛАДКА: КАРТА -->
+    <div id="v-card" class="view">
+      <div class="loyalty">
+        <div class="lname" id="cName">—</div>
+        <div class="lcard" id="cCard">GAB-0000</div>
+        <div class="bonus"><span class="n" id="cBonus">0</span><span class="u">бонусов ⭐</span></div>
+      </div>
+      <div class="panel">
+        <h2>🎫 Карта клиента</h2>
+        <div class="qrbox" id="qrbox"><div class="spin"></div></div>
+        <div class="qrhint">Покажите QR на кассе, чтобы начислить и списать бонусы</div>
+      </div>
+      <div class="panel">
+        <h2>📈 История бонусов</h2>
+        <div id="histList"><div class="spin"></div></div>
+      </div>
+    </div>
+
+    <!-- ВКЛАДКА: НОВОСТИ -->
+    <div id="v-news" class="view hidden">
+      <div id="newsList"><div class="spin"></div></div>
+    </div>
+
+    <!-- ВКЛАДКА: ДРУЗЬЯ -->
+    <div id="v-ref" class="view hidden">
+      <div class="panel">
+        <h2>👥 Приведи друга</h2>
+        <p class="howto" id="refHow">Поделитесь кодом. Когда друг зарегистрируется и первый раз что-то купит — вам начислим бонусы ⭐.</p>
+        <div class="codebox"><span class="code" id="refCode">—</span>
+          <button class="btn mini ghost" onclick="copyCode()">Копировать</button></div>
+        <button class="btn primary" onclick="shareRef()">Поделиться приглашением</button>
+        <div class="stats">
+          <div class="stat"><div class="n" id="refCount">0</div><div class="l">приглашено</div></div>
+          <div class="stat"><div class="n" id="refEarned">0</div><div class="l">бонусов ⭐</div></div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>🫂 Ваши друзья</h2>
+        <div id="friendList"><div class="empty">Пока никого нет — самое время пригласить!</div></div>
+      </div>
+    </div>
+
+    <!-- ВКЛАДКА: ПРАЗДНИК -->
+    <div id="v-party" class="view hidden">
+      <div class="panel">
+        <h2>🎉 Заявка на праздник</h2>
+        <p class="howto">Оставьте заявку — администратор перезвонит и всё организует: день рождения, аниматоры, шоу.</p>
+        <label class="fld"><span class="lbl">Желаемая дата</span>
+          <input id="pDate" type="date" /></label>
+        <label class="fld"><span class="lbl">Сколько детей</span>
+          <input id="pKids" type="number" inputmode="numeric" min="1" placeholder="Например, 10" /></label>
+        <label class="fld"><span class="lbl">Пожелания</span>
+          <textarea id="pNote" placeholder="Тема праздника, возраст, что важно…"></textarea></label>
+        <div style="margin-top:16px"><button class="btn primary" onclick="sendParty()">Отправить заявку</button></div>
+      </div>
+    </div>
+
+    <!-- ВКЛАДКА: ПРОФИЛЬ -->
+    <div id="v-prof" class="view hidden">
+      <div class="panel">
+        <h2>👤 Профиль</h2>
+        <label class="fld"><span class="lbl">Имя</span><input id="prName" type="text" /></label>
+        <label class="fld"><span class="lbl">Телефон</span><input id="prPhone" type="tel" disabled /></label>
+        <label class="fld"><span class="lbl">E-mail (необязательно)</span><input id="prEmail" type="email" placeholder="you@mail.ru" /></label>
+        <div style="margin-top:16px"><button class="btn primary" onclick="saveProfile()">Сохранить</button></div>
+      </div>
+
+      <div class="panel">
+        <h2>🧒 Дети</h2>
+        <p class="howto">Добавьте детей — не пропустим их день рождения и подготовим сюрприз.</p>
+        <div id="kidList"></div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <input id="kName" type="text" placeholder="Имя ребёнка" style="flex:2" />
+          <input id="kDate" type="date" style="flex:1.4" />
+        </div>
+        <div style="margin-top:10px"><button class="btn ghost" onclick="addKid()">＋ Добавить ребёнка</button></div>
+      </div>
+
+      <div class="panel">
+        <h2>🔒 Безопасность</h2>
+        <label class="fld"><span class="lbl">Текущий пароль</span><input id="pwOld" type="password" autocomplete="current-password" /></label>
+        <label class="fld"><span class="lbl">Новый пароль</span><input id="pwNew" type="password" autocomplete="new-password" /></label>
+        <div style="margin-top:16px"><button class="btn ghost" onclick="changePw()">Сменить пароль</button></div>
+      </div>
+
+      <div style="margin:18px 0"><button class="btn ghost" onclick="logout()">Выйти</button></div>
+      <p class="center muted" style="font-size:12px">Парк развлечений «Чайлэнд»</p>
+    </div>
+  </div>
+
+  <nav class="tabbar">
+    <button class="tab active" data-v="card" onclick="go('card')"><span class="ic">🎫</span>Карта</button>
+    <button class="tab" data-v="news" onclick="go('news')"><span class="ic">📰</span>Новости</button>
+    <button class="tab" data-v="ref" onclick="go('ref')"><span class="ic">👥</span>Друзья</button>
+    <button class="tab" data-v="party" onclick="go('party')"><span class="ic">🎉</span>Праздник</button>
+    <button class="tab" data-v="prof" onclick="go('prof')"><span class="ic">👤</span>Профиль</button>
+  </nav>
+</section>
+
+<script>
+(function(){
+  'use strict';
+  var $ = function(id){ return document.getElementById(id); };
+  var TKEY = 'gab_lk_token';
+  var TK = localStorage.getItem(TKEY) || '';
+  var ME = null;
+  var mode = 'login';
+
+  // ---- toast ----
+  var toastT;
+  function toast(msg, bad){
+    var t = $('toast'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '');
+    clearTimeout(toastT); toastT = setTimeout(function(){ t.className = t.className.replace('show',''); }, 2800);
+  }
+
+  // ---- api ----
+  function api(path, opts){
+    opts = opts || {};
+    var h = opts.headers || {};
+    if (opts.body && typeof opts.body === 'object'){ h['Content-Type'] = 'application/json'; opts.body = JSON.stringify(opts.body); }
+    if (TK) h['Authorization'] = 'Bearer ' + TK;
+    opts.headers = h;
+    return fetch('/api/client' + path, opts).then(function(r){
+      return r.text().then(function(txt){
+        var data = {}; try { data = txt ? JSON.parse(txt) : {}; } catch(e){ data = {}; }
+        if (r.status === 401 && TK){ logout(); throw new Error(data.error || 'Сессия истекла'); }
+        if (!r.ok) throw new Error(data.error || 'Ошибка запроса');
+        return data;
+      });
+    });
+  }
+
+  function fmt(n){ return new Intl.NumberFormat('ru-RU').format(Math.round(Number(n)||0)); }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function dmy(s){ if(!s) return ''; var d=String(s).slice(0,10).split('-'); return d.length===3? d[2]+'.'+d[1]+'.'+d[0] : s; }
+
+  // ================= AUTH =================
+  window.setMode = function(m){
+    mode = m;
+    $('segLogin').className = m==='login'?'on':'';
+    $('segReg').className = m==='reg'?'on':'';
+    $('fldName').className = m==='reg'?'fld':'fld hidden';
+    $('fldRef').className = m==='reg'?'fld':'fld hidden';
+    $('authBtn').textContent = m==='reg'?'Зарегистрироваться':'Войти';
+    $('aPass').setAttribute('autocomplete', m==='reg'?'new-password':'current-password');
+    $('authHint').textContent = m==='reg'
+      ? 'Придумайте пароль — по нему будете заходить. Карта и бонусы уже ждут!'
+      : 'Нет аккаунта? Нажмите «Регистрация» — заведём карту и подарим бонусы.';
+  };
+
+  window.doAuth = function(){
+    var phone = $('aPhone').value.trim();
+    var pass = $('aPass').value;
+    if (!phone){ toast('Введите телефон', true); return; }
+    if (pass.length < 4){ toast('Пароль — минимум 4 символа', true); return; }
+    var btn = $('authBtn'); btn.disabled = true;
+    var p, body;
+    if (mode === 'reg'){
+      body = { phone: phone, password: pass, full_name: $('aName').value.trim(), referrer_code: $('aRef').value.trim() };
+      p = api('/auth/register', { method:'POST', body: body });
+    } else {
+      p = api('/auth/login', { method:'POST', body: { phone: phone, password: pass } });
+    }
+    p.then(function(r){
+      TK = r.token; localStorage.setItem(TKEY, TK);
+      localStorage.removeItem('gab_lk_ref');
+      enterApp();
+    }).catch(function(e){ toast(e.message, true); })
+      .then(function(){ btn.disabled = false; });
+  };
+
+  window.logout = function(){
+    TK = ''; ME = null; localStorage.removeItem(TKEY);
+    $('appScreen').className = 'hidden';
+    $('authScreen').className = '';
+    $('aPass').value = '';
+  };
+
+  // ================= APP =================
+  function enterApp(){
+    $('authScreen').className = 'hidden';
+    $('appScreen').className = '';
+    loadMe(); loadQR(); loadHistory();
+  }
+
+  window.go = function(v){
+    ['card','news','ref','party','prof'].forEach(function(k){
+      $('v-'+k).className = 'view' + (k===v?'':' hidden');
+    });
+    var tabs = document.querySelectorAll('.tab');
+    for (var i=0;i<tabs.length;i++) tabs[i].className = 'tab' + (tabs[i].getAttribute('data-v')===v?' active':'');
+    if (v==='news') loadNews();
+    if (v==='ref') loadReferrals();
+    if (v==='prof') fillProfile();
+    window.scrollTo(0,0);
+  };
+
+  // ---- Новости (публичные, читаются и без входа) ----
+  var newsLoaded = false;
+  function loadNews(){
+    var el = $('newsList');
+    fetch('/api/public/news?limit=30').then(function(r){ return r.json(); }).then(function(rows){
+      newsLoaded = true;
+      if (!rows || !rows.length){ el.innerHTML = '<div class="empty">Пока новостей нет. Загляните позже!</div>'; return; }
+      el.innerHTML = rows.map(function(n){
+        var cover = n.cover && n.cover.length <= 4 ? n.cover : '';
+        var picture = n.image || (n.cover && n.cover.indexOf('http') === 0 ? n.cover : '');
+        var img = picture ? '<img class="n-img" src="'+esc(picture)+'" alt="" />' : '';
+        return '<div class="panel newsitem">'+img+
+          '<div class="n-head">'+(cover?'<span class="n-emoji">'+cover+'</span>':'')+
+          '<div><div class="n-ttl">'+esc(n.title)+(n.pinned?' <span class="n-pin">закреплено</span>':'')+'</div>'+
+          '<div class="n-date">'+dmy(n.created_at)+'</div></div></div>'+
+          (n.body?'<div class="n-body">'+esc(n.body).replace(/\n/g,'<br>')+'</div>':'')+'</div>';
+      }).join('');
+    }).catch(function(){ if(!newsLoaded) el.innerHTML = '<div class="empty">Не удалось загрузить новости</div>'; });
+  }
+
+  function loadMe(){
+    return api('/me').then(function(m){
+      ME = m;
+      $('hiName').textContent = 'Здравствуйте, ' + (m.full_name||'').split(' ')[0] + '!';
+      $('cName').textContent = m.full_name || '—';
+      $('cCard').textContent = m.card_no || '—';
+      $('cBonus').textContent = fmt(m.bonus);
+    }).catch(function(e){ toast(e.message, true); });
+  }
+
+  function loadQR(){
+    var box = $('qrbox');
+    fetch('/api/client/card-qr', { headers: { Authorization: 'Bearer ' + TK } })
+      .then(function(r){ return r.ok ? r.text() : Promise.reject(); })
+      .then(function(svg){ box.innerHTML = svg; })
+      .catch(function(){ box.innerHTML = '<div class="qrhint">QR недоступен офлайн</div>'; });
+  }
+
+  function loadHistory(){
+    api('/history').then(function(rows){
+      var el = $('histList');
+      if (!rows.length){ el.innerHTML = '<div class="empty">Пока операций нет. Первые бонусы — впереди!</div>'; return; }
+      el.innerHTML = rows.map(function(t){
+        var p = Number(t.points)||0; var plus = p>=0;
+        return '<div class="row"><div><div class="r-t">'+esc(t.reason)+'</div>'+
+          '<div class="r-s">'+dmy(t.created_at)+'</div></div>'+
+          '<div class="amt '+(plus?'plus':'minus')+'">'+(plus?'+':'')+fmt(p)+' ⭐</div></div>';
+      }).join('');
+    }).catch(function(){ $('histList').innerHTML = '<div class="empty">Не удалось загрузить</div>'; });
+  }
+
+  // ---- Рефералы ----
+  function loadReferrals(){
+    api('/referrals').then(function(r){
+      $('refCode').textContent = r.code || '—';
+      $('refCount').textContent = fmt(r.invited_count);
+      $('refEarned').textContent = fmt(r.earned_bonus);
+      if (r.referrer_percent){
+        $('refHow').innerHTML = 'Поделитесь кодом. Когда друг зарегистрируется и первый раз что-то купит — вам начислим <b>'+r.referrer_percent+'%</b> от его покупки бонусами ⭐.';
+      }
+      var fl = $('friendList');
+      if (!r.friends || !r.friends.length){ fl.innerHTML = '<div class="empty">Пока никого нет — самое время пригласить!</div>'; return; }
+      fl.innerHTML = r.friends.map(function(f){
+        return '<div class="row"><div><div class="r-t">'+esc(f.full_name)+'</div>'+
+          '<div class="r-s">с '+dmy(f.created_at)+'</div></div>'+
+          '<div class="amt '+(f.referral_rewarded?'plus':'')+'">'+(f.referral_rewarded?'бонус начислен':'ждём покупки')+'</div></div>';
+      }).join('');
+    }).catch(function(e){ toast(e.message, true); });
+  }
+  function refLink(){
+    var code = $('refCode').textContent;
+    return location.origin + '/lk/?ref=' + encodeURIComponent(code);
+  }
+  window.copyCode = function(){
+    var code = $('refCode').textContent;
+    if (navigator.clipboard) navigator.clipboard.writeText(code).then(function(){ toast('Код скопирован'); });
+    else toast(code);
+  };
+  window.shareRef = function(){
+    var text = 'Приходи в парк «Чайлэнд»! Регистрируйся по моему коду ' + $('refCode').textContent + ' и получи бонусы: ' + refLink();
+    if (navigator.share){ navigator.share({ title:'Чайлэнд', text:text, url:refLink() }).catch(function(){}); }
+    else if (navigator.clipboard){ navigator.clipboard.writeText(text).then(function(){ toast('Приглашение скопировано'); }); }
+    else toast(refLink());
+  };
+
+  // ---- Праздник ----
+  window.sendParty = function(){
+    var body = { event_date: $('pDate').value, kids_count: $('pKids').value, note: $('pNote').value.trim() };
+    api('/leads', { method:'POST', body: body }).then(function(){
+      $('pDate').value=''; $('pKids').value=''; $('pNote').value='';
+      toast('Заявка отправлена! Мы перезвоним 🎉');
+    }).catch(function(e){ toast(e.message, true); });
+  };
+
+  // ---- Профиль ----
+  function fillProfile(){
+    if (!ME) return;
+    $('prName').value = ME.full_name || '';
+    $('prPhone').value = ME.phone || '';
+    $('prEmail').value = ME.email || '';
+    renderKids(ME.kids || []);
+  }
+  window.saveProfile = function(){
+    api('/me', { method:'PUT', body:{ full_name:$('prName').value.trim(), email:$('prEmail').value.trim() } })
+      .then(function(m){ ME.full_name=m.full_name; ME.email=m.email; loadMe(); toast('Сохранено'); })
+      .catch(function(e){ toast(e.message, true); });
+  };
+  function renderKids(kids){
+    var el = $('kidList');
+    if (!kids.length){ el.innerHTML = '<div class="empty" style="padding:10px">Детей пока нет</div>'; return; }
+    el.innerHTML = kids.map(function(k){
+      return '<div class="kid"><div><div class="r-t">'+esc(k.name)+'</div>'+
+        (k.birth_date?'<div class="r-s">'+dmy(k.birth_date)+'</div>':'')+'</div>'+
+        '<button class="x" onclick="delKid('+k.id+')">✕</button></div>';
+    }).join('');
+  }
+  window.addKid = function(){
+    var name = $('kName').value.trim();
+    if (!name){ toast('Имя ребёнка', true); return; }
+    api('/kids', { method:'POST', body:{ name:name, birth_date:$('kDate').value||null } })
+      .then(function(){ $('kName').value=''; $('kDate').value=''; return loadMe(); })
+      .then(function(){ renderKids(ME.kids||[]); toast('Добавлено'); })
+      .catch(function(e){ toast(e.message, true); });
+  };
+  window.delKid = function(id){
+    api('/kids/'+id, { method:'DELETE' }).then(function(){ return loadMe(); })
+      .then(function(){ renderKids(ME.kids||[]); }).catch(function(e){ toast(e.message, true); });
+  };
+  window.changePw = function(){
+    var o=$('pwOld').value, n=$('pwNew').value;
+    if (n.length<4){ toast('Новый пароль — минимум 4 символа', true); return; }
+    api('/me/password', { method:'POST', body:{ old_password:o, new_password:n } })
+      .then(function(){ $('pwOld').value=''; $('pwNew').value=''; toast('Пароль изменён'); })
+      .catch(function(e){ toast(e.message, true); });
+  };
+
+  // ---- init ----
+  function init(){
+    // Реферальный код из ссылки ?ref=...
+    var m = /[?&]ref=([^&]+)/.exec(location.search);
+    if (m){ var code = decodeURIComponent(m[1]); localStorage.setItem('gab_lk_ref', code); }
+    var savedRef = localStorage.getItem('gab_lk_ref');
+    if (savedRef && !TK){ setMode('reg'); $('aRef').value = savedRef; }
+    else setMode('login');
+
+    if (TK) enterApp(); else { $('authScreen').className=''; $('appScreen').className='hidden'; }
+
+    if ('serviceWorker' in navigator){
+      navigator.serviceWorker.register('/lk/sw.js', { scope:'/lk/' }).catch(function(){});
+    }
+  }
+  init();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1653 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Чайлэнд · Админ-панель (демо)</title>
+<style>
+:root{
+  --bg:#f1f5f9; --card:#ffffff; --line:#e2e8f0;
+  --ink:#1e293b; --dim:#64748b;
+  --side:#0f172a; --side-text:#cbd5e1;
+  --orange:#ea580c; --orange-h:#c2410c;
+  --green:#059669; --red:#dc2626; --blue:#2563eb; --gold:#d97706;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+  background:var(--bg);color:var(--ink);font-size:14px;min-height:100vh}
+button{font-family:inherit;cursor:pointer;border:none;background:none}
+input,select{font-family:inherit;background:#fff;color:var(--ink);border:1px solid #cbd5e1;border-radius:10px;
+  padding:9px 12px;font-size:14px}
+input:focus,select:focus{outline:2px solid rgba(234,88,12,.35);border-color:var(--orange)}
+input:disabled{background:#f8fafc;color:var(--dim)}
+
+/* ===== раскладка ===== */
+.app{display:flex;min-height:100vh}
+aside{width:236px;background:var(--side);color:var(--side-text);display:flex;flex-direction:column;
+  position:fixed;inset:0 auto 0 0;z-index:40;transition:transform .25s}
+.side-head{display:flex;align-items:center;gap:10px;padding:16px 16px 14px;border-bottom:1px solid #1e293b}
+.side-logo{width:38px;height:38px;border-radius:10px;background:var(--orange);display:grid;place-items:center;font-size:19px}
+.side-head b{color:#fff;font-size:15px}
+.side-head small{display:block;font-size:10.5px;color:#64748b;letter-spacing:.5px}
+aside nav{flex:1;padding:12px 10px;overflow-y:auto;display:flex;flex-direction:column}
+/* большие основные кнопки */
+.nav-main button{display:flex;align-items:center;gap:14px;width:100%;padding:22px 16px;border-radius:14px;
+  color:var(--side-text);font-size:17px;font-weight:600;margin-bottom:8px;text-align:left;transition:.15s}
+.nav-main button .ic{font-size:26px;width:32px;text-align:center}
+.nav-main button:hover{background:#1e293b;color:#fff}
+.nav-main button.act{background:var(--orange);color:#fff;box-shadow:0 6px 18px rgba(234,88,12,.35)}
+/* нижние служебные */
+.nav-bottom{margin-top:auto;padding-top:10px;border-top:1px solid #1e293b}
+.nav-bottom button{display:flex;align-items:center;gap:11px;width:100%;padding:10px 12px;border-radius:10px;
+  color:var(--side-text);font-size:13.5px;font-weight:500;margin-bottom:2px;text-align:left;transition:.15s}
+.nav-bottom button .ic{width:20px;text-align:center}
+.nav-bottom button:hover{background:#1e293b;color:#fff}
+.nav-bottom button.act{background:var(--orange);color:#fff}
+.side-foot{padding:12px;border-top:1px solid #1e293b}
+.side-foot button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;border-radius:10px;color:var(--side-text)}
+.side-foot button:hover{background:#1e293b;color:#fff}
+
+.main{flex:1;margin-left:236px;display:flex;flex-direction:column;min-width:0}
+.topbar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;
+  background:#fff;border-bottom:1px solid var(--line);padding:10px 22px}
+.burger{display:none;font-size:20px;padding:4px 8px;border-radius:8px}
+.burger:hover{background:var(--bg)}
+.page-title{font-size:16.5px;font-weight:700}
+.shift-chip{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--dim);
+  background:var(--bg);padding:6px 12px;border-radius:20px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--red)}
+.dot.on{background:var(--green)}
+.profile{margin-left:auto;display:flex;align-items:center;gap:10px;position:relative}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--orange);color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px}
+.profile .who{line-height:1.25;text-align:right}
+.profile .who b{font-size:13.5px;display:block}
+.profile .who small{color:var(--dim);font-size:11.5px}
+.prof-btn{display:flex;align-items:center;gap:10px;padding:5px 8px;border-radius:12px}
+.prof-btn:hover{background:var(--bg)}
+.prof-menu{position:absolute;right:0;top:52px;background:#fff;border:1px solid var(--line);border-radius:14px;
+  box-shadow:0 12px 34px rgba(15,23,42,.14);min-width:240px;padding:8px;display:none;z-index:60}
+.prof-menu.open{display:block}
+.prof-menu .pm-label{font-size:11px;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px 4px}
+.prof-menu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:9px 10px;border-radius:9px;font-size:13.5px}
+.prof-menu button:hover{background:var(--bg)}
+.prof-menu button.cur{background:#fff7ed;color:var(--orange);font-weight:600}
+
+.content{padding:clamp(14px,2vw,34px) clamp(14px,2.2vw,40px) 60px;width:100%;max-width:2200px;margin:0 auto}
+.page{display:none}.page.act{display:block}
+/* обёртка таблиц — горизонтальная прокрутка на узких экранах */
+.tbl-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl-wrap table{min-width:560px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px;
+  box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.card h3{font-size:14.5px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.muted{color:var(--dim)}
+.grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start}
+@media(max-width:1000px){.grid2{grid-template-columns:1fr}}
+
+.btn{border-radius:10px;font-weight:600;padding:clamp(10px,1vw,14px) clamp(16px,1.6vw,24px);font-size:clamp(13.5px,.95vw,16px);min-height:44px;transition:.15s;color:#fff;display:inline-flex;align-items:center;gap:7px;justify-content:center}
+.btn-orange{background:var(--orange)} .btn-orange:hover{background:var(--orange-h)}
+.btn-green{background:var(--green)} .btn-green:hover{background:#047857}
+.btn-ghost{background:#fff;border:1px solid #cbd5e1;color:var(--ink)} .btn-ghost:hover{border-color:var(--orange);color:var(--orange)}
+.btn-red{background:#fff;border:1px solid #fecaca;color:var(--red)} .btn-red:hover{background:#fef2f2}
+.btn-sm{padding:7px 12px;font-size:12px;border-radius:8px;min-height:34px}
+.btn-big{padding:clamp(15px,1.4vw,20px) clamp(24px,2vw,34px);font-size:clamp(15.5px,1.15vw,19px);border-radius:12px;min-height:52px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* тарифы */
+.tariffs{display:grid;grid-template-columns:repeat(auto-fill,minmax(clamp(160px,14vw,240px),1fr));gap:clamp(9px,.9vw,16px)}
+.tariff{background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:clamp(13px,1.1vw,20px);cursor:pointer;text-align:left;transition:.15s;min-height:44px}
+.tariff:hover{border-color:var(--orange);box-shadow:0 4px 14px rgba(234,88,12,.12);transform:translateY(-2px)}
+.tariff .tn{font-weight:600;font-size:clamp(13px,1vw,16px);min-height:36px;color:var(--ink)}
+.tariff .tp{font-weight:800;font-size:clamp(21px,1.7vw,30px);color:var(--orange);margin-top:6px}
+.tariff .doc{font-size:11px;color:var(--gold);font-weight:600;margin-top:3px}
+.daykind{padding:5px 13px;border-radius:16px;font-weight:700;font-size:12px;background:#fff7ed;color:var(--orange);border:1px solid #fed7aa}
+
+/* чек */
+.cl{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:13.5px}
+.cl .nm{flex:1;font-weight:500}
+.cl button{background:var(--bg);color:var(--dim);width:25px;height:25px;border-radius:7px;font-weight:700}
+.cl button:hover{color:var(--ink)}
+.cl .qty{min-width:20px;text-align:center;font-weight:700}
+.totrow{display:flex;justify-content:space-between;padding:5px 0;font-weight:600;font-size:13.5px}
+.totrow.big{font-size:19px;font-weight:800;border-top:2px solid var(--line);margin-top:8px;padding-top:11px}
+.totrow.big span:last-child{color:var(--orange)}
+.client-tag{display:flex;justify-content:space-between;align-items:center;background:#ecfdf5;border:1px solid #a7f3d0;
+  border-radius:10px;padding:8px 12px;font-weight:600;font-size:13px;margin-bottom:10px;color:#065f46}
+.client-box{display:flex;gap:8px;margin-bottom:10px}
+.client-box input{flex:1}
+
+/* ===== экран оплаты ===== */
+.pay-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:80;display:none;place-items:center;padding:16px}
+.pay-overlay.open{display:grid}
+.pay-modal{width:100%;max-width:560px;background:#fff;border-radius:18px;padding:26px;box-shadow:0 30px 80px rgba(15,23,42,.4);
+  max-height:92vh;overflow-y:auto}
+.pay-modal h3{font-size:17px;font-weight:800;margin-bottom:4px}
+.pay-step{font-size:12px;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:16px}
+.pay-items{background:var(--bg);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+.pay-items .pi-row{display:flex;justify-content:space-between;font-size:13.5px;font-weight:500;padding:4px 0}
+.pay-sum{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;font-weight:700;
+  border-top:1px solid var(--line);margin-top:8px;padding-top:10px}
+.pay-sum .val{font-size:26px;font-weight:800;color:var(--orange)}
+.bonus-box{border:1px solid #fde68a;background:#fffbeb;border-radius:12px;padding:13px 14px;margin-bottom:14px}
+.bonus-box .bb-head{display:flex;justify-content:space-between;font-weight:700;font-size:13.5px;color:#92400e;margin-bottom:8px}
+.bonus-box .bb-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;font-weight:500}
+.bonus-box input{width:110px;padding:8px 10px}
+.bonus-box .bb-note{font-size:11.5px;color:#a16207;margin-top:8px;font-weight:500}
+.methods{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.method{border:2px solid var(--line);border-radius:14px;padding:16px 10px;text-align:center;font-weight:700;font-size:13.5px;
+  cursor:pointer;transition:.15s;background:#fff}
+.method .mi{font-size:26px;display:block;margin-bottom:6px}
+.method:hover{border-color:#fdba74}
+.method.on{border-color:var(--orange);background:#fff7ed;color:var(--orange);box-shadow:0 4px 14px rgba(234,88,12,.15)}
+@media(max-width:520px){.methods{grid-template-columns:1fr}}
+.cash-calc{display:flex;gap:10px;align-items:end;margin-bottom:14px}
+.cash-calc label{font-size:11px;color:var(--dim);font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase}
+.change{font-size:14px;font-weight:700;color:var(--green);padding-bottom:10px}
+.pay-topay{display:flex;justify-content:space-between;align-items:baseline;font-size:15px;font-weight:800;
+  padding:12px 2px;border-top:2px solid var(--line)}
+.pay-topay .val{font-size:30px;color:var(--green)}
+.fiscal{display:none;text-align:center;padding:28px 10px}
+.fiscal.show{display:block}
+.spinner{width:46px;height:46px;border:5px solid #fed7aa;border-top-color:var(--orange);border-radius:50%;
+  margin:0 auto 16px;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.fiscal .fs-txt{font-weight:700;font-size:15px}
+.fiscal .fs-sub{color:var(--dim);font-size:13px;margin-top:6px}
+.fiscal-ok{display:none;text-align:center;padding:18px 10px}
+.fiscal-ok.show{display:block}
+.fiscal-ok .ok-ic{width:62px;height:62px;border-radius:50%;background:#ecfdf5;color:var(--green);font-size:32px;
+  display:grid;place-items:center;margin:0 auto 12px;border:2px solid #a7f3d0}
+.fiscal-ok .fd{font-size:12.5px;color:var(--dim);margin-top:6px;font-weight:600}
+.fiscal-ok .bns{margin-top:10px;font-weight:700;font-size:13.5px;color:var(--gold)}
+
+/* таблицы */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:var(--dim);text-align:left;font-weight:600;padding:8px;border-bottom:1px solid var(--line);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+td{padding:9px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+tr:hover td{background:#fafbfd}
+.tag{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700}
+.tag.new{background:#eff6ff;color:var(--blue)}
+.tag.prepaid{background:#fffbeb;color:var(--gold)}
+.tag.confirmed,.tag.done2{background:#ecfdf5;color:var(--green)}
+.tag.done{background:#f1f5f9;color:var(--dim)}
+.tag.cancelled,.tag.refunded{background:#fef2f2;color:var(--red)}
+.tag.m-cash{background:#f0fdf4;color:var(--green)} .tag.m-card{background:#eff6ff;color:var(--blue)} .tag.m-online{background:#faf5ff;color:#7c3aed}
+
+.frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:12px}
+.frm label{font-size:10.5px;color:var(--dim);font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px}
+.frm input,.frm select{width:100%}
+.svc-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin:10px 0}
+.svc{background:#fff;border:1.5px solid var(--line);border-radius:11px;padding:12px;cursor:pointer;font-weight:600;font-size:13px;transition:.15s}
+.svc:hover{border-color:var(--orange)}
+.svc.on{border-color:var(--green);background:#f0fdf4}
+.svc .sp{color:var(--orange);font-weight:700;margin-top:3px}
+.svc select{width:100%;margin-top:8px;padding:6px 8px;font-size:12.5px}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px;margin-bottom:16px}
+.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px}
+.stat .sv{font-weight:800;font-size:21px;color:var(--ink)}
+.stat .sv.or{color:var(--orange)} .stat .sv.gr{color:var(--green)} .stat .sv.rd{color:var(--red)}
+.stat .sl{font-size:11px;color:var(--dim);font-weight:600;margin-top:3px;text-transform:uppercase;letter-spacing:.3px}
+
+.set-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.set-tabs button{padding:10px 16px;border-radius:9px;background:#fff;border:1px solid var(--line);font-weight:600;font-size:clamp(13px,.9vw,15px);color:var(--dim);min-height:42px}
+.set-tabs button.act{background:var(--orange);border-color:var(--orange);color:#fff}
+td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
+
+/* группы продаж — чипы в кассе */
+.grp-chips{display:flex;gap:clamp(7px,.7vw,12px);margin-bottom:14px;flex-wrap:wrap}
+.grp-chips button{padding:clamp(8px,.8vw,13px) clamp(15px,1.4vw,24px);border-radius:24px;background:#fff;border:1px solid var(--line);font-weight:600;font-size:clamp(13px,.95vw,16px);color:var(--dim);min-height:42px}
+.grp-chips button:hover{border-color:#fdba74;color:var(--orange)}
+.grp-chips button.act{background:var(--orange);border-color:var(--orange);color:#fff;box-shadow:0 3px 10px rgba(234,88,12,.22)}
+.app-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;background:#eff6ff;color:var(--blue)}
+
+/* ===== CRM / ВОРОНКА ===== */
+.crm-board{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;align-items:start}
+.crm-col{background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:11px;min-width:0}
+.crm-col h4{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--dim);
+  display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.crm-col .cnt{background:#fff;border:1px solid var(--line);border-radius:20px;padding:1px 9px;font-size:11px;color:var(--dim)}
+.lead{background:#fff;border:1px solid var(--line);border-radius:11px;padding:11px;margin-bottom:9px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.lead .ln{font-weight:700;font-size:13.5px}
+.lead .lp{font-size:12.5px;color:var(--dim);margin-top:2px}
+.lead .lsrc{display:inline-block;margin-top:6px;font-size:11px;font-weight:600;color:var(--gold);background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:2px 8px}
+.lead .lnote{font-size:12px;color:var(--ink);margin-top:7px;line-height:1.4}
+.lead .lmove{display:flex;align-items:center;gap:6px;margin-top:9px}
+.lead .lmove button{width:26px;height:26px;border-radius:8px;background:var(--bg);color:var(--dim);font-weight:700}
+.lead .lmove button:hover:not(:disabled){background:var(--orange);color:#fff}
+.lead .lmove button:disabled{opacity:.3;cursor:not-allowed}
+.lead .lmove .lstage{flex:1;font-size:11.5px;font-weight:700;text-align:center;color:var(--orange)}
+.lead .ltasks{margin-top:9px;border-top:1px dashed var(--line);padding-top:8px}
+.lead .ltask{display:flex;align-items:center;gap:7px;font-size:12px;padding:2px 0}
+.lead .ltask.done{color:var(--dim);text-decoration:line-through}
+.lead .ltask input{padding:0;margin:0}
+.lead .ltdue{font-size:10.5px;color:var(--gold);font-weight:600}
+.lead .taskadd{display:flex;gap:5px;margin-top:7px}
+.lead .taskadd input{padding:5px 8px;font-size:12px;flex:1;min-width:0}
+.lead .taskadd input[type=date]{flex:0 0 118px}
+.lead .lact{display:flex;gap:6px;margin-top:9px}
+.lead .lact .btn{flex:1}
+.lead.conv{opacity:.55}
+@media(max-width:900px){.crm-board{grid-template-columns:1fr}}
+
+/* ===== КАРТОЧКА КЛИЕНТА ===== */
+.cc-head{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+.cc-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:6px}
+.cc-stats .stat{padding:11px}
+.cc-stats .sv{font-size:16px}
+@media(max-width:520px){.cc-stats{grid-template-columns:repeat(2,1fr)}}
+.cc-sec{margin-top:18px}
+.cc-sec h4{font-size:13.5px;font-weight:700;margin-bottom:9px;display:flex;align-items:center;gap:7px}
+.kid-card{border:1.5px solid var(--line);border-radius:11px;padding:11px 13px;margin-bottom:9px;background:#fff}
+.kid-card.soon{border-color:#fbbf24;background:#fffbeb}
+.kid-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.kid-badge{display:inline-block;font-size:11.5px;font-weight:700;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:12px;padding:2px 10px}
+
+/* ===== ДАШБОРД ===== */
+.dash-filters{display:flex;gap:clamp(10px,1.2vw,18px);flex-wrap:wrap;align-items:flex-end}
+.dash-period{display:inline-flex;gap:6px;flex-wrap:wrap}
+.dash-period button{padding:9px clamp(14px,1.2vw,20px);border-radius:22px;background:#fff;border:1px solid var(--line);font-weight:600;font-size:clamp(12.5px,.9vw,15px);color:var(--dim);min-height:42px}
+.dash-period button:hover{border-color:#fdba74;color:var(--orange)}
+.dash-period button.act{background:var(--orange);border-color:var(--orange);color:#fff}
+.dash-range{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dash-sel{display:flex;flex-direction:column;gap:4px}
+.dash-sel label{font-size:10.5px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.dash-sel select{min-height:42px}
+.dbar{height:8px;background:#f1f5f9;border-radius:6px;margin-top:6px;overflow:hidden}
+.dbar span{display:block;height:100%;background:linear-gradient(90deg,#fb923c,var(--orange));border-radius:6px;min-width:3px;transition:width .3s}
+.dbar.cash span{background:linear-gradient(90deg,#34d399,var(--green))}
+.dbar.card span{background:linear-gradient(90deg,#60a5fa,var(--blue))}
+.dbar.online span{background:linear-gradient(90deg,#c084fc,#7c3aed)}
+.mrow{margin-bottom:15px}
+.mrow-top{display:flex;justify-content:space-between;font-size:13.5px;font-weight:600;margin-bottom:3px}
+.mrow .dbar{height:12px}
+
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(80px);opacity:0;z-index:99;
+  background:var(--green);color:#fff;font-weight:600;font-size:13.5px;
+  padding:12px 22px;border-radius:12px;box-shadow:0 10px 30px rgba(15,23,42,.25);transition:.3s;max-width:90vw}
+#toast.err{background:var(--red)}
+#toast.show{transform:translateX(-50%);opacity:1}
+.demo-badge{position:fixed;right:12px;bottom:12px;background:#fff;border:1px solid var(--line);color:var(--dim);
+  padding:7px 13px;border-radius:18px;font-size:11px;font-weight:600;z-index:50}
+
+@media(max-width:900px){
+  aside{transform:translateX(-100%)} aside.open{transform:none;box-shadow:0 0 60px rgba(0,0,0,.4)}
+  .main{margin-left:0} .burger{display:block}
+  .profile .who{display:none}
+}
+/* телефон/узкий: одна колонка, компактные модалки */
+@media(max-width:640px){
+  .topbar{padding:10px 14px;gap:8px}
+  .page-title{font-size:15px}
+  .shift-chip{display:none}
+  .pay-modal{padding:18px;border-radius:14px}
+  .pay-overlay{padding:8px;place-items:start center}
+  .pay-sum .val{font-size:22px}
+  .pay-topay .val{font-size:24px}
+  .card{padding:14px}
+  .card h3{flex-wrap:wrap}
+  .stats{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
+  .methods{grid-template-columns:1fr}
+}
+/* большой сенсорный экран: крупнее шрифты/отступы */
+@media(min-width:1600px){
+  body{font-size:15px}
+  .card{padding:clamp(18px,1.5vw,28px);border-radius:16px}
+  .stats{gap:clamp(11px,1vw,18px)}
+  .stat .sv{font-size:clamp(21px,1.8vw,30px)}
+  table{font-size:clamp(13px,1vw,16px)}
+}
+
+/* Карточка клиента: всё сразу в обзоре, без горизонтальной прокрутки */
+#clientCardBody{max-width:min(780px,96vw)}
+#clientCardBody .tbl-wrap table{min-width:0}
+#clientCardBody th,#clientCardBody td{padding:7px 8px;white-space:nowrap}
+#clientCardBody td:nth-child(2){white-space:normal}
+</style>
+</head>
+<body>
+<div class="app">
+
+<aside id="sidebar">
+  <div class="side-head">
+    <img src="/logo.png" alt="Чайлэнд — парк развлечений" style="width:100%;max-width:190px;height:auto;display:block;margin:2px auto">
+  </div>
+  <nav>
+    <div class="nav-main" id="navMain"></div>
+    <div class="nav-bottom" id="navBottom"></div>
+  </nav>
+  <div class="side-foot"><button onclick="toast('В реальном приложении — выход из аккаунта')"><span class="ic">🚪</span> Выйти</button></div>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <button class="burger" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+    <div class="page-title" id="pageTitle">Касса</div>
+    <div class="shift-chip"><span class="dot" id="shiftDot"></span><span id="shiftLbl">Смена закрыта</span></div>
+    <div class="profile">
+      <button class="prof-btn" onclick="document.getElementById('profMenu').classList.toggle('open')">
+        <div class="who"><b id="profName">Арам Халатян</b><small id="profRole">Владелец</small></div>
+        <div class="avatar" id="profAva">АХ</div>
+      </button>
+      <div class="prof-menu" id="profMenu">
+        <div class="pm-label">Сменить роль (демо)</div>
+        <button onclick="setRole('owner')" id="r-owner">👑 Владелец — Арам Халатян</button>
+        <button onclick="setRole('admin')" id="r-admin">🛠️ Администратор — Елена</button>
+        <button onclick="setRole('cashier')" id="r-cashier">💳 Кассир — Ольга</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+
+  <!-- ============ ДАШБОРД ============ -->
+  <div class="page" id="p-dash">
+    <div class="card">
+      <h3>📊 Дашборд продаж</h3>
+      <div class="dash-filters">
+        <div class="dash-period" id="dashPeriod">
+          <button data-per="today" onclick="setDashPeriod('today',this)">Сегодня</button>
+          <button data-per="7" onclick="setDashPeriod('7',this)">7 дней</button>
+          <button data-per="30" class="act" onclick="setDashPeriod('30',this)">30 дней</button>
+          <button data-per="custom" onclick="setDashPeriod('custom',this)">Произвольный</button>
+        </div>
+        <div class="dash-range" id="dashRange" style="display:none">
+          <input type="date" id="dashFrom" onchange="renderDash()">
+          <span class="muted">—</span>
+          <input type="date" id="dashTo" onchange="renderDash()">
+        </div>
+        <div class="dash-sel"><label>Группа</label>
+          <select id="dashGroup" onchange="renderDash()"><option value="all">Все группы</option></select></div>
+        <div class="dash-sel"><label>Позиция</label>
+          <select id="dashPosition" onchange="renderDash()"><option value="all">Все позиции</option></select></div>
+        <div class="dash-sel"><label>Оплата</label>
+          <select id="dashMethod" onchange="renderDash()">
+            <option value="all">Все</option><option value="cash">Наличные</option><option value="card">Безнал</option><option value="online">Онлайн</option>
+          </select></div>
+        <div class="dash-sel"><label>Кассир</label>
+          <select id="dashCashier" onchange="renderDash()"><option value="all">Все кассиры</option></select></div>
+      </div>
+      <div class="muted" id="dashRangeLbl" style="font-size:12.5px;margin-top:12px"></div>
+    </div>
+    <div class="stats" id="dashKpi"></div>
+    <div class="grid2">
+      <div class="card" style="margin-bottom:0">
+        <h3>🏆 Топ позиций по продажам (по количеству)</h3>
+        <div class="tbl-wrap"><table><thead><tr><th>Позиция</th><th>Кол-во</th><th>Сумма</th><th>Доля</th></tr></thead><tbody id="dashTop"></tbody></table></div>
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <h3>💳 Выручка по способам оплаты</h3>
+        <div id="dashMethods"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ КАССА ============ -->
+  <div class="page act" id="p-pos">
+    <div class="card" id="shiftClosed">
+      <h3>🔐 Открытие смены</h3>
+      <div class="frm" style="grid-template-columns:180px auto">
+        <div><label>Размен в кассе, ₽</label><input type="number" id="cashStart" value="5000"></div>
+        <div style="align-self:end"><button class="btn btn-green" onclick="openShift()">Открыть смену</button></div>
+      </div>
+    </div>
+
+    <div class="grid2" id="posWork" style="display:none">
+      <div class="card" style="margin-bottom:0">
+        <h3 style="flex-wrap:wrap">🎟️ Тарифы
+          <input type="date" id="posDate" onchange="renderTariffs()" style="margin-left:auto">
+          <span class="daykind" id="dayKind"></span>
+        </h3>
+        <div class="grp-chips" id="posGroups"></div>
+        <div class="tariffs" id="tariffGrid"></div>
+      </div>
+
+      <div class="card" style="margin-bottom:0">
+        <h3>🧾 Чек</h3>
+        <div id="clientSlot"></div>
+        <div id="checkLines"><div class="muted" style="padding:12px 0;text-align:center">Нажмите тариф слева</div></div>
+        <div class="totrow big"><span>Итого:</span><span id="checkTotal">0 ₽</span></div>
+        <div style="display:flex;gap:9px;margin-top:13px">
+          <button class="btn btn-orange btn-big" style="flex:1" onclick="goPay()">Оплатить →</button>
+          <button class="btn btn-ghost" onclick="clearCheck()">Очистить</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px" id="salesCard" hidden>
+      <h3>📜 Продажи за смену</h3>
+      <div class="tbl-wrap"><table><thead><tr><th>Время</th><th>Состав</th><th>Клиент</th><th>Итого</th><th>Оплата</th><th>Бонусы −/+</th><th>ФД</th><th>Статус</th><th></th></tr></thead>
+      <tbody id="salesTbl"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- ============ ПРАЗДНИКИ ============ -->
+  <div class="page" id="p-parties">
+    <div class="card">
+      <h3>➕ Новое бронирование</h3>
+      <div class="frm">
+        <div><label>Дата</label><input type="date" id="pbDate"></div>
+        <div><label>С</label><input type="time" id="pbFrom" value="12:00"></div>
+        <div><label>До</label><input type="time" id="pbTo" value="14:00"></div>
+        <div><label>Комната</label><select id="pbRoom"></select></div>
+        <div><label>Детей</label><input type="number" id="pbKids" value="8" min="1"></div>
+        <div><label>Телефон клиента</label><input id="pbPhone" placeholder="+7 ___ ___-__-__"></div>
+      </div>
+      <div class="svc-list" id="pbServices"></div>
+      <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+        <div class="totrow big" style="border:none;padding:0;margin:0"><span>Итого:&nbsp;</span><span id="pbTotal">0 ₽</span></div>
+        <button class="btn btn-orange" onclick="createBooking()">Забронировать 🎉</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>📅 Бронирования</h3>
+      <div class="tbl-wrap"><table><thead><tr><th>Дата</th><th>Время</th><th>Комната</th><th>Контакт</th><th>Услуги</th><th>Итого</th><th>Предоплата</th><th>Статус</th><th></th></tr></thead>
+      <tbody id="bookTbl"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- ============ КЛИЕНТЫ ============ -->
+  <div class="page" id="p-clients">
+    <div class="card">
+      <h3>➕ Завести клиента и выдать карту</h3>
+      <div class="frm" style="grid-template-columns:1fr 1fr 1fr 1fr auto">
+        <div><label>Имя</label><input id="ncName" placeholder="Имя Фамилия"></div>
+        <div><label>Телефон</label><input id="ncPhone" placeholder="+7 ___ ___-__-__"></div>
+        <div><label>Код пригласившего</label><input id="ncRef" placeholder="напр. GB0001 (необязательно)"></div>
+        <div><label>Номер карты</label><input id="ncCard" placeholder="выдаётся автоматически" disabled></div>
+        <div style="align-self:end"><button class="btn btn-green" onclick="addClient()">Создать + карта</button></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>👥 База клиентов</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">📱 База клиентов общая с мобильным приложением — карты, бонусы и покупки синхронизируются.</div>
+      <div class="tbl-wrap"><table><thead><tr><th>Имя</th><th>Телефон</th><th>Карта</th><th>Бонусы</th><th>Покупок</th><th>Приложение</th></tr></thead>
+      <tbody id="cliTbl"></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- ============ CRM / ВОРОНКА ============ -->
+  <div class="page" id="p-crm">
+    <div class="card">
+      <h3>🧲 Новый лид в воронку</h3>
+      <div class="frm" style="grid-template-columns:1fr 1fr 1fr 1.4fr auto">
+        <div><label>Имя</label><input id="lname" placeholder="Имя клиента"></div>
+        <div><label>Телефон</label><input id="lphone" placeholder="+7 ___ ___-__-__"></div>
+        <div><label>Источник</label><input id="lsource" placeholder="Instagram, сайт, 2ГИС…"></div>
+        <div><label>Заметка</label><input id="lnote" placeholder="что хочет клиент"></div>
+        <div style="align-self:end"><button class="btn btn-orange" onclick="addLead()">Добавить лид</button></div>
+      </div>
+      <div class="muted" style="font-size:12.5px">Ведите клиента по стадиям, ставьте задачи и переносите в базу клиентов при продаже.</div>
+    </div>
+    <div class="crm-board" id="crmBoard"></div>
+  </div>
+
+  <!-- ============ ОТЧЁТЫ ============ -->
+  <div class="page" id="p-report">
+    <div class="stats" id="repStats"></div>
+    <div class="grid2">
+      <div class="card" style="margin-bottom:0">
+        <h3>🧮 По тарифам</h3>
+        <div class="tbl-wrap"><table><thead><tr><th>Тариф</th><th>Кол-во</th><th>Сумма</th></tr></thead><tbody id="repByType"></tbody></table></div>
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <h3>💸 Расходы смены</h3>
+        <div class="frm" style="grid-template-columns:110px 1fr auto;margin-bottom:10px">
+          <div><label>Сумма, ₽</label><input type="number" id="expAmt" placeholder="0"></div>
+          <div><label>На что</label><input id="expNote" placeholder="вода, канцелярия, инкассация…"></div>
+          <div style="align-self:end"><button class="btn btn-ghost" onclick="addExpense()">Внести</button></div>
+        </div>
+        <div class="tbl-wrap"><table><thead><tr><th>Время</th><th>Кто</th><th>На что</th><th>Сумма</th></tr></thead><tbody id="expTbl"></tbody></table></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px" id="closeCard" hidden>
+      <h3>🔒 Закрытие смены</h3>
+      <div class="frm" style="grid-template-columns:220px auto">
+        <div><label>Фактически наличных в кассе, ₽</label><input type="number" id="cashFact" placeholder="пересчитайте кассу"></div>
+        <div style="align-self:end"><button class="btn btn-red" onclick="closeShift()">Закрыть смену (Z-отчёт)</button></div>
+      </div>
+      <div class="muted" id="cashDiff" style="font-weight:600"></div>
+    </div>
+  </div>
+
+  <!-- ============ НАСТРОЙКИ ============ -->
+  <!-- ============ СКУД / ТАБЕЛЬ ============ -->
+  <div class="page" id="p-skud">
+    <div class="card">
+      <h3>🟢 Сейчас на смене</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:10px">Отметки приходят с терминала отпечатков пальца. Зелёные — на смене.</div>
+      <div id="skudStatus" class="skud-status"></div>
+    </div>
+    <div class="card">
+      <h3>👥 Персонал <button class="btn btn-green btn-sm" style="margin-left:auto" onclick="skudAddToggle()">+ Добавить сотрудника</button></h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Весь персонал парка (не только касса): аниматоры, уборщики, повара и т.д. ID отпечатка берётся из терминала.</div>
+      <div id="skudAddForm" class="frm" style="grid-template-columns:1fr 1fr 1fr 1fr auto;margin-bottom:14px;display:none">
+        <div><label>Имя</label><input id="spName" placeholder="Имя Фамилия"></div>
+        <div><label>Должность</label><input id="spPos" placeholder="Аниматор / Уборщик"></div>
+        <div><label>Телефон</label><input id="spPhone" placeholder="+7 ___ ___-__-__"></div>
+        <div><label>ID отпечатка</label><input id="spFp" placeholder="из терминала"></div>
+        <div style="align-self:end"><button class="btn btn-green" onclick="skudAdd()">Добавить</button></div>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr><th>Имя</th><th>Должность</th><th>ID отпечатка</th><th>Ставка ₽/ч</th><th>Статус</th><th>Ручная отметка</th><th></th></tr></thead><tbody id="skudPersonnel"></tbody></table></div>
+    </div>
+    <div class="card">
+      <h3>📆 График работы (план)</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:10px">Плановые часы по дням недели. Впишите часы в ячейку — сохранится автоматически.</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <button class="btn btn-ghost btn-sm" onclick="skudWeek(-1)">← Неделя</button>
+        <b id="skudWeekLabel"></b>
+        <button class="btn btn-ghost btn-sm" onclick="skudWeek(1)">Неделя →</button>
+      </div>
+      <div class="tbl-wrap"><table><thead id="skudSchedHead"></thead><tbody id="skudSchedBody"></tbody></table></div>
+    </div>
+    <div class="card">
+      <h3>📅 Табель и зарплата</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Зарплата считается за рабочее окно <b>10:00–22:00</b>: часы вне него (пришёл раньше / ушёл позже) не оплачиваются. К выплате = факт. часы × ставка.</div>
+      <div class="frm" style="grid-template-columns:180px 180px auto;margin-bottom:12px">
+        <div><label>С</label><input type="date" id="tsFrom"></div>
+        <div><label>По</label><input type="date" id="tsTo"></div>
+        <div style="align-self:end"><button class="btn btn-orange btn-sm" onclick="loadTimesheet()">Показать</button></div>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr><th>Сотрудник</th><th>Должность</th><th>Ставка ₽/ч</th><th>План, ч</th><th>Факт, ч</th><th>К выплате, ₽</th></tr></thead><tbody id="skudTimesheet"></tbody></table></div>
+    </div>
+  </div>
+
+  <div class="page" id="p-news">
+    <div class="card">
+      <h3>✍️ <span id="newsFormTitle">Новая новость</span></h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Новости видят клиенты в приложении «личный кабинет» и на сайте. Можно добавить эмодзи-значок и/или загрузить картинку.</div>
+      <input type="hidden" id="newsEditId" value="">
+      <div class="frm" style="grid-template-columns:120px 1fr;margin-bottom:10px">
+        <div><label>Эмодзи-значок</label><input id="newsCover" placeholder="🎉" maxlength="300"></div>
+        <div><label>Заголовок</label><input id="newsTitle" placeholder="Заголовок новости"></div>
+      </div>
+      <div style="margin-bottom:10px"><label style="font-size:12.5px;color:var(--muted);display:block;margin-bottom:4px">Текст</label>
+        <textarea id="newsBody" rows="4" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font-family:inherit;font-size:14px" placeholder="Текст новости…"></textarea></div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:12.5px;color:var(--muted);display:block;margin-bottom:6px">Картинка (необязательно)</label>
+        <input type="hidden" id="newsImage" value="">
+        <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">
+          <img id="newsImgPreview" alt="" style="display:none;max-width:240px;max-height:150px;border-radius:12px;border:1px solid var(--line);object-fit:cover">
+          <div>
+            <input type="file" id="newsImgFile" accept="image/*" onchange="newsPickImage(this)" style="font-size:13px">
+            <div class="muted" style="font-size:11.5px;margin-top:6px">JPG/PNG — автоматически сожмётся</div>
+            <button type="button" class="btn btn-ghost btn-sm" id="newsImgClear" style="display:none;margin-top:8px" onclick="newsClearImage()">Убрать картинку</button>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+        <label style="display:flex;align-items:center;gap:7px;font-size:13.5px;cursor:pointer"><input type="checkbox" id="newsPub" checked style="width:auto"> Опубликовать</label>
+        <label style="display:flex;align-items:center;gap:7px;font-size:13.5px;cursor:pointer"><input type="checkbox" id="newsPin" style="width:auto"> Закрепить наверху</label>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-green" onclick="saveNews()">Сохранить</button>
+        <button class="btn btn-ghost" id="newsCancelBtn" style="display:none" onclick="newsResetForm()">Отмена</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>📰 Все новости</h3>
+      <div class="tbl-wrap"><table><thead><tr><th></th><th>Заголовок</th><th>Статус</th><th>Дата</th><th></th></tr></thead><tbody id="newsTbl"></tbody></table></div>
+    </div>
+  </div>
+
+  <div class="page" id="p-settings">
+    <div class="set-tabs">
+      <button class="act" onclick="setTab('tariffs',this)">Тарифы билетов</button>
+      <button onclick="setTab('products',this)">Товары</button>
+      <button onclick="setTab('groups',this)">Группы продаж</button>
+      <button onclick="setTab('services',this)">Услуги праздника</button>
+      <button onclick="setTab('acquiring',this)">Эквайринг</button>
+      <button onclick="setTab('loyalty',this)">Бонусы и праздничные дни</button>
+      <button onclick="setTab('referral',this)">Реферальная</button>
+      <button onclick="setTab('kpi',this)">KPI кассиров</button>
+      <button id="tabStaff" onclick="setTab('staff',this)" style="display:none">Сотрудники</button>
+    </div>
+    <div class="card set-pane" id="s-tariffs">
+      <h3>🎟️ Тарифы и позиции <button class="btn btn-green btn-sm" style="margin-left:auto" onclick="addTariff()">+ Добавить позицию</button></h3>
+      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Группа</th><th>День</th><th>Цена, ₽</th><th>Документ</th><th></th></tr></thead><tbody id="setTariffs"></tbody></table></div>
+    </div>
+    <div class="card set-pane" id="s-products" hidden>
+      <h3>🛍️ Товары</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Товары кафе, сувениры и прочие позиции для кассы. Выберите группу, введите название и цену.</div>
+      <div class="frm" style="grid-template-columns:1fr 1fr 120px 130px auto;margin-bottom:14px">
+        <div><label>Группа</label><select id="pdGroup"></select></div>
+        <div><label>Название</label><input id="pdName" placeholder="напр. Попкорн"></div>
+        <div><label>Цена, ₽</label><input type="number" id="pdPrice" min="0" placeholder="0"></div>
+        <div><label>ТЦ</label><select id="pdLoc"></select></div>
+        <div style="align-self:end"><button class="btn btn-green" onclick="addProduct()">+ Добавить</button></div>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Группа</th><th>Цена, ₽</th><th>ТЦ</th><th></th></tr></thead><tbody id="setProducts"></tbody></table></div>
+    </div>
+    <div class="card set-pane" id="s-groups" hidden>
+      <h3>🗂️ Группы продаж <button class="btn btn-green btn-sm" style="margin-left:auto" onclick="addGroup()">+ Добавить группу</button></h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Группы товаров (как в Эвотор): по ним раскладываются вкладки на кассе. Билеты фильтруются по дню недели, остальные группы показывают все позиции.</div>
+      <div class="tbl-wrap"><table><thead><tr><th>Название группы</th><th>Позиций</th><th></th></tr></thead><tbody id="setGroups"></tbody></table></div>
+    </div>
+    <div class="card set-pane" id="s-services" hidden>
+      <h3>🎉 Услуги праздника <button class="btn btn-green btn-sm" style="margin-left:auto" onclick="addService()">+ Добавить услугу</button></h3>
+      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Цена, ₽</th><th>Варианты (через |)</th><th></th></tr></thead><tbody id="setServices"></tbody></table></div>
+    </div>
+    <div class="card set-pane" id="s-acquiring" hidden>
+      <h3>🏦 Эквайринг — подключение терминала <span id="acqBadge" style="margin-left:auto"></span></h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:14px">Подключение платёжного терминала банка для приёма оплаты картой в кассе.</div>
+      <div class="frm" style="grid-template-columns:repeat(2,1fr)">
+        <div><label>Банк-эквайер</label><select id="acqBank">
+          <option>Сбербанк</option><option>ВТБ</option><option>Альфа-Банк</option><option>Тинькофф</option><option>—</option>
+        </select></div>
+        <div><label>Режим</label><select id="acqMode"><option value="test">Тестовый</option><option value="prod">Боевой</option></select></div>
+        <div><label>Терминал ID (TID)</label><input id="acqTid" placeholder="напр. 20010001"></div>
+        <div><label>Merchant ID</label><input id="acqMerchant" placeholder="напр. 700000001234"></div>
+        <div><label>Ключ / пароль терминала</label><input type="password" id="acqKey" placeholder="••••••••"></div>
+        <div style="align-self:end;display:flex;gap:8px">
+          <button class="btn btn-ghost" onclick="checkAcquiring()">Проверить соединение</button>
+          <button class="btn btn-green" onclick="saveAcquiring()">Сохранить</button>
+        </div>
+      </div>
+      <div class="card" id="acqStatus" style="margin:8px 0 0;background:#f8fafc"></div>
+    </div>
+    <div class="card set-pane" id="s-loyalty" hidden>
+      <h3>⭐ Бонусная программа</h3>
+      <div class="frm" style="grid-template-columns:220px 1fr">
+        <div><label>Кэшбэк с покупки, %</label><input type="number" id="setCashback" onchange="CFG.cashback=+this.value;toast('Кэшбэк: '+this.value+'%')"></div>
+        <div><label>Праздничные даты (тариф выходного дня), через запятую</label><input id="setHolidays" placeholder="2026-12-31, 2027-01-01" onchange="CFG.holidays=this.value.split(',').map(s=>s.trim()).filter(Boolean);renderTariffs();toast('Праздничные даты сохранены')"></div>
+      </div>
+      <div class="muted" style="font-size:12.5px">1 бонус = 1 ₽. Кэшбэк начисляется на денежную часть чека после подтверждения оплаты.</div>
+    </div>
+    <div class="card set-pane" id="s-staff" hidden>
+      <h3>👤 Сотрудники</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Логины и пароли для входа в панель. Роли: <b>Кассир</b> — касса, клиенты, воронка, возвраты; <b>Администратор</b> — плюс праздники и отчёты; <b>Владелец</b> — всё, включая настройки и сотрудников.</div>
+      <div class="frm" style="grid-template-columns:1fr 1fr 1fr 160px auto;margin-bottom:14px">
+        <div><label>Имя</label><input id="stName" placeholder="Имя Фамилия"></div>
+        <div><label>Логин</label><input id="stLogin" placeholder="напр. olga"></div>
+        <div><label>Пароль</label><input id="stPass" placeholder="пароль"></div>
+        <div><label>Роль</label><select id="stRole"><option value="cashier">Кассир</option><option value="admin">Администратор</option><option value="owner">Владелец</option></select></div>
+        <div style="align-self:end"><button class="btn btn-green" onclick="staffAdd()">+ Добавить</button></div>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr><th>Имя</th><th>Логин</th><th>Роль</th><th>Статус</th><th>Действия</th></tr></thead><tbody id="setStaff"></tbody></table></div>
+    </div>
+    <div class="card set-pane" id="s-referral" hidden>
+      <h3>🎁 Реферальная программа «Приведи друга»</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">У каждого клиента есть свой код (виден в карточке). Приглашённый получает приветственный бонус при регистрации, а пригласившему начисляется <b>процент от первой покупки друга</b>.</div>
+      <div class="frm" style="grid-template-columns:repeat(3,1fr)">
+        <div><label>Программа</label><select id="refEnabled"><option value="true">Включена</option><option value="false">Выключена</option></select></div>
+        <div><label>Пригласившему, % от 1-й покупки друга</label><input type="number" id="refReferrer" min="0" max="100"></div>
+        <div><label>Бонус приглашённому, ⭐</label><input type="number" id="refReferee" min="0"></div>
+      </div>
+      <button class="btn btn-green" onclick="saveReferral()">Сохранить</button>
+    </div>
+    <div class="card set-pane" id="s-kpi" hidden>
+      <h3>🎯 KPI сотрудников кассы</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Задайте цели за период — ниже показываются фактические результаты сотрудников (зелёным — цель достигнута).</div>
+      <div class="frm" style="grid-template-columns:repeat(3,1fr)">
+        <div><label>Цель по выручке, ₽</label><input type="number" id="kpiRevenue" min="0"></div>
+        <div><label>Цель по чекам, шт</label><input type="number" id="kpiChecks" min="0"></div>
+        <div><label>Цель по среднему чеку, ₽</label><input type="number" id="kpiAvg" min="0"></div>
+      </div>
+      <button class="btn btn-green" onclick="saveKpi()">Сохранить цели</button>
+      <div style="display:flex;gap:8px;margin:14px 0 6px">
+        <button class="btn btn-ghost btn-sm" onclick="loadKpi('today')">Сегодня</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadKpi('7')">7 дней</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadKpi('month')">Месяц</button>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr><th>Сотрудник</th><th>Выручка</th><th>Чеки</th><th>Ср. чек</th><th>Возвраты</th></tr></thead><tbody id="kpiTable"></tbody></table></div>
+    </div>
+  </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ============ ЭКРАН ОПЛАТЫ ============ -->
+<div class="pay-overlay" id="payOverlay">
+  <div class="pay-modal">
+    <div id="payMain">
+      <h3>Приём оплаты</h3>
+      <div class="pay-step">Шаг 2 из 2 · подтверждение и фискализация</div>
+      <div class="pay-items" id="payItems"></div>
+      <div id="payBonusBox"></div>
+      <div class="pay-topay"><span>К оплате:</span><span class="val" id="payToPay">0 ₽</span></div>
+      <div style="font-size:11px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 8px">Способ оплаты</div>
+      <div class="methods">
+        <button class="method" data-m="cash" onclick="setMethod('cash')"><span class="mi">💵</span>Наличные</button>
+        <button class="method" data-m="card" onclick="setMethod('card')"><span class="mi">💳</span>Картой</button>
+        <button class="method" data-m="online" onclick="setMethod('online')"><span class="mi">🌐</span>Онлайн</button>
+      </div>
+      <div class="cash-calc" id="cashCalc" style="display:none">
+        <div><label>Получено наличными, ₽</label><input type="number" id="cashGiven" oninput="renderChange()"></div>
+        <div class="change" id="changeOut"></div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:6px">
+        <button class="btn btn-green btn-big" style="flex:1" id="confirmPay" onclick="confirmPay()">Подтвердить оплату ✓</button>
+        <button class="btn btn-ghost" onclick="cancelPay()">← Назад к чеку</button>
+      </div>
+    </div>
+
+    <div class="fiscal" id="payFiscal">
+      <div class="spinner"></div>
+      <div class="fs-txt">Отправка команды в кассовый аппарат…</div>
+      <div class="fs-sub">Штрих-М · фискализация чека</div>
+    </div>
+
+    <div class="fiscal-ok" id="payDone">
+      <div class="ok-ic">✓</div>
+      <div class="fs-txt" id="doneSum"></div>
+      <div class="fd" id="doneFd"></div>
+      <div class="bns" id="doneBonus"></div>
+      <button class="btn btn-orange btn-big" style="margin-top:18px;width:100%" onclick="finishPay()">Новый чек</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ КАРТОЧКА КЛИЕНТА ============ -->
+<div class="pay-overlay" id="clientOverlay" onclick="if(event.target===this)closeClientCard()">
+  <div class="pay-modal" id="clientCardBody"></div>
+</div>
+
+<!-- ============ ВОЗВРАТ ============ -->
+<div class="pay-overlay" id="refundOverlay">
+  <div class="pay-modal">
+    <div id="refundMain">
+      <h3>↩️ Оформление возврата</h3>
+      <div class="pay-step">Возвратный чек · фискализация Штрих-М</div>
+      <div class="pay-items" id="refundItems"></div>
+      <div id="refundInfo"></div>
+      <div style="font-size:11px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Причина возврата</div>
+      <div class="frm" style="grid-template-columns:1fr 1.4fr;margin-bottom:8px">
+        <div><label>Причина</label><select id="refundReason">
+          <option>Отказ клиента</option><option>Ошибка кассира</option><option>Брак / претензия</option><option>Другое</option>
+        </select></div>
+        <div><label>Комментарий</label><input id="refundComment" placeholder="необязательно"></div>
+      </div>
+      <div style="font-size:11px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:10px 0 8px">Способ возврата денег</div>
+      <div class="methods" id="refundMethods" style="grid-template-columns:repeat(2,1fr)">
+        <button class="method" data-rm="cash" onclick="setRefundMethod('cash')"><span class="mi">💵</span>Наличными</button>
+        <button class="method" data-rm="card" onclick="setRefundMethod('card')"><span class="mi">💳</span>На карту</button>
+      </div>
+      <div class="pay-topay"><span>К возврату:</span><span class="val" id="refundToPay" style="color:var(--red)">0 ₽</span></div>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn btn-red btn-big" style="flex:1" onclick="confirmRefund()">Оформить возврат ↩️</button>
+        <button class="btn btn-ghost" onclick="cancelRefund()">← Отмена</button>
+      </div>
+    </div>
+    <div class="fiscal" id="refundFiscal">
+      <div class="spinner"></div>
+      <div class="fs-txt">Отправка команды в кассовый аппарат…</div>
+      <div class="fs-sub">Штрих-М · возвратный чек</div>
+    </div>
+    <div class="fiscal-ok" id="refundDone">
+      <div class="ok-ic" style="background:#fef2f2;color:var(--red);border-color:#fecaca">↩</div>
+      <div class="fs-txt" id="refundDoneSum"></div>
+      <div class="fd" id="refundDoneFd"></div>
+      <div class="bns" id="refundDoneBonus"></div>
+      <button class="btn btn-orange btn-big" style="margin-top:18px;width:100%" onclick="finishRefund()">Готово</button>
+    </div>
+  </div>
+</div>
+
+<div class="demo-badge" id="demoBadge">ДЕМО · данные в памяти браузера</div>
+<div id="toast"></div>
+
+<script>
+/* ================= КОНФИГ ================= */
+let CFG = { cashback: 5, holidays: [] };
+let ACQUIRING = { bank:'—', tid:'', merchant:'', key:'', mode:'test', connected:false };
+let GROUPS = [
+  {id:1, name:"Билеты"},
+  {id:2, name:"Кафе"},
+  {id:3, name:"Сувениры"},
+];
+let TARIFFS = [
+  {id:1, name:"Будний день (Пн–Чт)", day:"weekday", price:690, doc:false, group:1},
+  {id:2, name:"Почти выходной (Пятница)", day:"friday", price:790, doc:false, group:1},
+  {id:3, name:"Выходные и праздники", day:"weekend", price:990, doc:false, group:1},
+  {id:4, name:"Многодетным (Пн–Чт)", day:"weekday", price:490, doc:true, group:1},
+  {id:5, name:"Многодетным (Пятница)", day:"friday", price:550, doc:true, group:1},
+  {id:6, name:"Многодетным (выходные)", day:"weekend", price:790, doc:true, group:1},
+  {id:7, name:"Особенным детям", day:"any", price:400, doc:true, group:1},
+  {id:8, name:"Малыш до 1 года (при оплате за второго ребёнка)", day:"any", price:0, doc:true, group:1},
+  {id:9,  name:"Попкорн", day:"any", price:250, doc:false, group:2},
+  {id:10, name:"Лимонад", day:"any", price:150, doc:false, group:2},
+  {id:11, name:"Сахарная вата", day:"any", price:200, doc:false, group:2},
+  {id:12, name:"Хот-дог", day:"any", price:280, doc:false, group:2},
+  {id:13, name:"Магнит", day:"any", price:300, doc:false, group:3},
+  {id:14, name:"Игрушка-космонавт", day:"any", price:600, doc:false, group:3},
+  {id:15, name:"Значок «Габри»", day:"any", price:150, doc:false, group:3},
+];
+let SERVICES = [
+  {id:1, name:"Аниматор (1 час)", price:3500, options:"Кошка Габри|Лабрадор Леон|Дракоша-Динго|НЕС|ПАКУ"},
+  {id:2, name:"Шоу-программа", price:5000, options:"Научное шоу|Шоу мыльных пузырей|Бумажное шоу|Неоновое шоу"},
+  {id:3, name:"Фотозона", price:2500, options:""},
+  {id:4, name:"Кэнди-бар", price:4000, options:""},
+  {id:5, name:"Шар-сюрприз", price:2000, options:""},
+  {id:6, name:"Оформление шарами", price:3000, options:""},
+  {id:7, name:"Фотоуслуги (1 час)", price:3500, options:""},
+  {id:8, name:"Аквагрим (до 10 детей)", price:1500, options:""},
+];
+let ROOMS = [
+  {id:1, name:"Банкетная №1", cap:15, price:2000},
+  {id:2, name:"Банкетная №2", cap:15, price:2000},
+];
+let seq = 100, fdSeq = 1;
+
+/* ================= РОЛИ И НАВИГАЦИЯ ================= */
+const ROLES = {
+  owner:   {name:"Арам Халатян", role:"Владелец", ava:"АХ", main:["dash","pos","parties","clients","crm"], bottom:["report","skud","news","settings"]},
+  admin:   {name:"Елена",        role:"Администратор", ava:"Е",  main:["dash","pos","parties","clients","crm"], bottom:["report","skud","news"]},
+  cashier: {name:"Ольга",        role:"Кассир", ava:"О",  main:["pos","parties","crm","clients"], bottom:["report"]},
+};
+const PAGES = {
+  dash:{t:"Дашборд", ic:"📊"},
+  pos:{t:"Касса", ic:"💳"}, parties:{t:"Праздники", ic:"🎉"}, clients:{t:"Клиенты", ic:"👥"},
+  crm:{t:"Воронка", ic:"🧲"},
+  report:{t:"Отчёты", ic:"📈"}, skud:{t:"Табель", ic:"🕐"}, news:{t:"Новости", ic:"📰"}, settings:{t:"Настройки", ic:"⚙️"},
+};
+let role = "owner", curPage = "dash";
+
+function setRole(r){
+  role = r; const u = ROLES[r];
+  document.getElementById('profName').textContent = u.name;
+  document.getElementById('profRole').textContent = u.role;
+  document.getElementById('profAva').textContent = u.ava;
+  document.querySelectorAll('.prof-menu button').forEach(b=>b.classList.remove('cur'));
+  document.getElementById('r-'+r).classList.add('cur');
+  document.getElementById('profMenu').classList.remove('open');
+  const all = [...u.main, ...u.bottom];
+  if(!all.includes(curPage)) curPage = "pos";
+  renderNav(); go(curPage);
+  toast('Вы вошли как: '+u.role+' ('+u.name+')');
+}
+function renderNav(){
+  const u = ROLES[role];
+  document.getElementById('navMain').innerHTML = u.main.map(p=>
+    `<button class="${p===curPage?'act':''}" onclick="go('${p}')"><span class="ic">${PAGES[p].ic}</span> ${PAGES[p].t}</button>`).join('');
+  document.getElementById('navBottom').innerHTML = u.bottom.map(p=>
+    `<button class="${p===curPage?'act':''}" onclick="go('${p}')"><span class="ic">${PAGES[p].ic}</span> ${PAGES[p].t}</button>`).join('');
+}
+function go(p){
+  curPage = p;
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('act'));
+  document.getElementById('p-'+p).classList.add('act');
+  document.getElementById('pageTitle').textContent = PAGES[p].t;
+  document.getElementById('sidebar').classList.remove('open');
+  renderNav();
+  // Владельцу не показываем экран «Открыть смену» — касса готова сразу
+  if(p==='pos' && !shift && role==='owner'){
+    shift = {cashStart:0, cashier:ROLES[role].name};
+    $('shiftClosed').style.display='none'; $('posWork').style.display='grid'; $('salesCard').hidden=false;
+    $('shiftDot').classList.add('on'); $('shiftLbl').textContent='Смена: '+shift.cashier;
+    renderSales();
+  }
+  if(p==='report') renderReport();
+  if(p==='clients') renderClients();
+  if(p==='settings') renderSettings();
+  if(p==='crm') renderCrm();
+  if(p==='dash') renderDash();
+  if(p==='news' && typeof renderNews==='function') renderNews();
+}
+document.addEventListener('click', e=>{
+  if(!e.target.closest('.profile')) document.getElementById('profMenu').classList.remove('open');
+});
+
+/* ================= ДАННЫЕ ================= */
+let clients = [
+  {id:1, name:"Мария Иванова", phone:"+7 900 123-45-67", card:"GAB-0001", bonus:40, buys:2, app:true,
+    history:[
+      {date:"2026-06-20", items:"Будний день ×2", total:1380, method:"cash"},
+      {date:"2026-05-14", items:"Выходные и праздники ×1, Попкорн ×2", total:1490, method:"card"},
+    ],
+    kids:[{name:"Соня", birth:birthSoon(9)}]},
+  {id:2, name:"Пётр Смирнов", phone:"+7 901 555-11-22", card:"GAB-0002", bonus:120, buys:5, app:false,
+    history:[
+      {date:"2026-06-28", items:"Почти выходной ×3", total:2370, method:"online"},
+      {date:"2026-06-10", items:"Многодетным (выходные) ×2, Лимонад ×2", total:1880, method:"card"},
+      {date:"2026-04-02", items:"Особенным детям ×1", total:400, method:"cash"},
+    ],
+    kids:[{name:"Артём", birth:"2017-11-03"}]},
+];
+let shift = null, sales = [], expenses = [], bookings = [], check = [], checkClient = null, cardSeq = 3;
+let posGroup = 1;
+
+/* ================= CRM / ВОРОНКА ================= */
+const CRM_STAGES = ['Новый лид','В работе','Записан','Купил','Отказ'];
+let leads = [
+  {id:1, name:"Ольга Петрова", phone:"+7 903 111-22-33", source:"Instagram", stage:"Новый лид", note:"Хочет день рождения на 10 детей", tasks:[{text:"Перезвонить",done:false,due:"2026-07-08"}], created:"2026-07-05"},
+  {id:2, name:"Игорь Волков", phone:"+7 904 222-33-44", source:"Сайт", stage:"В работе", note:"Считаем смету на аниматора", tasks:[{text:"Отправить КП",done:true,due:""}], created:"2026-07-04"},
+  {id:3, name:"Анна Кузнецова", phone:"+7 905 333-44-55", source:"Рекомендация", stage:"Записан", note:"Праздник 12 июля, банкетная №1", tasks:[], created:"2026-07-03"},
+  {id:4, name:"Дмитрий Соколов", phone:"+7 906 444-55-66", source:"2ГИС", stage:"Отказ", note:"Дорого, ушёл к конкурентам", tasks:[], created:"2026-07-02"},
+];
+let leadSeq = 100;
+
+const fmt = n => (+n).toLocaleString('ru-RU') + ' ₽';
+const $ = id => document.getElementById(id);
+function toast(msg, err=false){ const t=$('toast'); t.textContent=msg; t.className=err?'err show':'show'; setTimeout(()=>t.classList.remove('show'),3200); }
+
+/* ================= СМЕНА ================= */
+function openShift(){
+  shift = {cashStart:+$('cashStart').value||0, cashier:ROLES[role].name};
+  $('shiftClosed').style.display='none'; $('posWork').style.display='grid'; $('salesCard').hidden=false;
+  $('shiftDot').classList.add('on'); $('shiftLbl').textContent='Смена: '+shift.cashier+' · размен '+fmt(shift.cashStart);
+  renderSales(); toast('Смена открыта. Размен: '+fmt(shift.cashStart));
+}
+function expectedCash(){
+  // Наличные физически пришли по всем cash-продажам (в т.ч. позже возвращённым)
+  const cashIn = sales.filter(s=>s.method==='cash'&&(s.status==='done'||s.status==='refunded')).reduce((a,s)=>a+s.paid,0);
+  // Возвраты, выданные наличными, уменьшают кассу
+  const cashRefunds = sales.filter(s=>s.status==='refunded'&&s.refundMethod==='cash').reduce((a,s)=>a+s.paid,0);
+  return (shift?shift.cashStart:0) + cashIn - expenses.reduce((a,e)=>a+e.amt,0) - cashRefunds;
+}
+function closeShift(){
+  const fact = +$('cashFact').value;
+  if(!$('cashFact').value) return toast('Пересчитайте наличные и введите сумму', true);
+  const exp = expectedCash(), diff = fact - exp;
+  const msg = diff===0 ? 'Касса сошлась ✓' : (diff>0?'Излишек ':'Недостача ')+fmt(Math.abs(diff));
+  if(!confirm('Закрыть смену?\nОжидалось: '+fmt(exp)+'\nФактически: '+fmt(fact)+'\n'+msg)) return;
+  shift=null; sales=[]; expenses=[]; clearCheck(); $('cashFact').value='';
+  $('shiftClosed').style.display='block'; $('posWork').style.display='none'; $('salesCard').hidden=true;
+  $('shiftDot').classList.remove('on'); $('shiftLbl').textContent='Смена закрыта';
+  renderSales(); renderReport(); toast('Смена закрыта. '+msg);
+}
+
+/* ================= ТАРИФЫ ================= */
+function dayKindOf(dateStr){
+  if(CFG.holidays.includes(dateStr)) return 'weekend';
+  const d = new Date(dateStr+'T12:00:00').getDay();
+  if(d===0||d===6) return 'weekend';
+  if(d===5) return 'friday';
+  return 'weekday';
+}
+const KIND_RU = {weekday:'Будний день', friday:'Пятница', weekend:'Выходной / праздник'};
+const DAY_RU = {weekday:'Пн–Чт', friday:'Пятница', weekend:'Выходные', any:'Любой день'};
+function setPosGroup(id){ posGroup = id; renderTariffs(); }
+function renderTariffs(){
+  const kind = dayKindOf($('posDate').value);
+  $('dayKind').textContent = KIND_RU[kind];
+  if(!GROUPS.find(g=>g.id===posGroup)) posGroup = GROUPS.length ? GROUPS[0].id : null;
+  $('posGroups').innerHTML = GROUPS.map(g=>
+    `<button class="${g.id===posGroup?'act':''}" onclick="setPosGroup(${g.id})">${g.name}</button>`).join('');
+  // Билеты (позиции с привязкой ко дню) фильтруются по дню недели, позиции any показываются всегда
+  const list = TARIFFS.filter(t=>t.group===posGroup && (t.day==='any'||t.day===kind) && (typeof prodInLoc!=='function'||prodInLoc(t)));
+  $('tariffGrid').innerHTML = list.length ? list.map(t=>`
+    <button class="tariff" onclick="addToCheck(${t.id})">
+      <div class="tn">${t.name}</div>
+      <div class="tp">${(+t.price).toLocaleString('ru-RU')} ₽</div>
+      ${t.doc?'<div class="doc">📄 нужен документ</div>':''}
+    </button>`).join('')
+    : '<div class="muted" style="padding:12px 0;grid-column:1/-1">В этой группе нет позиций</div>';
+}
+
+/* ================= ЧЕК (Шаг 1) ================= */
+function addToCheck(tid){
+  if(!shift) return toast('Сначала откройте смену', true);
+  const t = TARIFFS.find(x=>x.id===tid);
+  const line = check.find(l=>l.t.id===tid);
+  if(line) line.qty++; else check.push({t, qty:1});
+  renderCheck();
+}
+function chQty(tid,d){
+  const line = check.find(l=>l.t.id===tid);
+  line.qty+=d; if(line.qty<=0) check=check.filter(l=>l!==line);
+  renderCheck();
+}
+const checkTotal = () => check.reduce((a,l)=>a+l.t.price*l.qty,0);
+function renderCheck(){
+  $('checkLines').innerHTML = check.length ? check.map(l=>`
+    <div class="cl"><span class="nm">${l.t.name}</span>
+    <button onclick="chQty(${l.t.id},-1)">−</button><span class="qty">${l.qty}</span><button onclick="chQty(${l.t.id},1)">+</button>
+    <span style="min-width:72px;text-align:right;font-weight:700">${fmt(l.t.price*l.qty)}</span></div>`).join('')
+    : '<div class="muted" style="padding:12px 0;text-align:center">Нажмите тариф слева</div>';
+  $('checkTotal').textContent = fmt(checkTotal());
+}
+function clearCheck(){ check=[]; checkClient=null; renderClientSlot(); renderCheck(); }
+
+function findCard(){
+  const v = $('cardInput').value.trim().toUpperCase();
+  const c = clients.find(x=>x.card.toUpperCase()===v);
+  if(!c) return toast('Карта не найдена. Попробуйте GAB-0001 или GAB-0002', true);
+  checkClient=c; renderClientSlot();
+  toast('Карта считана: '+c.name+' · '+c.bonus+' бонусов');
+}
+function dropClient(){ checkClient=null; renderClientSlot(); }
+function renderClientSlot(){
+  $('clientSlot').innerHTML = checkClient
+    ? `<div class="client-tag"><span>💳 ${checkClient.name} · ${checkClient.card} · ${checkClient.bonus} бонусов</span><button onclick="dropClient()" style="font-size:15px;color:#065f46">✕</button></div>`
+    : `<div class="client-box"><input id="cardInput" placeholder="📷 Сканируйте карту клиента (GAB-0001)" onkeydown="if(event.key==='Enter')findCard()"><button class="btn btn-ghost" onclick="findCard()">Найти</button></div>`;
+}
+
+/* ================= ОПЛАТА (Шаг 2) ================= */
+let PAY = null;
+function goPay(){
+  if(!shift) return toast('Откройте смену', true);
+  if(!check.length) return toast('Чек пуст — выберите тарифы', true);
+  PAY = { items:check.map(l=>({name:l.t.name,qty:l.qty,price:l.t.price})),
+          total:checkTotal(), client:checkClient, bonusSpend:0, method:null };
+  $('payMain').style.display='block'; $('payFiscal').classList.remove('show'); $('payDone').classList.remove('show');
+  $('cashGiven').value=''; $('changeOut').textContent='';
+  document.querySelectorAll('.method').forEach(m=>m.classList.remove('on'));
+  $('cashCalc').style.display='none';
+  renderPayScreen();
+  $('payOverlay').classList.add('open');
+}
+function renderPayScreen(){
+  $('payItems').innerHTML = PAY.items.map(i=>`<div class="pi-row"><span>${i.name} × ${i.qty}</span><span>${fmt(i.price*i.qty)}</span></div>`).join('')
+    + `<div class="pay-sum"><span>Сумма чека:</span><span class="val">${fmt(PAY.total)}</span></div>`;
+  if(PAY.client){
+    const c = PAY.client;
+    const maxSpend = Math.min(c.bonus, PAY.total);
+    const willEarn = Math.floor((PAY.total - PAY.bonusSpend)*CFG.cashback/100);
+    $('payBonusBox').innerHTML = `
+      <div class="bonus-box">
+        <div class="bb-head"><span>⭐ ${c.name} · карта ${c.card}</span><span>${c.bonus} бонусов</span></div>
+        <div class="bb-row">
+          Списать бонусов:
+          <input type="number" min="0" max="${maxSpend}" value="${PAY.bonusSpend}"
+            oninput="PAY.bonusSpend=Math.min(Math.max(0,Math.round(+this.value||0)),${maxSpend});renderPayScreen()">
+          <button class="btn btn-ghost btn-sm" onclick="PAY.bonusSpend=${maxSpend};renderPayScreen()">Максимум (${maxSpend})</button>
+        </div>
+        <div class="bb-note">После подтверждения оплаты: спишем ${PAY.bonusSpend} и начислим +${willEarn} бонусов (кэшбэк ${CFG.cashback}%)</div>
+      </div>`;
+  } else {
+    $('payBonusBox').innerHTML = `<div class="bonus-box" style="background:#f8fafc;border-color:var(--line)">
+      <div class="bb-row muted">Карта клиента не сканировалась — продажа без бонусов</div></div>`;
+  }
+  $('payToPay').textContent = fmt(PAY.total - PAY.bonusSpend);
+  renderChange();
+}
+function setMethod(m){
+  PAY.method = m;
+  document.querySelectorAll('.method').forEach(b=>b.classList.toggle('on', b.dataset.m===m));
+  $('cashCalc').style.display = m==='cash' ? 'flex' : 'none';
+  renderChange();
+}
+function renderChange(){
+  if(!PAY || PAY.method!=='cash'){ $('changeOut').textContent=''; return; }
+  const toPay = PAY.total - PAY.bonusSpend;
+  const given = +$('cashGiven').value||0;
+  $('changeOut').textContent = given>=toPay ? 'Сдача: '+fmt(given-toPay) : (given>0 ? 'Не хватает '+fmt(toPay-given) : '');
+  $('changeOut').style.color = given>=toPay ? 'var(--green)' : 'var(--red)';
+}
+function cancelPay(){ $('payOverlay').classList.remove('open'); PAY=null; }
+
+function confirmPay(){
+  if(!PAY.method) return toast('Выберите способ оплаты', true);
+  const toPay = PAY.total - PAY.bonusSpend;
+  if(PAY.method==='cash'){
+    const given = +$('cashGiven').value||0;
+    if(given < toPay) return toast('Получено меньше суммы к оплате', true);
+  }
+  // Отправка в кассовый аппарат (эмуляция Штрих-М)
+  $('payMain').style.display='none';
+  $('payFiscal').classList.add('show');
+  setTimeout(()=>{
+    const fd = 'ФД №'+String(fdSeq++).padStart(6,'0');
+    // Бонусы двигаются ТОЛЬКО после подтверждения фискализации
+    let earned = 0;
+    if(PAY.client){
+      earned = Math.floor(toPay*CFG.cashback/100);
+      PAY.client.bonus += earned - PAY.bonusSpend;
+      PAY.client.buys++;
+    }
+    sales.unshift({id:Date.now(), time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}),
+      items:PAY.items, client:PAY.client?PAY.client.name:'—', total:PAY.total,
+      method:PAY.method, paid:toPay, bonus:PAY.bonusSpend, earned, fd, status:'done'});
+    $('payFiscal').classList.remove('show');
+    $('doneSum').textContent = 'Чек на '+fmt(PAY.total)+' фискализирован';
+    $('doneFd').textContent = fd+' · Штрих-М · '+({cash:'наличные',card:'безналичные',online:'онлайн'})[PAY.method]
+      + (PAY.method==='card' && ACQUIRING.connected ? ' · эквайринг '+ACQUIRING.bank : '')
+      + (PAY.method==='cash' && +$('cashGiven').value>toPay ? ' · сдача '+fmt(+$('cashGiven').value-toPay) : '');
+    $('doneBonus').textContent = PAY.client ? '⭐ Списано '+PAY.bonusSpend+' · начислено +'+earned+' бонусов' : '';
+    $('payDone').classList.add('show');
+    renderSales(); renderClients();
+  }, 1600);
+}
+function finishPay(){
+  $('payOverlay').classList.remove('open');
+  PAY=null; clearCheck();
+}
+
+/* ===== ВОЗВРАТ (модалка + возвратный ФД) ===== */
+let REFUND = null;
+const RM_RU = {cash:'наличными', card:'на карту'};
+function openRefund(id){
+  const s = sales.find(x=>x.id===id);
+  if(!s || s.status!=='done') return;
+  REFUND = { sale:s, method: s.method==='cash' ? 'cash' : 'card' };
+  $('refundMain').style.display='block'; $('refundFiscal').classList.remove('show'); $('refundDone').classList.remove('show');
+  $('refundReason').value='Отказ клиента'; $('refundComment').value='';
+  renderRefundScreen();
+  $('refundOverlay').classList.add('open');
+}
+function renderRefundScreen(){
+  const s = REFUND.sale;
+  $('refundItems').innerHTML = s.items.map(i=>`<div class="pi-row"><span>${i.name} × ${i.qty}</span><span>${fmt(i.price*i.qty)}</span></div>`).join('')
+    + `<div class="pay-sum"><span>Сумма чека:</span><span class="val">${fmt(s.total)}</span></div>`;
+  $('refundInfo').innerHTML = `<div class="bonus-box" style="background:#f8fafc;border-color:var(--line)">
+    <div class="bb-row"><span>Первоначальная оплата:</span> <span class="tag m-${s.method}">${M_RU[s.method]}</span> <b>${fmt(s.paid)}</b></div>
+    ${(s.bonus||s.earned)?`<div class="bb-row" style="margin-top:7px">Бонусы: списано −${s.bonus} · начислено +${s.earned} <span class="muted">(будут откатаны)</span></div>`:''}
+  </div>`;
+  document.querySelectorAll('#refundMethods .method').forEach(b=>b.classList.toggle('on', b.dataset.rm===REFUND.method));
+  $('refundToPay').textContent = fmt(s.paid);
+}
+function setRefundMethod(m){
+  REFUND.method = m;
+  document.querySelectorAll('#refundMethods .method').forEach(b=>b.classList.toggle('on', b.dataset.rm===m));
+}
+function cancelRefund(){ $('refundOverlay').classList.remove('open'); REFUND=null; }
+function confirmRefund(){
+  const s = REFUND.sale;
+  // Отправка возвратного чека в кассовый аппарат (эмуляция Штрих-М)
+  $('refundMain').style.display='none'; $('refundFiscal').classList.add('show');
+  setTimeout(()=>{
+    const fd = 'ФД возврата №'+String(fdSeq++).padStart(6,'0');
+    s.status='refunded';
+    s.refundReason = $('refundReason').value;
+    s.refundComment = $('refundComment').value.trim();
+    s.refundMethod = REFUND.method;
+    s.refundedAt = new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+    const c = clients.find(x=>x.name===s.client);
+    let bonusMsg='';
+    if(c){ c.bonus += s.bonus - s.earned; bonusMsg = '⭐ Возвращено '+s.bonus+' списанных · снято '+s.earned+' начисленных'; }
+    $('refundFiscal').classList.remove('show');
+    $('refundDoneSum').textContent = 'Возврат на '+fmt(s.paid)+' оформлен';
+    $('refundDoneFd').textContent = fd+' · Штрих-М · '+RM_RU[REFUND.method];
+    $('refundDoneBonus').textContent = bonusMsg;
+    $('refundDone').classList.add('show');
+    renderSales(); renderClients(); renderReport();
+    toast('Возврат оформлен: '+s.refundReason);
+  }, 1600);
+}
+function finishRefund(){ $('refundOverlay').classList.remove('open'); REFUND=null; }
+
+const M_RU = {cash:'наличные', card:'безналичные', online:'онлайн'};
+function renderSales(){
+  $('salesTbl').innerHTML = sales.length ? sales.map(s=>`
+    <tr><td>${s.time}</td><td>${s.items.map(i=>i.name+' ×'+i.qty).join('<br>')}</td><td>${s.client}</td>
+    <td><b>${fmt(s.total)}</b></td>
+    <td><span class="tag m-${s.method}">${M_RU[s.method]}</span> ${fmt(s.paid)}</td>
+    <td>−${s.bonus} / +${s.earned}</td><td class="muted">${s.fd}</td>
+    <td><span class="tag ${s.status==='done'?'done2':'refunded'}"${s.status==='refunded'&&s.refundReason?` title="Причина: ${s.refundReason}${s.refundComment?' — '+s.refundComment:''} · возврат ${RM_RU[s.refundMethod]||''}"`:''}>${s.status==='done'?'проведён':'возврат'}</span>${s.status==='refunded'&&s.refundReason?`<br><span class="muted" style="font-size:11px">${s.refundReason}</span>`:''}</td>
+    <td>${s.status==='done'?'<button class="btn btn-ghost btn-sm" onclick="openRefund('+s.id+')">Возврат</button>':''}</td></tr>`).join('')
+    : '<tr><td colspan="9" class="muted">Пока нет продаж</td></tr>';
+}
+
+/* ================= РАСХОДЫ ================= */
+function addExpense(){
+  if(!shift) return toast('Расходы вносятся в открытую смену', true);
+  const amt=+$('expAmt').value, note=$('expNote').value.trim();
+  if(!amt||amt<=0) return toast('Укажите сумму расхода', true);
+  if(!note) return toast('Напишите, на что расход', true);
+  expenses.unshift({time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}), who:ROLES[role].name, note, amt});
+  $('expAmt').value=''; $('expNote').value='';
+  renderReport(); toast('Расход '+fmt(amt)+' внесён');
+}
+
+/* ================= ПРАЗДНИКИ ================= */
+let pbSel = {};
+function renderPartyForm(){
+  $('pbRoom').innerHTML = ROOMS.map(r=>`<option value="${r.id}">${r.name} · ${fmt(r.price)}</option>`).join('');
+  $('pbServices').innerHTML = SERVICES.map(s=>{
+    const opts = s.options ? s.options.split('|') : [];
+    return `<div class="svc ${pbSel[s.id]?'on':''}" onclick="toggleSvc(${s.id},event)">
+      <div>${s.name}</div><div class="sp">${fmt(s.price)}</div>
+      ${opts.length?`<select onchange="pbSel[${s.id}]&&(pbSel[${s.id}].option=this.value)" onclick="event.stopPropagation()">${opts.map(o=>`<option>${o}</option>`).join('')}</select>`:''}
+    </div>`;}).join('');
+  renderPbTotal();
+}
+function toggleSvc(id,e){
+  if(e.target.tagName==='SELECT') return;
+  if(pbSel[id]) delete pbSel[id];
+  else { const s=SERVICES.find(x=>x.id===id); pbSel[id]={option:(s.options?s.options.split('|')[0]:'')}; }
+  renderPartyForm();
+}
+function pbTotal(){
+  const room = ROOMS.find(r=>r.id===+$('pbRoom').value);
+  return (room?+room.price:0) + Object.keys(pbSel).reduce((a,id)=>a+ +SERVICES.find(s=>s.id===+id).price,0);
+}
+function renderPbTotal(){ $('pbTotal').textContent = fmt(pbTotal()); }
+document.addEventListener('change', e=>{ if(e.target.id==='pbRoom') renderPbTotal(); });
+
+function createBooking(){
+  const date=$('pbDate').value, from=$('pbFrom').value, to=$('pbTo').value, roomId=+$('pbRoom').value, phone=$('pbPhone').value.trim();
+  if(!date) return toast('Укажите дату праздника', true);
+  if(!phone) return toast('Укажите телефон клиента', true);
+  const clash = bookings.find(b=>b.roomId===roomId&&b.date===date&&b.status!=='cancelled'&&!(b.to<=from||b.from>=to));
+  if(clash) return toast('Комната занята в это время ('+clash.from+'–'+clash.to+')', true);
+  bookings.push({id:Date.now(), date, from, to, roomId, room:ROOMS.find(r=>r.id===roomId).name, phone,
+    kids:+$('pbKids').value||0,
+    services:Object.entries(pbSel).map(([id,v])=>{const s=SERVICES.find(x=>x.id===+id);return{name:s.name,option:v.option,price:s.price};}),
+    total:pbTotal(), prepaid:0, status:'new'});
+  pbSel={}; renderPartyForm(); renderBookings(); toast('Праздник забронирован 🎉');
+}
+function prepay(id){
+  const b=bookings.find(x=>x.id===id);
+  const amt=+prompt('Сумма предоплаты, ₽ (итого '+fmt(b.total)+'):', Math.min(3000,b.total));
+  if(!amt||amt<=0) return;
+  b.prepaid+=amt; if(b.status==='new'||b.status==='confirmed')b.status='prepaid';
+  renderBookings(); toast('Предоплата '+fmt(amt)+' принята');
+}
+function setStatus(id,st){ bookings.find(x=>x.id===id).status=st; renderBookings(); }
+const ST_RU={new:'новое',confirmed:'подтверждено',prepaid:'предоплачено',done:'проведено',cancelled:'отменено'};
+function renderBookings(){
+  $('bookTbl').innerHTML = bookings.length ? bookings.sort((a,b)=>a.date.localeCompare(b.date)).map(b=>`
+    <tr><td>${b.date.split('-').reverse().join('.')}</td><td>${b.from}–${b.to}</td><td>${b.room}</td>
+    <td>${b.phone}<br><span class="muted">${b.kids} детей</span></td>
+    <td>${b.services.map(s=>s.name+(s.option?' <span class="muted">('+s.option+')</span>':'')).join('<br>')||'—'}</td>
+    <td><b>${fmt(b.total)}</b></td><td>${fmt(b.prepaid)}</td>
+    <td><span class="tag ${b.status}">${ST_RU[b.status]}</span></td>
+    <td style="white-space:nowrap">${b.status!=='done'&&b.status!=='cancelled'?`
+      <button class="btn btn-ghost btn-sm" title="Предоплата" onclick="prepay(${b.id})">💰</button>
+      <button class="btn btn-ghost btn-sm" title="Проведено" onclick="setStatus(${b.id},'done')">✓</button>
+      <button class="btn btn-ghost btn-sm" title="Отменить" onclick="setStatus(${b.id},'cancelled')">✕</button>`:''}</td></tr>`).join('')
+    : '<tr><td colspan="9" class="muted">Пока нет бронирований</td></tr>';
+}
+
+/* ================= КЛИЕНТЫ ================= */
+function addClient(){
+  const name=$('ncName').value.trim(), phone=$('ncPhone').value.trim();
+  if(!name||!phone) return toast('Заполните имя и телефон', true);
+  const card='GAB-'+String(cardSeq++).padStart(4,'0');
+  clients.push({id:Date.now(), name, phone, card, bonus:0, buys:0, app:false, history:[], kids:[]});
+  $('ncName').value=''; $('ncPhone').value='';
+  renderClients(); toast('Клиент создан. Выдана карта '+card+' ⭐');
+}
+function renderClients(){
+  $('cliTbl').innerHTML = clients.map(c=>{
+    const soon = (c.kids||[]).some(k=>daysToBirthday(k.birth)<=30);
+    return `<tr style="cursor:pointer" onclick="openClientCard(${c.id})" title="Открыть карточку клиента">
+    <td>${c.name} ${soon?'<span title="Скоро день рождения ребёнка">🎂</span>':''}</td>
+    <td>${c.phone}</td><td><b style="color:var(--orange)">${c.card}</b></td><td>${c.bonus}</td><td>${c.buys}</td>
+    <td>${c.app?'<span class="app-badge">✓ есть</span>':'<span class="muted">—</span>'}</td></tr>`;
+  }).join('');
+}
+
+/* ===== КАРТОЧКА КЛИЕНТА ===== */
+// дата рождения, у которой ближайший ДР через daysAhead дней (для демо-данных)
+function birthSoon(daysAhead){
+  const d=new Date(); d.setDate(d.getDate()+daysAhead);
+  const y=d.getFullYear()-7, m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+day;
+}
+function daysToBirthday(birth){
+  const b=new Date(birth+'T00:00:00'), now=new Date(); now.setHours(0,0,0,0);
+  let next=new Date(now.getFullYear(), b.getMonth(), b.getDate());
+  if(next<now) next=new Date(now.getFullYear()+1, b.getMonth(), b.getDate());
+  return Math.round((next-now)/86400000);
+}
+function ageOf(birth){
+  const b=new Date(birth+'T00:00:00'), now=new Date();
+  let a=now.getFullYear()-b.getFullYear();
+  const m=now.getMonth()-b.getMonth();
+  if(m<0||(m===0&&now.getDate()<b.getDate())) a--;
+  return a;
+}
+function ruAge(n){ const n10=n%10,n100=n%100; if(n10===1&&n100!==11)return n+' год'; if(n10>=2&&n10<=4&&(n100<10||n100>=20))return n+' года'; return n+' лет'; }
+function ruDays(n){ const n10=n%10,n100=n%100; if(n10===1&&n100!==11)return n+' день'; if(n10>=2&&n10<=4&&(n100<10||n100>=20))return n+' дня'; return n+' дней'; }
+const dmy = s => s.split('-').reverse().join('.');
+
+let cardClientId = null;
+function openClientCard(id){ cardClientId=id; renderClientCard(); $('clientOverlay').classList.add('open'); }
+function closeClientCard(){ $('clientOverlay').classList.remove('open'); cardClientId=null; }
+function addKid(id){
+  const c=clients.find(x=>x.id===id); if(!c) return;
+  const name=$('kidName').value.trim(), birth=$('kidBirth').value;
+  if(!name) return toast('Укажите имя ребёнка', true);
+  if(!birth) return toast('Укажите дату рождения', true);
+  (c.kids=c.kids||[]).push({name, birth});
+  renderClientCard(); renderClients(); toast('Ребёнок «'+name+'» добавлен');
+}
+function sendBirthdayOffer(id, kidIdx){
+  const c=clients.find(x=>x.id===id); const k=c.kids[kidIdx];
+  toast('Предложение о праздновании ДР для '+k.name+' отправлено (SMS/приложение)');
+}
+function renderClientCard(){
+  const c=clients.find(x=>x.id===cardClientId); if(!c) return;
+  // История: прошлые покупки + текущие продажи смены
+  const cur = sales.filter(s=>s.client===c.name).map(s=>({
+    date:'сегодня '+s.time, items:s.items.map(i=>i.name+' ×'+i.qty).join(', '), total:s.total, method:s.method, earned:s.earned, live:true
+  }));
+  const hist = [...cur, ...(c.history||[]).map(h=>({...h, date:dmy(h.date)}))];
+  const histHtml = hist.length ? `<div class="tbl-wrap"><table><thead><tr><th>Дата</th><th>Состав</th><th>Сумма</th><th>Оплата</th><th>Бонусы</th></tr></thead><tbody>${
+    hist.map(h=>`<tr><td>${h.date}${h.live?' <span class="tag new">смена</span>':''}</td><td>${h.items}</td>
+      <td><b>${fmt(h.total)}</b></td><td><span class="tag m-${h.method}">${M_RU[h.method]}</span></td><td style="color:var(--gold);font-weight:700">+${h.earned!=null?h.earned:Math.floor(h.total*(CFG.cashback||0)/100)} ⭐</td></tr>`).join('')
+  }</tbody></table></div>` : '<div class="muted" style="padding:8px 0">Покупок пока нет</div>';
+  const kids = c.kids||[];
+  const kidsHtml = kids.length ? kids.map((k,i)=>{
+    const dd=daysToBirthday(k.birth), soon=dd<=30;
+    return `<div class="kid-card ${soon?'soon':''}">
+      <div class="kid-top"><b>${k.name}</b>${soon?`<span class="kid-badge">🎂 скоро ДР — ${ruDays(dd)}</span>`:''}</div>
+      <div class="muted" style="font-size:12.5px;margin-top:3px">Дата рождения: ${dmy(k.birth)} · ${ruAge(ageOf(k.birth))} · до ДР ${ruDays(dd)}</div>
+      ${soon?`<button class="btn btn-orange btn-sm" style="margin-top:8px" onclick="sendBirthdayOffer(${c.id},${i})">Отправить предложение</button>`:''}
+    </div>`;
+  }).join('') : '<div class="muted" style="padding:8px 0">Дети не добавлены</div>';
+  $('clientCardBody').innerHTML = `
+    <div class="cc-head">
+      <div class="avatar" style="width:52px;height:52px;font-size:19px">${c.name.split(' ').map(w=>w[0]).slice(0,2).join('')}</div>
+      <div style="flex:1">
+        <div style="font-size:18px;font-weight:800">${c.name}</div>
+        <div class="muted" style="font-size:13px">${c.phone} · <b style="color:var(--orange)">${c.card}</b></div>
+      </div>
+      <button onclick="closeClientCard()" style="font-size:20px;color:var(--dim);padding:4px 10px">✕</button>
+    </div>
+    <div class="cc-stats">
+      <div class="stat"><div class="sv or">${c.bonus}</div><div class="sl">Бонусов</div></div>
+      <div class="stat"><div class="sv">${c.buys}</div><div class="sl">Покупок</div></div>
+      <div class="stat"><div class="sv ${c.app?'gr':''}">${c.app?'В приложении':'Нет'}</div><div class="sl">Мобильное приложение</div></div>
+      <div class="stat"><div class="sv">${kids.length}</div><div class="sl">Детей</div></div>
+    </div>
+    <div class="cc-sec"><h4>🧾 История покупок</h4>${histHtml}</div>
+    <div class="cc-sec"><h4>🧒 Дети</h4>
+      ${kidsHtml}
+      <div class="frm" style="grid-template-columns:1fr 150px auto;margin-top:12px;margin-bottom:0">
+        <div><label>Имя ребёнка</label><input id="kidName" placeholder="Имя"></div>
+        <div><label>Дата рождения</label><input type="date" id="kidBirth"></div>
+        <div style="align-self:end"><button class="btn btn-green btn-sm" onclick="addKid(${c.id})">+ Добавить</button></div>
+      </div>
+    </div>`;
+}
+
+/* ================= ОТЧЁТЫ ================= */
+function renderReport(){
+  const done=sales.filter(s=>s.status==='done');
+  const rev=done.reduce((a,s)=>a+s.total,0);
+  const cash=done.filter(s=>s.method==='cash').reduce((a,s)=>a+s.paid,0);
+  const card=done.filter(s=>s.method==='card').reduce((a,s)=>a+s.paid,0);
+  const online=done.filter(s=>s.method==='online').reduce((a,s)=>a+s.paid,0);
+  const bs=done.reduce((a,s)=>a+s.bonus,0), be=done.reduce((a,s)=>a+s.earned,0);
+  const expSum=expenses.reduce((a,e)=>a+e.amt,0);
+  const refunded=sales.filter(s=>s.status==='refunded');
+  const refSum=refunded.reduce((a,s)=>a+s.paid,0);
+  $('repStats').innerHTML = shift ? `
+    <div class="stat"><div class="sv">${done.length}</div><div class="sl">Чеков</div></div>
+    <div class="stat"><div class="sv or">${fmt(rev)}</div><div class="sl">Выручка (без возвратов)</div></div>
+    <div class="stat"><div class="sv">${fmt(cash)}</div><div class="sl">Наличные</div></div>
+    <div class="stat"><div class="sv">${fmt(card)}</div><div class="sl">Безналичные</div></div>
+    <div class="stat"><div class="sv">${fmt(online)}</div><div class="sl">Онлайн</div></div>
+    <div class="stat"><div class="sv rd">${refunded.length} · −${fmt(refSum)}</div><div class="sl">Возвраты</div></div>
+    <div class="stat"><div class="sv rd">−${fmt(expSum)}</div><div class="sl">Расходы</div></div>
+    <div class="stat"><div class="sv">${bs} / ${be}</div><div class="sl">Бонусы списано / начислено</div></div>
+    <div class="stat"><div class="sv gr">${fmt(expectedCash())}</div><div class="sl">Ожидается в кассе</div></div>`
+    : '<div class="card muted" style="grid-column:1/-1;margin:0">Смена не открыта — откройте её на вкладке «Касса»</div>';
+  const by={};
+  done.forEach(s=>s.items.forEach(i=>{by[i.name]=by[i.name]||{qty:0,amt:0};by[i.name].qty+=i.qty;by[i.name].amt+=i.qty*i.price;}));
+  $('repByType').innerHTML = Object.entries(by).map(([n,v])=>`<tr><td>${n}</td><td>${v.qty}</td><td><b>${fmt(v.amt)}</b></td></tr>`).join('')
+    || '<tr><td colspan="3" class="muted">Нет продаж</td></tr>';
+  $('expTbl').innerHTML = expenses.length ? expenses.map(e=>`
+    <tr><td>${e.time}</td><td>${e.who}</td><td>${e.note}</td><td><b style="color:var(--red)">−${fmt(e.amt)}</b></td></tr>`).join('')
+    : '<tr><td colspan="4" class="muted">Расходов нет</td></tr>';
+  $('closeCard').hidden = !shift;
+  if(shift) $('cashDiff').textContent = 'Ожидается наличных с учётом расходов: '+fmt(expectedCash());
+}
+
+/* ================= НАСТРОЙКИ ================= */
+function setTab(t, btn){
+  document.querySelectorAll('.set-pane').forEach(x=>x.hidden=true);
+  document.querySelectorAll('.set-tabs button').forEach(x=>x.classList.remove('act'));
+  $('s-'+t).hidden=false; btn.classList.add('act');
+}
+function renderSettings(){
+  $('setCashback').value = CFG.cashback;
+  $('setHolidays').value = CFG.holidays.join(', ');
+  $('setTariffs').innerHTML = TARIFFS.map(t=>`
+    <tr><td><input value="${t.name}" onchange="updT(${t.id},'name',this.value)" style="width:100%;min-width:200px"></td>
+    <td><select onchange="updT(${t.id},'group',+this.value)">
+      ${GROUPS.map(g=>`<option value="${g.id}" ${t.group===g.id?'selected':''}>${g.name}</option>`).join('')}</select></td>
+    <td><select onchange="updT(${t.id},'day',this.value)">
+      ${Object.entries(DAY_RU).map(([k,v])=>`<option value="${k}" ${t.day===k?'selected':''}>${v}</option>`).join('')}</select></td>
+    <td><input type="number" value="${t.price}" onchange="updT(${t.id},'price',+this.value)" style="width:90px"></td>
+    <td><input type="checkbox" ${t.doc?'checked':''} onchange="updT(${t.id},'doc',this.checked)"></td>
+    <td><button class="btn btn-red btn-sm" onclick="delT(${t.id})">Удалить</button></td></tr>`).join('');
+  $('setGroups').innerHTML = GROUPS.map(g=>{
+    const cnt = TARIFFS.filter(t=>t.group===g.id).length;
+    return `<tr><td><input value="${g.name}" onchange="updG(${g.id},this.value)" style="min-width:200px"></td>
+    <td>${cnt}</td>
+    <td><button class="btn btn-red btn-sm" onclick="delG(${g.id})" ${GROUPS.length<=1?'disabled':''}>Удалить</button></td></tr>`;
+  }).join('');
+  $('setServices').innerHTML = SERVICES.map(s=>`
+    <tr><td><input value="${s.name}" onchange="updS(${s.id},'name',this.value)" style="width:100%;min-width:180px"></td>
+    <td><input type="number" value="${s.price}" onchange="updS(${s.id},'price',+this.value)" style="width:90px"></td>
+    <td><input value="${s.options}" onchange="updS(${s.id},'options',this.value)" style="width:100%;min-width:200px" placeholder="Вариант 1|Вариант 2"></td>
+    <td><button class="btn btn-red btn-sm" onclick="delS(${s.id})">Удалить</button></td></tr>`).join('');
+  var _sr=$('setRooms'); if(_sr) _sr.innerHTML = ROOMS.map(r=>`
+    <tr><td><input value="${r.name}" onchange="updR(${r.id},'name',this.value)" style="min-width:160px"></td>
+    <td><input type="number" value="${r.cap}" onchange="updR(${r.id},'cap',+this.value)" style="width:80px"></td>
+    <td><input type="number" value="${r.price}" onchange="updR(${r.id},'price',+this.value)" style="width:90px"></td>
+    <td><button class="btn btn-red btn-sm" onclick="delR(${r.id})">Удалить</button></td></tr>`).join('');
+  renderAcquiring();
+}
+
+/* ===== ЭКВАЙРИНГ ===== */
+function renderAcquiring(){
+  $('acqBank').value=ACQUIRING.bank; $('acqMode').value=ACQUIRING.mode;
+  $('acqTid').value=ACQUIRING.tid; $('acqMerchant').value=ACQUIRING.merchant; $('acqKey').value=ACQUIRING.key;
+  $('acqBadge').innerHTML = ACQUIRING.connected
+    ? '<span class="tag done2">● подключён</span>'
+    : '<span class="tag done">● не подключён</span>';
+  $('acqStatus').innerHTML = ACQUIRING.connected
+    ? `<b style="color:var(--green)">✓ Терминал ${ACQUIRING.bank} подключён</b>
+       <div class="muted" style="font-size:12.5px;margin-top:6px">TID: ${ACQUIRING.tid||'—'} · Merchant: ${ACQUIRING.merchant||'—'} · режим: ${ACQUIRING.mode==='prod'?'боевой':'тестовый'}</div>`
+    : '<span class="muted">Терминал не подключён — оплата картой проводится без привязки к банку-эквайеру.</span>';
+}
+function readAcqForm(){
+  ACQUIRING.bank=$('acqBank').value; ACQUIRING.mode=$('acqMode').value;
+  ACQUIRING.tid=$('acqTid').value.trim(); ACQUIRING.merchant=$('acqMerchant').value.trim(); ACQUIRING.key=$('acqKey').value;
+}
+function checkAcquiring(){
+  readAcqForm();
+  if(ACQUIRING.bank==='—') return toast('Выберите банк-эквайер', true);
+  if(!ACQUIRING.tid||!ACQUIRING.merchant) return toast('Заполните TID и Merchant ID', true);
+  $('acqStatus').innerHTML='<span class="muted">⏳ Проверка соединения с терминалом…</span>';
+  toast('Проверка соединения с терминалом…');
+  setTimeout(()=>{ ACQUIRING.connected=true; renderAcquiring(); toast('✓ Терминал '+ACQUIRING.bank+' подключён'); }, 1400);
+}
+function saveAcquiring(){
+  readAcqForm();
+  if(ACQUIRING.bank==='—') ACQUIRING.connected=false;
+  renderAcquiring(); toast('Настройки эквайринга сохранены');
+}
+function updT(id,f,v){ TARIFFS.find(t=>t.id===id)[f]=v; renderSettings(); renderTariffs(); toast('Позиция обновлена'); }
+function updG(id,v){ GROUPS.find(g=>g.id===id).name=v; renderSettings(); renderTariffs(); toast('Группа переименована'); }
+function addGroup(){ GROUPS.push({id:seq++, name:"Новая группа"}); renderSettings(); renderTariffs(); toast('Группа добавлена'); }
+function delG(id){
+  if(GROUPS.length<=1) return toast('Нельзя удалить последнюю группу', true);
+  const has = TARIFFS.filter(t=>t.group===id);
+  const first = GROUPS.find(g=>g.id!==id).id;
+  if(has.length){
+    if(!confirm('В группе '+has.length+' позиц. Перенести их в группу «'+GROUPS.find(g=>g.id===first).name+'» и удалить группу?')) return;
+    has.forEach(t=>t.group=first);
+  }
+  GROUPS = GROUPS.filter(g=>g.id!==id);
+  if(posGroup===id) posGroup = GROUPS[0].id;
+  renderSettings(); renderTariffs(); toast('Группа удалена');
+}
+function updS(id,f,v){ SERVICES.find(s=>s.id===id)[f]=v; renderPartyForm(); toast('Услуга обновлена'); }
+function updR(id,f,v){ ROOMS.find(r=>r.id===id)[f]=v; renderPartyForm(); toast('Комната обновлена'); }
+function delT(id){ TARIFFS=TARIFFS.filter(t=>t.id!==id); renderSettings(); renderTariffs(); toast('Тариф удалён'); }
+function delS(id){ SERVICES=SERVICES.filter(s=>s.id!==id); renderSettings(); renderPartyForm(); toast('Услуга удалена'); }
+function delR(id){ ROOMS=ROOMS.filter(r=>r.id!==id); renderSettings(); renderPartyForm(); toast('Комната удалена'); }
+function addTariff(){ TARIFFS.push({id:seq++, name:"Новая позиция", day:"any", price:0, doc:false, group:(GROUPS[0]?GROUPS[0].id:1)}); renderSettings(); renderTariffs(); }
+function addService(){ SERVICES.push({id:seq++, name:"Новая услуга", price:0, options:""}); renderSettings(); renderPartyForm(); }
+function addRoom(){ ROOMS.push({id:seq++, name:"Новая комната", cap:10, price:0}); renderSettings(); renderPartyForm(); }
+
+/* ================= CRM / ВОРОНКА ================= */
+function addLead(){
+  const name=$('lname').value.trim(), phone=$('lphone').value.trim();
+  if(!name||!phone) return toast('Укажите имя и телефон лида', true);
+  leads.push({id:leadSeq++, name, phone, source:$('lsource').value.trim()||'—',
+    stage:CRM_STAGES[0], note:$('lnote').value.trim(), tasks:[], created:today});
+  $('lname').value=''; $('lphone').value=''; $('lsource').value=''; $('lnote').value='';
+  renderCrm(); toast('Лид добавлен в воронку 🧲');
+}
+function moveLead(id,dir){
+  const l=leads.find(x=>x.id===id); if(!l||l.converted) return;
+  const i=CRM_STAGES.indexOf(l.stage)+dir;
+  if(i<0||i>=CRM_STAGES.length) return;
+  l.stage=CRM_STAGES[i]; renderCrm();
+}
+function closeOrder(id){ const l=leads.find(x=>x.id===id); if(l){ l.stage='Купил'; renderCrm(); toast('Заказ закрыт — лид в стадии «Купил»'); } }
+function addLeadTask(id){
+  const l=leads.find(x=>x.id===id); if(!l) return;
+  const text=$('lt-'+id).value.trim(), due=$('ltd-'+id).value;
+  if(!text) return toast('Введите текст задачи', true);
+  l.tasks.push({text, done:false, due}); renderCrm();
+}
+function toggleLeadTask(id,i){ const l=leads.find(x=>x.id===id); if(l){ l.tasks[i].done=!l.tasks[i].done; renderCrm(); } }
+function addLeadNote(id){ const l=leads.find(x=>x.id===id); if(!l) return; const t=$('ln-'+id).value.trim(); if(!t) return; (l.notes=l.notes||[]).push({text:t}); $('ln-'+id).value=''; renderCrm(); }
+function convertLead(id){
+  const l=leads.find(x=>x.id===id); if(!l) return;
+  if(!confirm('Перенести лида «'+l.name+'» в базу клиентов и выдать карту?')) return;
+  const card='GAB-'+String(cardSeq++).padStart(4,'0');
+  clients.push({id:Date.now(), name:l.name, phone:l.phone, card, bonus:0, buys:0, app:false, history:[], kids:[]});
+  l.converted=true;
+  renderCrm(); renderClients(); toast('Лид перенесён в клиенты · карта '+card+' ⭐');
+}
+function leadTaskInfo(l){
+  const open=l.tasks.filter(t=>!t.done);
+  if(!l.tasks.length) return '<span class="muted">задач нет</span>';
+  const withDue=open.filter(t=>t.due).sort((a,b)=>a.due.localeCompare(b.due));
+  const nearest=withDue[0];
+  return `<span class="muted">задач: ${open.length}/${l.tasks.length}</span>`+
+    (nearest?` · <span class="ltdue">ближайшая: ${nearest.due.split('-').reverse().join('.')}</span>`:'');
+}
+function renderCrm(){
+  const active=leads.filter(l=>!l.converted);
+  $('crmBoard').innerHTML = CRM_STAGES.map(st=>{
+    const col=active.filter(l=>l.stage===st);
+    return `<div class="crm-col"><h4>${st}<span class="cnt">${col.length}</span></h4>
+      ${col.map(l=>{
+        const i=CRM_STAGES.indexOf(l.stage);
+        return `<div class="lead">
+          <div class="ln">${l.name}</div>
+          <div class="lp">${l.phone}</div>
+          <div><span class="lsrc">${l.source}</span></div>
+          ${l.note?`<div class="lnote">${l.note}</div>`:''}
+          <div class="lmove">
+            <button onclick="moveLead(${l.id},-1)" ${i<=0?'disabled':''} title="Назад">◀</button>
+            <span class="lstage">${l.stage}</span>
+            <button onclick="moveLead(${l.id},1)" ${i>=CRM_STAGES.length-1?'disabled':''} title="Вперёд">▶</button>
+          </div>
+          <div class="ltasks">
+            <div style="font-size:11px;font-weight:700;color:var(--dim);margin-bottom:5px">Задачи · ${leadTaskInfo(l)}</div>
+            ${l.tasks.map((t,ti)=>`<label class="ltask ${t.done?'done':''}">
+              <input type="checkbox" ${t.done?'checked':''} onchange="toggleLeadTask(${l.id},${ti})">
+              <span>${t.text}</span>${t.due?`<span class="ltdue">${t.due.split('-').reverse().join('.')}</span>`:''}</label>`).join('')}
+            <div class="taskadd">
+              <input id="lt-${l.id}" placeholder="новая задача" onkeydown="if(event.key==='Enter')addLeadTask(${l.id})">
+              <input type="date" id="ltd-${l.id}">
+              <button class="btn btn-ghost btn-sm" onclick="addLeadTask(${l.id})">+</button>
+            </div>
+          </div>
+          <div class="ltasks">
+            <div style="font-size:11px;font-weight:700;color:var(--dim);margin-bottom:5px">Примечания к заказу</div>
+            ${(l.notes||[]).map(n=>`<div class="lnote">${(typeof n==='string'?n:n.text)}</div>`).join('')}
+            <div class="taskadd">
+              <input id="ln-${l.id}" placeholder="добавить примечание" onkeydown="if(event.key==='Enter')addLeadNote(${l.id})">
+              <button class="btn btn-ghost btn-sm" onclick="addLeadNote(${l.id})">+</button>
+            </div>
+          </div>
+          <div class="lact">
+            <button class="btn btn-ghost btn-sm" onclick="closeOrder(${l.id})">Закрыть заказ</button>
+            ${l.client_id
+              ? `<span class="btn btn-ghost btn-sm" style="opacity:.65;cursor:default" title="Заявка от клиента приложения">✓ Уже клиент</span>`
+              : `<button class="btn btn-green btn-sm" onclick="convertLead(${l.id})">В базу клиентов</button>`}
+          </div>
+        </div>`;
+      }).join('') || '<div class="muted" style="font-size:12px;padding:6px 2px">пусто</div>'}
+    </div>`;
+  }).join('');
+}
+
+/* ================= ДАШБОРД ================= */
+const CASHIERS = ['Арам Халатян','Елена','Ольга'];
+let SALES_DATA = [];
+let dashState = { period:'30' };
+function shiftDate(str,n){ const d=new Date(str+'T00:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function genDashData(){
+  const pool = TARIFFS.filter(t=>t.price>0).map(t=>({name:t.name, price:t.price, group:t.group}));
+  const byGroup = {}; pool.forEach(p=>{ (byGroup[p.group]=byGroup[p.group]||[]).push(p); });
+  const groupIds = Object.keys(byGroup).map(Number);
+  const rnd = (a,b)=>a+Math.floor(Math.random()*(b-a+1));
+  const pick = arr=>arr[Math.floor(Math.random()*arr.length)];
+  const methodPick = ()=>{ const r=Math.random(); return r<0.45?'cash':(r<0.85?'card':'online'); };
+  const groupPick = ()=>{ const r=Math.random(); return r<0.55?1:(r<0.85?2:3); }; // Билеты/Кафе/Сувениры
+  SALES_DATA = [];
+  const days = 55;
+  for(let d=days-1; d>=0; d--){
+    const date = shiftDate(today, -d);
+    const dow = new Date(date+'T12:00:00').getDay();
+    const base = (dow===0||dow===6) ? rnd(9,17) : rnd(3,9); // выходные загруженнее
+    for(let n=0; n<base; n++){
+      let gid = groupPick(); if(!byGroup[gid]) gid = pick(groupIds);
+      const cnt = rnd(1,3), items = [];
+      for(let k=0; k<cnt; k++){ const it = pick(byGroup[gid]); items.push({name:it.name, qty:rnd(1,4), price:it.price}); }
+      SALES_DATA.push({ date, cashier:pick(CASHIERS), method:methodPick(), group:gid, items });
+    }
+  }
+}
+function setDashPeriod(p, btn){
+  dashState.period = p;
+  document.querySelectorAll('#dashPeriod button').forEach(b=>b.classList.remove('act'));
+  btn.classList.add('act');
+  $('dashRange').style.display = p==='custom' ? 'flex' : 'none';
+  renderDash();
+}
+function dashRange(){
+  const p = dashState.period;
+  if(p==='today') return {from:today, to:today};
+  if(p==='7')  return {from:shiftDate(today,-6),  to:today};
+  if(p==='30') return {from:shiftDate(today,-29), to:today};
+  let from = $('dashFrom').value || shiftDate(today,-29);
+  let to   = $('dashTo').value   || today;
+  if(from>to){ const t=from; from=to; to=t; }
+  return {from, to};
+}
+function renderDash(){
+  if(!$('dashGroup').dataset.filled){
+    $('dashGroup').insertAdjacentHTML('beforeend', GROUPS.map(g=>`<option value="${g.id}">${g.name}</option>`).join(''));
+    $('dashCashier').insertAdjacentHTML('beforeend', CASHIERS.map(c=>`<option value="${c}">${c}</option>`).join(''));
+    $('dashGroup').dataset.filled = '1';
+  }
+  const {from,to} = dashRange();
+  const g=$('dashGroup').value, m=$('dashMethod').value, cshr=$('dashCashier').value;
+  const rows = SALES_DATA.filter(s=> s.date>=from && s.date<=to
+    && (g==='all'||s.group===+g) && (m==='all'||s.method===m) && (cshr==='all'||s.cashier===cshr));
+  let revenue=0, qtySold=0; const byItem={}, byMethod={cash:0,card:0,online:0};
+  rows.forEach(s=>{
+    let recTotal=0;
+    s.items.forEach(i=>{ const amt=i.qty*i.price; recTotal+=amt; qtySold+=i.qty;
+      byItem[i.name]=byItem[i.name]||{qty:0,amt:0}; byItem[i.name].qty+=i.qty; byItem[i.name].amt+=amt; });
+    revenue+=recTotal; byMethod[s.method]+=recTotal;
+  });
+  const checks=rows.length, avg=checks?Math.round(revenue/checks):0;
+  $('dashKpi').innerHTML = `
+    <div class="stat"><div class="sv or">${fmt(revenue)}</div><div class="sl">Выручка</div></div>
+    <div class="stat"><div class="sv">${checks}</div><div class="sl">Чеков</div></div>
+    <div class="stat"><div class="sv">${fmt(avg)}</div><div class="sl">Средний чек</div></div>
+    <div class="stat"><div class="sv gr">${qtySold}</div><div class="sl">Продано позиций</div></div>`;
+  // Топ позиций — по количеству по убыванию
+  const items = Object.entries(byItem).map(([name,v])=>({name,qty:v.qty,amt:v.amt})).sort((a,b)=>b.qty-a.qty);
+  const maxQty = items.length?items[0].qty:1, totalQty=qtySold||1;
+  $('dashTop').innerHTML = items.length ? items.map(it=>`
+    <tr><td><div style="font-weight:600">${it.name}</div>
+      <div class="dbar"><span style="width:${Math.round(it.qty/maxQty*100)}%"></span></div></td>
+      <td><b>${it.qty}</b></td><td>${fmt(it.amt)}</td><td>${(it.qty/totalQty*100).toFixed(1)}%</td></tr>`).join('')
+    : '<tr><td colspan="4" class="muted">Нет данных за выбранный период</td></tr>';
+  // Разбивка выручки по способам оплаты
+  const totRev = revenue||1, ML={cash:'Наличные',card:'Безнал',online:'Онлайн'};
+  $('dashMethods').innerHTML = ['cash','card','online'].map(k=>{
+    const v=byMethod[k], pct=Math.round(v/totRev*100);
+    return `<div class="mrow"><div class="mrow-top"><span>${ML[k]}</span><b>${fmt(v)} · ${pct}%</b></div>
+      <div class="dbar ${k}"><span style="width:${pct}%"></span></div></div>`;
+  }).join('');
+  $('dashRangeLbl').textContent = 'Период: '+dmy(from)+' — '+dmy(to)+' · записей о продажах: '+rows.length;
+}
+
+/* ================= СТАРТ ================= */
+const today = new Date().toISOString().slice(0,10);
+$('posDate').value = today; $('pbDate').value = today;
+genDashData();
+setRole('owner');
+renderTariffs(); renderPartyForm(); renderBookings(); renderClients(); renderClientSlot(); renderCheck(); renderSales();
+
+</script>
+<script src="app.js"></script>
+</body>
+</html>

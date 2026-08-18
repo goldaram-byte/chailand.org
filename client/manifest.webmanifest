@@ -1,0 +1,15 @@
+{
+  "name": "Чайлэнд — личный кабинет",
+  "short_name": "Чайлэнд",
+  "description": "Бонусы, карта, приглашения друзей и заявки на праздник в парке «Чайлэнд».",
+  "start_url": "/lk/",
+  "scope": "/lk/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b1026",
+  "theme_color": "#0b1026",
+  "icons": [
+    { "src": "/logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

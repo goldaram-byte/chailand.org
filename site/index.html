@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Чайлэнд — технические работы</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    color:#fff;min-height:100%;display:flex;align-items:center;justify-content:center;
+    padding:24px;text-align:center;
+    background:radial-gradient(1200px 600px at 50% -10%,#fb923c 0%,#ea580c 45%,#c2410c 100%);
+    overflow:hidden;position:relative;
+  }
+  .balloon{position:absolute;border-radius:50%;opacity:.18;filter:blur(1px);animation:float 12s ease-in-out infinite}
+  .b1{width:120px;height:150px;background:#fde68a;left:8%;top:20%}
+  .b2{width:90px;height:115px;background:#fecaca;right:12%;top:30%;animation-delay:-3s}
+  .b3{width:70px;height:90px;background:#bfdbfe;left:20%;bottom:12%;animation-delay:-6s}
+  .b4{width:100px;height:125px;background:#ddd6fe;right:22%;bottom:8%;animation-delay:-9s}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-22px)}}
+  .card{position:relative;z-index:1;max-width:560px}
+  .logo{
+    width:96px;height:96px;border-radius:24px;background:rgba(255,255,255,.16);
+    display:grid;place-items:center;margin:0 auto 22px;font-size:52px;
+    box-shadow:0 10px 40px rgba(0,0,0,.15);backdrop-filter:blur(4px);
+  }
+  h1{font-size:30px;line-height:1.2;margin-bottom:14px;letter-spacing:.3px}
+  p{font-size:17px;line-height:1.6;opacity:.95;margin-bottom:10px}
+  .brand{font-weight:800;letter-spacing:1px;text-transform:uppercase;font-size:14px;opacity:.85;margin-bottom:28px}
+  .sub{font-size:15px;opacity:.8;margin-top:24px}
+  a{color:#fff;font-weight:700}
+  @media(max-width:480px){h1{font-size:24px}p{font-size:15px}.logo{width:78px;height:78px;font-size:42px}}
+</style>
+</head>
+<body>
+  <div class="balloon b1"></div>
+  <div class="balloon b2"></div>
+  <div class="balloon b3"></div>
+  <div class="balloon b4"></div>
+
+  <main class="card">
+    <div class="logo">🎡</div>
+    <div class="brand">Чайлэнд</div>
+    <h1>Идут технические работы</h1>
+    <p>Мы обновляем сайт, чтобы он стал ещё удобнее.<br>Совсем скоро вернёмся — спасибо, что вы с нами!</p>
+    <p class="sub">Парк работает в обычном режиме.<br>По вопросам броней и праздников звоните в администрацию парка.</p>
+  </main>
+</body>
+</html>

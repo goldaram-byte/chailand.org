@@ -1,0 +1,85 @@
+# Боевое развёртывание «Габрилеон»: база + приложение + автоматический HTTPS.
+# Настройки берутся из .env (рядом с этим файлом). См. DEPLOY.md.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-gabrileon}
+      POSTGRES_USER: ${POSTGRES_USER:-gabrileon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?нужно задать POSTGRES_PASSWORD в .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gabrileon} -d ${POSTGRES_DB:-gabrileon}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-gabrileon}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-gabrileon}
+      JWT_SECRET: ${JWT_SECRET:?нужно задать JWT_SECRET в .env}
+      JWT_TTL: ${JWT_TTL:-12h}
+      NODE_ENV: production
+      PORT: "4000"
+      AUTO_MIGRATE: "1"
+    expose:
+      - "4000"
+
+  # Автоматический бэкап базы: каждые BACKUP_INTERVAL секунд (по умолчанию 5 мин)
+  # снимает сжатую копию в папку ./backups. Данные пишутся в БД мгновенно при
+  # каждом действии — это вторая копия на случай потери диска.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER:-gabrileon}
+      POSTGRES_DB: ${POSTGRES_DB:-gabrileon}
+      BACKUP_INTERVAL: ${BACKUP_INTERVAL:-300}
+      BACKUP_RECENT_KEEP: ${BACKUP_RECENT_KEEP:-288}
+      BACKUP_DAILY_KEEP: ${BACKUP_DAILY_KEEP:-30}
+      # Необязательная выгрузка бэкапов в облако (Яндекс.Диск, WebDAV)
+      CLOUD_UPLOAD: ${CLOUD_UPLOAD:-}
+      YADISK_USER: ${YADISK_USER:-}
+      YADISK_PASS: ${YADISK_PASS:-}
+      YADISK_DIR: ${YADISK_DIR:-gabrileon-backups}
+      UPLOAD_INTERVAL: ${UPLOAD_INTERVAL:-3600}
+    volumes:
+      - ./scripts/backup-loop.sh:/backup-loop.sh:ro
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "/backup-loop.sh"]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?нужно задать DOMAIN в .env, например admin.gabrileon.ru}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Публичный сайт-лендинг gabrileon.ru. Файлы лежат в самом репозитории
+      # (папка ./site), поэтому на сервере достаточно `git pull` — отдельный
+      # репозиторий/токен не нужен. Путь переопределяется SITE_ROOT в .env.
+      - ${SITE_ROOT:-./site}:/srv/site:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

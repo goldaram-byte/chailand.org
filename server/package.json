@@ -1,0 +1,30 @@
+{
+  "name": "gabrileon-admin-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend API для админ-панели парка «Габрилеон» (касса, CRM, клиенты, лояльность, фискализация, эквайринг)",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "migrate": "node src/migrate.js",
+    "seed": "node src/seed.js",
+    "seed:history": "node src/seed-history.js",
+    "reset": "node src/migrate.js && node src/seed.js && node src/seed-history.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "compression": "^1.8.1",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.5.2",
+    "helmet": "^8.2.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1",
+    "qrcode": "^1.5.4"
+  }
+}
