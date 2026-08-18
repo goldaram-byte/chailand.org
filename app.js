@@ -124,6 +124,10 @@
 
       if (settings.cashback != null) CFG.cashback = Number(settings.cashback);
       if (settings.holidays) CFG.holidays = settings.holidays;
+      // Фискализация: 'emulation' (по умолчанию) | 'shtrih' (печать на кассе через
+      // локальный HTTP-драйвер Штрих-М) | 'taxcom' (облачный ОФД, печатает сервер).
+      window.FISCAL_DRIVER = settings.fiscal_driver || 'emulation';
+      window.SHTRIH_URL = settings.shtrih_url || 'http://localhost:5893';
       if (acq) { ACQUIRING.bank = acq.bank || '—'; ACQUIRING.mode = acq.mode; ACQUIRING.connected = !!acq.connected; ACQUIRING.tid = acq.terminal_id || ''; ACQUIRING.merchant = acq.merchant_id || ''; }
 
       clients = cl.map(function (c) {
@@ -1137,6 +1141,49 @@
     if (cur) sel.value = cur;
   }
 
+  // ---------------- Штрих-М: печать чека на локальном ККТ ----------------
+  // Драйвер «Штрих-М: Драйвер ФР» на кассовом ПК даёт HTTP-JSON интерфейс на
+  // localhost (адрес и порт задаются в настройках, см. window.SHTRIH_URL).
+  // Браузер на кассе стучится туда напрямую — сервер это устройство не видит.
+  //
+  // ВАЖНО: имена команд/полей ниже — по общей документации HTTP-драйвера
+  // Штрих-М и МОГУТ отличаться в вашей версии драйвера. Перед боевым запуском
+  // обязательно сверьте с документацией установленного драйвера (пункт меню
+  // «Настройка соединения» → «HTTP-сервер») и поправьте SHTRIH_CMD при нужде.
+  var SHTRIH_CMD = {
+    // операция «пробить чек целиком»: позиции + оплаты + закрытие одним вызовом
+    path: '/',
+    command: 'PrintFiscalCheck',
+  };
+  function printShtrihReceipt(kind, items, payments) {
+    var url = (window.SHTRIH_URL || 'http://localhost:5893').replace(/\/+$/, '') + SHTRIH_CMD.path;
+    var body = {
+      Command: SHTRIH_CMD.command,
+      CheckType: kind === 'return' ? 'Return' : 'Sell',
+      Positions: (items || []).map(function (it) {
+        return { Name: it.name, Price: Number(it.price), Quantity: Number(it.qty || 1), Tax: 'VatNo' };
+      }),
+      Payments: [
+        Number(payments.cash) > 0 ? { Type: 'Cash', Sum: Number(payments.cash) } : null,
+        Number(payments.card) + Number(payments.bonus || 0) > 0 ? { Type: 'Electronically', Sum: Number(payments.card) + Number(payments.bonus || 0) } : null,
+      ].filter(Boolean),
+    };
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(function (res) {
+      if (!res.ok) throw new Error('Штрих-М: касса ответила ошибкой (HTTP ' + res.status + ')');
+      return res.json();
+    }).then(function (r) {
+      var fn = r.FnNumber || r.FnFactoryNumber, fd = r.DocumentNumber || r.FdNumber, fp = r.FiscalSign || r.Fp;
+      if (!fn || !fd || !fp) throw new Error('Штрих-М: чек напечатан, но касса не вернула номера ФН/ФД/ФП');
+      return { fnNumber: String(fn), fdNumber: String(fd), fp: String(fp), receiptUrl: r.OfdReceiptUrl || r.CheckUrl || null };
+    }).catch(function (e) {
+      throw new Error('Не удалось напечатать чек на Штрих-М (' + (e.message || 'нет связи с кассой') + '). Проверьте, что касса включена и подключена.');
+    });
+  }
+
   function installLocations() {
     loadLocations();
   }
@@ -1160,33 +1207,62 @@
       });
       var cash = PAY.method === 'cash' ? toPay : 0;
       var card = PAY.method === 'cash' ? 0 : toPay;
-      enqueue({
-        uuid: id, kind: 'sale', client_uuid: id,
-        payload: {
-          client_uuid: id, items: items,
-          client_id: (checkClient && checkClient.id) || null,
-          cash_amount: cash, card_amount: card, bonus_used: PAY.bonusSpend || 0,
-          method: PAY.method === 'cash' ? 'cash' : 'card',
-          location_id: deviceLoc(),
-        },
-      });
+      var payments = { cash: cash, card: card, bonus: PAY.bonusSpend || 0 };
+      function send(fiscal) {
+        enqueue({
+          uuid: id, kind: 'sale', client_uuid: id,
+          payload: {
+            client_uuid: id, items: items,
+            client_id: (checkClient && checkClient.id) || null,
+            cash_amount: cash, card_amount: card, bonus_used: PAY.bonusSpend || 0,
+            method: PAY.method === 'cash' ? 'cash' : 'card',
+            location_id: deviceLoc(),
+            fiscal: fiscal || undefined,
+          },
+        });
+      }
       // Привязать серверный uuid к локальной продаже (для будущего возврата)
       setTimeout(function () { if (sales[0] && !sales[0].uuid) sales[0].uuid = id; }, 1700);
+      if (window.FISCAL_DRIVER === 'shtrih') {
+        printShtrihReceipt('sale', items, payments).then(send).catch(function (e) {
+          if (typeof toast === 'function') toast(e.message, true); else alert(e.message);
+        });
+      } else {
+        send(null);
+      }
     });
 
     // Возврат
     wrap('confirmRefund', function () {
       if (!REFUND || !REFUND.sale) return;
       var s = REFUND.sale, id = uuid();
-      enqueue({
-        uuid: id, kind: 'return', client_uuid: id,
-        payload: {
-          client_uuid: id,
-          parent_sale_id: s.serverId || undefined,
-          parent_client_uuid: s.uuid || undefined,
-          reason: (document.getElementById('refundReason') || {}).value || 'Возврат',
-        },
-      });
+      function send(fiscal) {
+        enqueue({
+          uuid: id, kind: 'return', client_uuid: id,
+          payload: {
+            client_uuid: id,
+            parent_sale_id: s.serverId || undefined,
+            parent_client_uuid: s.uuid || undefined,
+            reason: (document.getElementById('refundReason') || {}).value || 'Возврат',
+            fiscal: fiscal || undefined,
+          },
+        });
+      }
+      if (window.FISCAL_DRIVER === 'shtrih') {
+        if (!s.serverId) {
+          if (typeof toast === 'function') toast('Продажа ещё не синхронизирована с сервером — подождите пару секунд и повторите возврат', true);
+          return;
+        }
+        api('/pos/sales/' + s.serverId).then(function (full) {
+          var items = (full.items || []).map(function (it) { return { name: it.name, price: it.price, qty: it.qty }; });
+          var payments = { cash: -Number(full.cash_amount), card: -Number(full.card_amount), bonus: -Number(full.bonus_used) };
+          return printShtrihReceipt('return', items, payments);
+        }).then(send).catch(function (e) {
+          if (typeof toast === 'function') toast(e.message, true); else alert(e.message);
+        });
+      } else {
+        send(null);
+      }
     });
 
     // Открытие/закрытие смены — на сервер
