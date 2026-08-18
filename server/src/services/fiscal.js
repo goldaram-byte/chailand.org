@@ -161,10 +161,17 @@ function stubDriver(name) {
   };
 }
 
+// Штрих-М печатает и фискализирует чек локально, на кассовом ПК (HTTP-драйвер
+// на localhost, недоступен серверу через интернет) — кассовое приложение в
+// браузере печатает чек само и присылает номера ФН/ФД/ФП через fiscalizeManual().
+// Если по какой-то причине браузер не приложил их к продаже — попадаем сюда:
+// очередь будет безрезультатно повторять попытки, пока кто-то не разберётся.
+const shtrihDriver = stubDriver('shtrih');
+
 const DRIVERS = {
   emulation: () => emulationDriver,
   taxcom: () => taxcomDriver,
-  shtrih: () => stubDriver('shtrih'),
+  shtrih: () => shtrihDriver,
   atol: () => stubDriver('atol'),
 };
 
@@ -212,6 +219,24 @@ async function markRetry(doc, err) {
       WHERE id=$1`,
     [doc.id, err.message, attempts, String(backoffSeconds(attempts))]
   );
+}
+
+/**
+ * Записать чек, который уже пробит и фискализирован локально на кассе
+ * (Штрих-М: касса в браузере напечатала его через HTTP-драйвер на localhost
+ * и прислала настоящие номера ФН/ФД/ФП с устройства). В отличие от
+ * fiscalize(), сервер сюда никуда не стучится — просто сохраняет результат.
+ */
+export async function fiscalizeManual({ sale, kind = 'sale', driver = 'shtrih', fnNumber, fdNumber, fp, receiptUrl }) {
+  if (!fnNumber || !fdNumber || !fp) {
+    throw new Error('Не хватает данных фискального чека (ФН/ФД/ФП) с кассового устройства');
+  }
+  const doc = await q1(
+    `INSERT INTO fiscal_docs (sale_id, kind, status, driver, fn_number, fd_number, fp, ofd_receipt_url, registered_at)
+     VALUES ($1,$2,'registered',$3,$4,$5,$6,$7, now()) RETURNING *`,
+    [sale.id, kind, driver, String(fnNumber), String(fdNumber), String(fp), receiptUrl || null]
+  );
+  return { id: doc.id, status: 'registered', fnNumber, fdNumber, fp, receiptUrl: receiptUrl || null, driver };
 }
 
 /**

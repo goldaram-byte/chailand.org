@@ -2,7 +2,7 @@
 // Используется и онлайн-кассой (routes/pos.js), и офлайн-синхронизацией (routes/sync.js),
 // поэтому идемпотентность (client_uuid) и лояльность живут здесь, в одном месте.
 import { q, q1, tx } from '../db.js';
-import { fiscalize } from './fiscal.js';
+import { fiscalize, fiscalizeManual } from './fiscal.js';
 import { acquiringPay, acquiringRefund } from './acquiring.js';
 
 class ApiError extends Error {
@@ -57,6 +57,7 @@ export async function createSale(user, body) {
     method,
     comment,
     location_id = null,
+    fiscal: fiscalReceipt = null, // чек, уже пробитый локально на кассе (Штрих-М)
   } = body || {};
 
   if (!Array.isArray(items) || items.length === 0) throw new ApiError(400, 'Чек пуст');
@@ -148,19 +149,21 @@ export async function createSale(user, body) {
     return sale.id;
   });
 
-  const fiscal = await fiscalize({
-    sale: { id: saleId },
-    items,
-    payments: { cash: cash_amount, card: card_amount, bonus: bonus_used },
-    kind: 'sale',
-  });
+  const fiscal = fiscalReceipt
+    ? await fiscalizeManual({ sale: { id: saleId }, kind: 'sale', ...fiscalReceipt })
+    : await fiscalize({
+        sale: { id: saleId },
+        items,
+        payments: { cash: cash_amount, card: card_amount, bonus: bonus_used },
+        kind: 'sale',
+      });
 
   return { ...(await loadSale(saleId)), acquiring: acq, fiscal };
 }
 
 /** Полный возврат продажи. Идемпотентно по client_uuid. */
 export async function createReturn(user, body) {
-  const { parent_sale_id, parent_client_uuid, reason, client_uuid } = body || {};
+  const { parent_sale_id, parent_client_uuid, reason, client_uuid, fiscal: fiscalReceipt = null } = body || {};
   if (!parent_sale_id && !parent_client_uuid) throw new ApiError(400, 'Не указана продажа для возврата');
 
   if (client_uuid) {
@@ -209,12 +212,14 @@ export async function createReturn(user, body) {
     return ret.id;
   });
 
-  const fiscal = await fiscalize({
-    sale: { id: retId },
-    items: parentItems,
-    payments: { cash: -parent.cash_amount, card: -parent.card_amount, bonus: -parent.bonus_used },
-    kind: 'return',
-  });
+  const fiscal = fiscalReceipt
+    ? await fiscalizeManual({ sale: { id: retId }, kind: 'return', ...fiscalReceipt })
+    : await fiscalize({
+        sale: { id: retId },
+        items: parentItems,
+        payments: { cash: -parent.cash_amount, card: -parent.card_amount, bonus: -parent.bonus_used },
+        kind: 'return',
+      });
 
   return { ...(await loadSale(retId)), acquiring: acq, fiscal };
 }
