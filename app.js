@@ -1053,7 +1053,13 @@
     document.body.appendChild(ov);
     var list = ov.querySelector('#locPickList');
     var cur = deviceLoc();
-    list.innerHTML = LOCS.map(function (l) {
+    // Владелец может смотреть сводно по обеим точкам — даём вернуться к «Все ТЦ».
+    // Кассиру эта опция не показывается: касса всегда должна быть привязана к одной точке.
+    var allOpt = (ME && ME.role === 'owner')
+      ? '<button data-id="" style="text-align:left;padding:13px 15px;border-radius:12px;border:2px solid ' + (!cur ? '#2563eb' : 'var(--line,#e2e8f0)') + ';background:' + (!cur ? '#eff6ff' : '#fff') + ';cursor:pointer;font-size:15px;font-weight:700;color:#0f172a">' +
+        '📍 Все ТЦ<span style="display:block;font-weight:500;font-size:12.5px;color:#64748b">Сводные данные по обеим точкам</span></button>'
+      : '';
+    list.innerHTML = allOpt + LOCS.map(function (l) {
       var on = l.id === cur;
       return '<button data-id="' + l.id + '" style="text-align:left;padding:13px 15px;border-radius:12px;border:2px solid ' + (on ? '#2563eb' : 'var(--line,#e2e8f0)') + ';background:' + (on ? '#eff6ff' : '#fff') + ';cursor:pointer;font-size:15px;font-weight:700;color:#0f172a">' +
         '📍 ' + locEsc(l.name) + (l.address ? '<span style="display:block;font-weight:500;font-size:12.5px;color:#64748b">' + locEsc(l.address) + '</span>' : '') + '</button>';
@@ -1062,7 +1068,7 @@
       btn.onclick = function () {
         setDeviceLoc(btn.getAttribute('data-id'));
         ov.remove();
-        if (typeof toast === 'function') toast('Касса привязана к: ' + locName(deviceLoc()));
+        if (typeof toast === 'function') toast(deviceLoc() ? 'Касса привязана к: ' + locName(deviceLoc()) : 'Показаны данные по всем ТЦ');
       };
     });
     var cl = ov.querySelector('#locPickClose'); if (cl) cl.onclick = function () { ov.remove(); };
