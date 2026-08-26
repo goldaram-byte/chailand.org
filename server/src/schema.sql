@@ -414,6 +414,51 @@ ALTER TABLE sales       ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES l
 -- Журнал мероприятий разделён по ТЦ (бронирование привязано к точке).
 ALTER TABLE bookings    ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES locations(id);
 CREATE INDEX IF NOT EXISTS idx_bookings_location ON bookings(location_id);
+
+-- ---------------------------------------------------------------------------
+-- Абонементы в парк.
+-- pass_types — виды абонементов (настраиваются владельцем): N посещений
+--   (NULL = безлимит) на valid_days дней; можно привязать к ТЦ.
+-- passes — проданные абонементы: всегда привязаны к клиенту (по карте),
+--   хранят остаток посещений и срок действия.
+-- pass_visits — история списаний (кто и когда прошёл по абонементу).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS pass_types (
+  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name        text NOT NULL,
+  price       numeric(12,2) NOT NULL DEFAULT 0,
+  visits      int,                              -- NULL = безлимит на срок
+  valid_days  int NOT NULL DEFAULT 30,
+  location_id bigint REFERENCES locations(id),  -- NULL = все ТЦ
+  is_active   boolean NOT NULL DEFAULT true,
+  sort        int NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS passes (
+  id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  pass_type_id bigint REFERENCES pass_types(id),
+  client_id    bigint NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  name         text NOT NULL,                   -- копия названия на момент продажи
+  visits_total int,                             -- NULL = безлимит
+  visits_left  int,
+  valid_from   date NOT NULL DEFAULT current_date,
+  valid_to     date NOT NULL,
+  status       text NOT NULL DEFAULT 'active',  -- active | used_up | expired | cancelled
+  sale_id      bigint REFERENCES sales(id),     -- продажа (фискальный чек), если была
+  location_id  bigint REFERENCES locations(id),
+  sold_by      bigint REFERENCES users(id),
+  created_at   timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_passes_client ON passes(client_id);
+
+CREATE TABLE IF NOT EXISTS pass_visits (
+  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  pass_id     bigint NOT NULL REFERENCES passes(id) ON DELETE CASCADE,
+  at          timestamptz NOT NULL DEFAULT now(),
+  by_user     bigint REFERENCES users(id),
+  location_id bigint REFERENCES locations(id)
+);
+CREATE INDEX IF NOT EXISTS idx_pass_visits_pass ON pass_visits(pass_id);
 -- Каталог может отличаться по ТЦ: location_id IS NULL — товар во всех ТЦ,
 -- иначе — только в своей точке.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES locations(id);

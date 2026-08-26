@@ -780,6 +780,7 @@
         if (name === 'referral') loadReferral();
         if (name === 'kpi') window.loadKpi('month');
         if (name === 'products') window.renderProducts();
+        if (name === 'passes' && window.renderPassTypes) window.renderPassTypes();
         return r;
       };
     }
@@ -1566,8 +1567,177 @@
     };
   }
 
+  /* ------------------------- Абонементы в парк --------------------------- */
+  function installPasses() {
+    function pEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function pDate(s) { var d = String(s || '').slice(0, 10).split('-'); return d.length === 3 ? d[2] + '.' + d[1] + '.' + d[0] : s; }
+    var pErr = function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); };
+
+    // ---- Настройки → «Абонементы»: виды абонементов ----
+    window.renderPassTypes = function () {
+      var tb = document.getElementById('passTypesTbl');
+      if (!SERVER) { if (tb) tb.innerHTML = '<tr><td colspan="7" class="muted">Доступно при работе с сервером</td></tr>'; return; }
+      api('/passes/types').then(function (list) {
+        var locOpts = function (cur) {
+          return '<option value="">Все ТЦ</option>' + LOCS.map(function (l) {
+            return '<option value="' + l.id + '"' + (Number(cur) === l.id ? ' selected' : '') + '>' + pEsc(l.name) + '</option>';
+          }).join('');
+        };
+        var ptLoc = document.getElementById('ptLoc');
+        if (ptLoc && !ptLoc.dataset.filled) { ptLoc.innerHTML = locOpts(null); ptLoc.dataset.filled = '1'; }
+        if (!tb) return;
+        tb.innerHTML = (list || []).map(function (t) {
+          return '<tr>' +
+            '<td><input value="' + pEsc(t.name) + '" style="min-width:170px" onchange="passTypeUpd(' + t.id + ',\'name\',this.value)"></td>' +
+            '<td><input type="number" min="0" value="' + Number(t.price) + '" style="width:90px" onchange="passTypeUpd(' + t.id + ',\'price\',this.value)"></td>' +
+            '<td><input type="number" min="1" value="' + (t.visits == null ? '' : t.visits) + '" placeholder="безлимит" style="width:90px" onchange="passTypeUpd(' + t.id + ',\'visits\',this.value)"></td>' +
+            '<td><input type="number" min="1" value="' + t.valid_days + '" style="width:80px" onchange="passTypeUpd(' + t.id + ',\'valid_days\',this.value)"></td>' +
+            '<td><select style="width:120px" onchange="passTypeUpd(' + t.id + ',\'location_id\',this.value)">' + locOpts(t.location_id) + '</select></td>' +
+            '<td>' + (t.is_active ? '<span style="color:var(--green);font-weight:700">продаётся</span>' : '<span class="muted">отключён</span>') + '</td>' +
+            '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="passTypeUpd(' + t.id + ',\'is_active\',' + (t.is_active ? 'false' : 'true') + ')">' + (t.is_active ? 'Откл.' : 'Вкл.') + '</button> ' +
+            '<button class="btn btn-ghost btn-sm" onclick="passTypeDel(' + t.id + ')">✕</button></td></tr>';
+        }).join('') || '<tr><td colspan="7" class="muted">Пока нет видов абонементов — добавьте первый выше</td></tr>';
+      }).catch(pErr);
+    };
+    window.passTypeAdd = function () {
+      if (!SERVER) return;
+      var n = document.getElementById('ptName'), p = document.getElementById('ptPrice'),
+          v = document.getElementById('ptVisits'), d = document.getElementById('ptDays'), l = document.getElementById('ptLoc');
+      if (!n.value.trim()) { if (typeof toast === 'function') toast('Укажите название абонемента', true); return; }
+      api('/passes/types', { method: 'POST', body: {
+        name: n.value.trim(), price: +p.value || 0,
+        visits: v.value ? +v.value : null, valid_days: +d.value || 30,
+        location_id: l.value ? +l.value : null,
+      } }).then(function () {
+        n.value = ''; p.value = ''; v.value = '';
+        window.renderPassTypes();
+        if (typeof toast === 'function') toast('Вид абонемента добавлен');
+      }).catch(pErr);
+    };
+    window.passTypeUpd = function (id, f, val) {
+      var body = {};
+      if (f === 'visits') body.visits = val === '' ? null : +val;
+      else if (f === 'price' || f === 'valid_days') body[f] = +val || 0;
+      else if (f === 'location_id') body.location_id = val ? +val : null;
+      else if (f === 'is_active') body.is_active = val === true || val === 'true';
+      else body[f] = val;
+      api('/passes/types/' + id, { method: 'PUT', body: body })
+        .then(function () { window.renderPassTypes(); })
+        .catch(pErr);
+    };
+    window.passTypeDel = function (id) {
+      if (!confirm('Удалить вид абонемента? Уже проданные абонементы продолжат действовать.')) return;
+      api('/passes/types/' + id, { method: 'DELETE' }).then(function () { window.renderPassTypes(); }).catch(pErr);
+    };
+
+    // ---- Абонементы клиента (касса и карточка клиента) ----
+    function passRow(p, clientId, containerId, inCard) {
+      var dead = p.status !== 'active';
+      var left = p.visits_left == null
+        ? 'безлимит'
+        : 'осталось ' + p.visits_left + (p.visits_total ? ' из ' + p.visits_total : '');
+      var st = { used_up: 'использован', expired: 'истёк', cancelled: 'аннулирован' }[p.status] || '';
+      return '<div class="pass-row' + (dead ? ' dead' : '') + '">' +
+        '<span class="pr-info">🎫 ' + pEsc(p.name) +
+        '<small>' + (dead ? st : left + ' · до ' + pDate(p.valid_to)) + (p.visits_used ? ' · посещений: ' + p.visits_used : '') + '</small></span>' +
+        (!dead ? '<button class="btn btn-green btn-sm" onclick="passCheckin(' + p.id + ',' + clientId + ',\'' + containerId + '\',' + !!inCard + ')">✓ Посещение</button>' : '') +
+        '</div>';
+    }
+    window.loadClientPasses = function (clientId, containerId, inCard) {
+      if (!SERVER || !localStorage.getItem(TOKEN_KEY)) return;
+      var el = document.getElementById(containerId); if (!el) return;
+      api('/passes/by-client/' + clientId).then(function (list) {
+        el = document.getElementById(containerId); if (!el) return;
+        list = list || [];
+        var show = inCard ? list : list.filter(function (p) { return p.status === 'active'; });
+        var rows = show.map(function (p) { return passRow(p, clientId, containerId, inCard); }).join('');
+        var sell = '<button class="btn btn-ghost btn-sm" onclick="openPassSell(' + clientId + ',\'' + containerId + '\',' + !!inCard + ')">🎫 Продать абонемент</button>';
+        el.innerHTML = rows + '<div style="margin:2px 0 8px">' + sell + '</div>';
+      }).catch(function () {});
+    };
+    window.passCheckin = function (passId, clientId, containerId, inCard) {
+      api('/passes/' + passId + '/checkin', { method: 'POST', body: { location_id: (typeof deviceLoc === 'function') ? deviceLoc() : null } })
+        .then(function (r) {
+          var msg = r.unlimited ? 'Посещение отмечено (безлимит до ' + pDate(r.valid_to) + ')'
+            : 'Посещение списано · осталось ' + r.visits_left;
+          if (typeof toast === 'function') toast('🎫 ' + msg);
+          window.loadClientPasses(clientId, containerId, inCard);
+        })
+        .catch(pErr);
+    };
+
+    // ---- Продажа абонемента (модалка) ----
+    var PASS_SELL = null;
+    window.openPassSell = function (clientId, containerId, inCard) {
+      api('/passes/types').then(function (list) {
+        var d = (typeof deviceLoc === 'function') ? deviceLoc() : null;
+        var types = (list || []).filter(function (t) { return t.is_active && (!d || !t.location_id || +t.location_id === +d); });
+        if (!types.length) { if (typeof toast === 'function') toast('Нет видов абонементов — добавьте в Настройках → Абонементы', true); return; }
+        PASS_SELL = { clientId: clientId, containerId: containerId, inCard: !!inCard, typeId: types[0].id, types: types };
+        var body = document.getElementById('passSellBody');
+        body.innerHTML =
+          '<div class="cc-head"><div style="flex:1"><div style="font-size:17px;font-weight:800">🎫 Продажа абонемента</div>' +
+          '<div class="muted" style="font-size:13px">Абонемент будет оформлен на карту клиента</div></div>' +
+          '<button onclick="closePassSell()" style="font-size:20px;color:var(--dim);padding:4px 10px">✕</button></div>' +
+          '<div id="passTypeList">' + types.map(function (t) {
+            var vis = t.visits == null ? 'безлимит' : t.visits + ' посещ.';
+            return '<button class="pass-type-btn' + (t.id === PASS_SELL.typeId ? ' on' : '') + '" data-pt="' + t.id + '" onclick="passSellPick(' + t.id + ')">' +
+              pEsc(t.name) + ' — ' + fmtNum(Number(t.price)) +
+              '<small>' + vis + ' · срок ' + t.valid_days + ' дн.</small></button>';
+          }).join('') + '</div>' +
+          '<div style="display:flex;gap:10px;align-items:end;margin-top:12px;flex-wrap:wrap">' +
+          '<div><label style="font-size:10.5px;color:var(--dim);font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Способ оплаты</label>' +
+          '<select id="psMethod"><option value="cash">Наличные</option><option value="card">Карта</option></select></div>' +
+          '<label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;padding-bottom:10px">' +
+          '<input type="checkbox" id="psFiscal" checked style="width:auto"> пробить чек (по кассе)</label>' +
+          '<button class="btn btn-green" style="margin-left:auto" onclick="passSellConfirm()">Оформить абонемент</button></div>' +
+          '<div class="muted" style="font-size:11.5px;margin-top:8px">С галочкой продажа проводится по кассе: фискальный чек и выручка смены (клиенту начислится кэшбэк). Без галочки — только запись абонемента.</div>';
+        document.getElementById('passOverlay').classList.add('open');
+      }).catch(pErr);
+    };
+    window.passSellPick = function (id) {
+      if (!PASS_SELL) return;
+      PASS_SELL.typeId = id;
+      document.querySelectorAll('#passTypeList .pass-type-btn').forEach(function (b) { b.classList.toggle('on', +b.getAttribute('data-pt') === id); });
+    };
+    window.closePassSell = function () { document.getElementById('passOverlay').classList.remove('open'); PASS_SELL = null; };
+    window.passSellConfirm = function () {
+      if (!PASS_SELL) return;
+      var s = PASS_SELL;
+      var method = (document.getElementById('psMethod') || {}).value || 'cash';
+      var fiscal = !!((document.getElementById('psFiscal') || {}).checked);
+      api('/passes/sell', { method: 'POST', body: {
+        pass_type_id: s.typeId, client_id: s.clientId, method: method, fiscal: fiscal,
+        location_id: (typeof deviceLoc === 'function') ? deviceLoc() : null,
+      } }).then(function (p) {
+        if (typeof toast === 'function') toast('🎫 Абонемент «' + p.name + '» оформлен' + (p.sale_id ? ' · чек пробит по кассе' : ' · без чека'));
+        window.closePassSell();
+        window.loadClientPasses(s.clientId, s.containerId, s.inCard);
+        hydrateAll().catch(function () {}); // обновить продажи/бонусы
+      }).catch(pErr);
+    };
+
+    // ---- Абонементы в карточке клиента ----
+    var _rcc = window.renderClientCard;
+    if (typeof _rcc === 'function') {
+      window.renderClientCard = function () {
+        var r = _rcc.apply(this, arguments);
+        if (SERVER && typeof cardClientId !== 'undefined' && cardClientId != null) {
+          var body = document.getElementById('clientCardBody');
+          if (body && !document.getElementById('ccPasses')) {
+            body.insertAdjacentHTML('beforeend',
+              '<div class="cc-sec"><h4>🎫 Абонементы</h4><div id="ccPasses"><span class="muted" style="font-size:12.5px">Загрузка…</span></div></div>');
+          }
+          window.loadClientPasses(cardClientId, 'ccPasses', true);
+        }
+        return r;
+      };
+    }
+  }
+
   function installHooks() {
     installStaff();
+    installPasses();
     installExtras();
     installTasks();
     installLeadAlerts();
