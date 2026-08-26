@@ -77,6 +77,15 @@ export async function createSale(user, body) {
     if (!client_id) throw new ApiError(400, 'Оплата бонусами возможна только для клиента с картой');
     const cl = await q1('SELECT bonus FROM clients WHERE id=$1', [client_id]);
     if (!cl || Number(cl.bonus) < Number(bonus_used)) throw new ApiError(400, 'Недостаточно бонусов на карте');
+    // Лимит оплаты бонусами — свой у каждой точки (ТЦ)
+    const loc = location_id ? await q1('SELECT bonus_spend_percent FROM locations WHERE id=$1', [location_id]) : null;
+    const pct = loc ? Number(loc.bonus_spend_percent) : 100;
+    if (pct < 100) {
+      const limit = Math.floor((total * pct) / 100);
+      if (Number(bonus_used) > limit) {
+        throw new ApiError(400, `Бонусами можно оплатить не более ${pct}% чека — это ${limit} ₽`);
+      }
+    }
   }
 
   const percent = await cashbackPercent();
