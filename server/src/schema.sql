@@ -465,6 +465,16 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES loca
 ALTER TABLE services ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES locations(id);
 -- Банкетные комнаты принадлежат конкретному ТЦ (NULL — во всех точках).
 ALTER TABLE rooms    ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES locations(id);
+
+-- Позиция каталога может работать сразу в НЕСКОЛЬКИХ ТЦ: список точек.
+-- Пустой список — позиция доступна во всех точках.
+-- Старая колонка location_id сохраняется для совместимости и переносится сюда.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS location_ids bigint[] NOT NULL DEFAULT '{}';
+ALTER TABLE services ADD COLUMN IF NOT EXISTS location_ids bigint[] NOT NULL DEFAULT '{}';
+UPDATE products SET location_ids = ARRAY[location_id]
+ WHERE location_id IS NOT NULL AND location_ids = '{}';
+UPDATE services SET location_ids = ARRAY[location_id]
+ WHERE location_id IS NOT NULL AND location_ids = '{}';
 CREATE INDEX IF NOT EXISTS idx_sales_location ON sales(location_id);
 CREATE INDEX IF NOT EXISTS idx_shifts_location ON cash_shifts(location_id);
 CREATE INDEX IF NOT EXISTS idx_products_location ON products(location_id);
