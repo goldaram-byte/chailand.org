@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 380" role="img" aria-label="ДрифтЛэнд">
+  <title>ДрифтЛэнд</title>
+  <defs>
+    <linearGradient id="dlBub" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#F4622A"/><stop offset="1" stop-color="#D81F16"/>
+    </linearGradient>
+    <linearGradient id="dlFlame" x1="0" y1="0" x2="1" y2="0.4">
+      <stop offset="0" stop-color="#E8291F"/><stop offset="1" stop-color="#FF7A2F"/>
+    </linearGradient>
+    <clipPath id="dlHelmet">
+      <path d="M40 230a190 180 0 0 1 380 0v52a26 26 0 0 1-26 26H66a26 26 0 0 1-26-26z"/>
+    </clipPath>
+  </defs>
+
+  <!-- пламя -->
+  <g fill="url(#dlFlame)">
+    <path d="M392 96c48-32 102-40 160-26-26 9-44 23-53 42 21-8 40-6 57 5-29 3-51 15-64 37-11-27-42-46-100-58z"/>
+    <path d="M404 186c56-38 120-44 184-28-30 10-52 26-62 47 24-8 45-5 64 8-34 3-59 17-74 43-14-30-47-52-112-70z"/>
+    <path d="M396 272c38-24 82-29 130-20-22 7-37 18-44 34 17-6 33-4 47 6-25 2-43 12-54 30-10-21-36-37-79-50z"/>
+  </g>
+
+  <!-- шлем: купол с плоским низом -->
+  <g clip-path="url(#dlHelmet)">
+    <rect x="30" y="40" width="400" height="280" fill="#ffffff"/>
+    <!-- красный «пузырь» -->
+    <circle cx="272" cy="196" r="104" fill="url(#dlBub)"/>
+    <!-- бежевая окантовка по нижнему краю -->
+    <rect x="30" y="266" width="400" height="34" fill="#F5E7C8"/>
+    <!-- тёмный вырез для лица -->
+    <ellipse cx="126" cy="252" rx="90" ry="72" fill="#2B2438"/>
+  </g>
+  <!-- контур шлема -->
+  <path d="M40 230a190 180 0 0 1 380 0v52a26 26 0 0 1-26 26H66a26 26 0 0 1-26-26z"
+        fill="none" stroke="#241F33" stroke-width="10" stroke-linejoin="round"/>
+  <!-- заклёпки -->
+  <circle cx="300" cy="160" r="10" fill="#241F33"/>
+  <circle cx="336" cy="214" r="9" fill="#241F33"/>
+  <circle cx="278" cy="248" r="9" fill="#241F33"/>
+  <!-- ремешок -->
+  <path d="M74 306c-12 12-18 26-18 42" fill="none" stroke="#241F33" stroke-width="12" stroke-linecap="round"/>
+  <rect x="34" y="342" width="36" height="26" rx="8" fill="#2B2438" stroke="#241F33" stroke-width="6"/>
+</svg>
