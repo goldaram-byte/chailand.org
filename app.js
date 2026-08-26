@@ -121,7 +121,7 @@
         return { id: p.id, pid: p.id, name: p.name, day: p.day_kind || 'any', price: Number(p.price), doc: p.requires_document, group: p.group_id, loc: p.location_id || null, track: !!p.track_stock, stock: Number(p.stock || 0) };
       });
       SERVICES = cat.services.map(function (s) { return { id: s.id, name: s.name, price: Number(s.price), options: s.options || '' }; });
-      ROOMS = cat.rooms.map(function (r) { return { id: r.id, name: r.name, cap: r.capacity, price: 2000 }; });
+      ROOMS = cat.rooms.map(function (r) { return { id: r.id, name: r.name, cap: r.capacity, price: 2000, loc: r.location_id || null }; });
 
       if (settings.cashback != null) CFG.cashback = Number(settings.cashback);
       if (settings.holidays) CFG.holidays = settings.holidays;
@@ -1252,6 +1252,7 @@
     if (!SERVER || !localStorage.getItem(TOKEN_KEY)) return Promise.resolve();
     return api('/locations').then(function (list) {
       LOCS = list || [];
+      window.ALL_LOCS = LOCS; // для журнала мероприятий и списка комнат
       renderLocBadge();
       renderLocSettings();
       fillDashLocation();
@@ -1447,6 +1448,7 @@
       return api('/bookings' + (d ? '?location_id=' + d : '')).then(function (rows) {
         bookings = (rows || []).map(mapBk);
         if (typeof renderBookings === 'function') renderBookings();
+        if (typeof curPage !== 'undefined' && curPage === 'journal' && typeof renderJournal === 'function') renderJournal();
         if (typeof bookingCardId !== 'undefined' && bookingCardId != null && typeof renderBookingCard === 'function') renderBookingCard();
       }).catch(function () {});
     };
@@ -1531,6 +1533,36 @@
       api('/bookings/' + id, { method: 'DELETE' })
         .then(function () { if (typeof closeBookingCard === 'function') closeBookingCard(); return window.loadBookings(); })
         .catch(bkErr);
+    };
+
+    // Открытие «Журнала» — подтянуть свежие брони с сервера
+    var _go = window.go;
+    if (typeof _go === 'function') {
+      window.go = function (p) { var r = _go.apply(this, arguments); if (p === 'journal') window.loadBookings(); return r; };
+    }
+
+    // Банкетные комнаты — на сервер
+    function roomsReload(msg) {
+      return hydrateAll().then(function () {
+        if (typeof renderJournal === 'function' && typeof curPage !== 'undefined' && curPage === 'journal') renderJournal();
+        if (msg && typeof toast === 'function') toast(msg);
+      }).catch(function () {});
+    }
+    window.roomAdd = function () {
+      if (!SERVER) return;
+      var n = document.getElementById('rmName'), c = document.getElementById('rmCap'), l = document.getElementById('rmLoc');
+      if (!n.value.trim()) return toast('Укажите название комнаты', true);
+      api('/catalog/rooms', { method: 'POST', body: { name: n.value.trim(), capacity: +c.value || 0, location_id: l.value ? +l.value : null } })
+        .then(function () { n.value = ''; c.value = ''; return roomsReload('Комната добавлена'); })
+        .catch(bkErr);
+    };
+    window.roomRename = function (id, v) { if (SERVER) api('/catalog/rooms/' + id, { method: 'PUT', body: { name: v } }).then(function () { return roomsReload(); }).catch(bkErr); };
+    window.roomSetCap = function (id, v) { if (SERVER) api('/catalog/rooms/' + id, { method: 'PUT', body: { capacity: +v || 0 } }).then(function () { return roomsReload(); }).catch(bkErr); };
+    window.roomSetLoc = function (id, v) { if (SERVER) api('/catalog/rooms/' + id, { method: 'PUT', body: { location_id: v ? +v : null } }).then(function () { return roomsReload('ТЦ комнаты изменён'); }).catch(bkErr); };
+    window.roomDel = function (id) {
+      if (!SERVER) return;
+      if (!confirm('Удалить комнату? Существующие брони останутся в журнале.')) return;
+      api('/catalog/rooms/' + id, { method: 'DELETE' }).then(function () { return roomsReload('Комната удалена'); }).catch(bkErr);
     };
   }
 
