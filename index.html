@@ -1297,32 +1297,42 @@ function renderTariffs(){
 }
 
 // Продажа абонемента из кассы: оформляется на карту клиента, поэтому
-// сначала нужно найти клиента в чеке.
+// сначала нужно найти клиента в чеке. Дальше абонемент — обычная позиция:
+// он попадает в чек и выдаётся при проведении оплаты, вместе с чеком.
 function posSellPass(typeId){
   if(!shift) return toast('Сначала откройте смену', true);
   if(!checkClient) return toast('Абонемент оформляется на карту клиента — сначала найдите клиента', true);
-  if(typeof openPassSell!=='function') return toast('Абонементы доступны при работе с сервером', true);
-  openPassSell(checkClient.id, 'clientPasses', false, typeId);
+  const t = (window.PASS_TYPES||[]).find(x=>+x.id===+typeId);
+  if(!t) return toast('Вид абонемента не найден', true);
+  addLine({ id:'pass'+t.id, name:'Абонемент «'+t.name+'»', price:+t.price, passType:t.id });
 }
 
 /* ================= ЧЕК (Шаг 1) ================= */
-function addToCheck(tid){
-  if(!shift) return toast('Сначала откройте смену', true);
-  const t = TARIFFS.find(x=>x.id===tid);
-  const line = check.find(l=>l.t.id===tid);
+// id позиции может быть и числом (билет, товар), и строкой (абонемент),
+// поэтому сравниваем как строки
+const sameId = (a,b) => String(a)===String(b);
+function addLine(t){
+  const line = check.find(l=>sameId(l.t.id, t.id));
   if(line) line.qty++; else check.push({t, qty:1});
   renderCheck();
 }
+function addToCheck(tid){
+  if(!shift) return toast('Сначала откройте смену', true);
+  const t = TARIFFS.find(x=>sameId(x.id, tid));
+  if(!t) return;
+  addLine(t);
+}
 function chQty(tid,d){
-  const line = check.find(l=>l.t.id===tid);
+  const line = check.find(l=>sameId(l.t.id, tid));
+  if(!line) return;
   line.qty+=d; if(line.qty<=0) check=check.filter(l=>l!==line);
   renderCheck();
 }
 const checkTotal = () => check.reduce((a,l)=>a+l.t.price*l.qty,0);
 function renderCheck(){
   $('checkLines').innerHTML = check.length ? check.map(l=>`
-    <div class="cl"><span class="nm">${l.t.name}</span>
-    <button onclick="chQty(${l.t.id},-1)">−</button><span class="qty">${l.qty}</span><button onclick="chQty(${l.t.id},1)">+</button>
+    <div class="cl"><span class="nm">${l.t.passType?'🎫 ':''}${l.t.name}</span>
+    <button onclick="chQty('${l.t.id}',-1)">−</button><span class="qty">${l.qty}</span><button onclick="chQty('${l.t.id}',1)">+</button>
     <span style="min-width:72px;text-align:right;font-weight:700">${fmt(l.t.price*l.qty)}</span></div>`).join('')
     : '<div class="muted" style="padding:12px 0;text-align:center">Нажмите тариф слева</div>';
   $('checkTotal').textContent = fmt(checkTotal());
@@ -1336,7 +1346,11 @@ function findCard(){
   checkClient=c; renderClientSlot();
   toast('Карта считана: '+c.name+' · '+c.bonus+' бонусов');
 }
-function dropClient(){ checkClient=null; renderClientSlot(); }
+function dropClient(){
+  // абонемент оформляется на карту — без клиента строка чека повиснет
+  if(check.some(l=>l.t.passType)) return toast('В чеке есть абонемент — сначала уберите его из чека', true);
+  checkClient=null; renderClientSlot();
+}
 function renderClientSlot(){
   $('clientSlot').innerHTML = checkClient
     ? `<div class="client-tag"><span>💳 ${checkClient.name} · ${checkClient.card} · ${checkClient.bonus} бонусов</span><button onclick="dropClient()" style="font-size:15px;color:#065f46">✕</button></div>

@@ -489,3 +489,7 @@ UPDATE clients SET card_no = lpad(substring(card_no from '[0-9]+'), 6, '0')
  WHERE card_no ~ '^GAB-[0-9]+$';
 UPDATE clients SET referral_code = '9' || lpad(id::text, 5, '0')
  WHERE referral_code IS NOT NULL AND referral_code !~ '^[0-9]+$';
+
+-- Абонемент продаётся строкой чека, как билет или товар: помним, какой вид
+-- абонемента стоял в позиции, чтобы возврат чека аннулировал выданное.
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS pass_type_id bigint REFERENCES pass_types(id);

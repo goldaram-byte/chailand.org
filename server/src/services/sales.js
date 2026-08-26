@@ -67,6 +67,20 @@ export async function createSale(user, body) {
     if (dup) return { ...(await loadSale(dup.id)), idempotent: true };
   }
 
+  // Абонемент — такая же позиция чека, как билет или товар, но выдаётся он
+  // на карту клиента: без клиента в чеке оформить его нельзя.
+  const passItems = items.filter((it) => it.pass_type_id);
+  const passTypes = {};
+  if (passItems.length) {
+    if (!client_id) throw new ApiError(400, 'Абонемент оформляется на карту клиента — добавьте клиента в чек');
+    for (const it of passItems) {
+      if (passTypes[it.pass_type_id]) continue;
+      const t = await q1('SELECT * FROM pass_types WHERE id=$1 AND is_active', [it.pass_type_id]);
+      if (!t) throw new ApiError(404, 'Вид абонемента не найден или отключён');
+      passTypes[it.pass_type_id] = t;
+    }
+  }
+
   const total = items.reduce((a, it) => a + Number(it.price) * Number(it.qty || 1), 0);
   const paid = Number(cash_amount) + Number(card_amount) + Number(bonus_used);
   if (Math.abs(paid - total) > 0.01) {
@@ -121,10 +135,23 @@ export async function createSale(user, body) {
     );
     for (const it of items) {
       await cq(
-        `INSERT INTO sale_items (sale_id, product_id, group_id, name, qty, price, sum)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [sale.id, it.product_id || null, it.group_id || null, it.name, it.qty || 1, it.price, Number(it.price) * Number(it.qty || 1)]
+        `INSERT INTO sale_items (sale_id, product_id, group_id, name, qty, price, sum, pass_type_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [sale.id, it.product_id || null, it.group_id || null, it.name, it.qty || 1, it.price, Number(it.price) * Number(it.qty || 1), it.pass_type_id || null]
       );
+      // Абонементы выдаём здесь же: сколько штук в позиции — столько и карт.
+      if (it.pass_type_id) {
+        const t = passTypes[it.pass_type_id];
+        for (let i = 0; i < Number(it.qty || 1); i++) {
+          await cq(
+            `INSERT INTO passes (pass_type_id, client_id, name, visits_total, visits_left,
+                                 valid_to, sale_id, location_id, sold_by)
+             VALUES ($1,$2,$3,$4,$4, current_date + ($5 || ' days')::interval, $6, $7, $8)`,
+            [t.id, client_id, t.name, t.visits || null, String(t.valid_days || 30),
+             sale.id, saleLocation || t.location_id || null, user.id]
+          );
+        }
+      }
       // Складской учёт: списываем остаток у товаров с учётом (track_stock).
       if (it.product_id) {
         const qty = Number(it.qty || 1);
@@ -220,9 +247,9 @@ export async function createReturn(user, body) {
     );
     for (const it of parentItems) {
       await cq(
-        `INSERT INTO sale_items (sale_id, product_id, group_id, name, qty, price, sum)
-         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [ret.id, it.product_id, it.group_id, it.name, -Number(it.qty), it.price, -Number(it.sum)]
+        `INSERT INTO sale_items (sale_id, product_id, group_id, name, qty, price, sum, pass_type_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [ret.id, it.product_id, it.group_id, it.name, -Number(it.qty), it.price, -Number(it.sum), it.pass_type_id || null]
       );
       // Возврат товара с учётом остатков — вернуть на склад.
       if (it.product_id) {
@@ -248,6 +275,8 @@ export async function createReturn(user, body) {
         await cq('UPDATE clients SET bonus = bonus + $2 WHERE id=$1', [parent.client_id, delta]);
       }
     }
+    // Возврат чека аннулирует выданные по нему абонементы
+    await cq(`UPDATE passes SET status='cancelled' WHERE sale_id=$1 AND status <> 'cancelled'`, [parent.id]);
     await cq(`UPDATE sales SET status='returned' WHERE id=$1`, [parent.id]);
     return ret.id;
   });

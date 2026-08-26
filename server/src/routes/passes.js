@@ -125,12 +125,18 @@ passesRouter.get(
     const rows = await q(
       `SELECT p.*, (SELECT count(*)::int FROM pass_visits v WHERE v.pass_id = p.id) AS visits_used,
               u.full_name AS sold_by_name, l.name AS location_name,
-              COALESCE(s.total, t.price) AS price, s.method AS pay_method
+              -- цена именно этой позиции чека, а не всей продажи
+              COALESCE(si.price, t.price) AS price, s.method AS pay_method
          FROM passes p
          LEFT JOIN users u ON u.id = p.sold_by
          LEFT JOIN locations l ON l.id = p.location_id
          LEFT JOIN sales s ON s.id = p.sale_id
          LEFT JOIN pass_types t ON t.id = p.pass_type_id
+         LEFT JOIN LATERAL (
+           SELECT price FROM sale_items
+            WHERE sale_id = p.sale_id AND pass_type_id = p.pass_type_id
+            ORDER BY id LIMIT 1
+         ) si ON true
         WHERE p.client_id=$1 ORDER BY p.created_at DESC LIMIT 20`,
       [req.params.clientId]
     );
