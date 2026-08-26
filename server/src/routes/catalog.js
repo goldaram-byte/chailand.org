@@ -154,7 +154,13 @@ catalogRouter.delete(
   '/products/:id',
   canEdit,
   ah(async (req, res) => {
-    await q('DELETE FROM products WHERE id=$1', [req.params.id]);
+    await tx(async ({ q: cq }) => {
+      // Позицию, которая уже продавалась, тоже можно удалить: строки чеков
+      // отвязываем от неё (название и цена в них уже сохранены), поэтому
+      // история продаж и отчёты не теряются.
+      await cq('UPDATE sale_items SET product_id=NULL WHERE product_id=$1', [req.params.id]);
+      await cq('DELETE FROM products WHERE id=$1', [req.params.id]);
+    });
     await audit(req, 'catalog.product.delete', { entity: 'product', entityId: req.params.id });
     res.json({ ok: true });
   })

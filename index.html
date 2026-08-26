@@ -1244,7 +1244,9 @@ function dayKindOf(dateStr){
   return 'weekday';
 }
 const KIND_RU = {weekday:'Будний день', friday:'Пятница', weekend:'Выходной / праздник'};
-const DAY_RU = {weekday:'Пн–Чт', friday:'Пятница', weekend:'Выходные', any:'Любой день'};
+const DAY_RU = {workweek:'Будни (Пн–Пт)', weekday:'Пн–Чт', friday:'Пятница', weekend:'Выходные', any:'Любой день'};
+// Подходит ли билет под тип дня: «Будни» покрывают и Пн–Чт, и пятницу
+const dayFits = (day, kind) => day==='any' || day===kind || (day==='workweek' && (kind==='weekday' || kind==='friday'));
 function setPosGroup(id){ posGroup = id; renderTariffs(); }
 function renderTariffs(){
   const kind = dayKindOf($('posDate').value);
@@ -1253,7 +1255,7 @@ function renderTariffs(){
   $('posGroups').innerHTML = GROUPS.map(g=>
     `<button class="${g.id===posGroup?'act':''}" onclick="setPosGroup(${g.id})">${g.name}</button>`).join('');
   // Билеты (позиции с привязкой ко дню) фильтруются по дню недели, позиции any показываются всегда
-  const list = TARIFFS.filter(t=>t.group===posGroup && (t.day==='any'||t.day===kind) && (typeof prodInLoc!=='function'||prodInLoc(t)));
+  const list = TARIFFS.filter(t=>t.group===posGroup && dayFits(t.day, kind) && (typeof prodInLoc!=='function'||prodInLoc(t)));
   $('tariffGrid').innerHTML = list.length ? list.map(t=>`
     <button class="tariff" title="${String(t.name).replace(/"/g,'&quot;')}" onclick="addToCheck(${t.id})">
       <div class="tn">${t.name}</div>
