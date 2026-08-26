@@ -3,11 +3,18 @@
 // интернета, не терялись и попадали в базу при появлении связи.
 import { q, q1, tx } from '../db.js';
 
-// Следующий номер карты GAB-XXXX
+// Следующий номер карты — только цифры (6 знаков), чтобы карту можно было
+// продиктовать по телефону и набрать на любом сканере/клавиатуре.
 export async function nextCardNo() {
-  const row = await q1(`SELECT card_no FROM clients WHERE card_no ~ '^GAB-[0-9]+$' ORDER BY card_no DESC LIMIT 1`);
-  const n = row ? parseInt(row.card_no.slice(4), 10) + 1 : 1;
-  return 'GAB-' + String(n).padStart(4, '0');
+  const row = await q1(`SELECT card_no FROM clients WHERE card_no ~ '^[0-9]+$' ORDER BY card_no::bigint DESC LIMIT 1`);
+  const n = row ? Number(row.card_no) + 1 : 1;
+  return String(n).padStart(6, '0');
+}
+
+// Реферальный код — тоже только цифры. Начинается с 9, чтобы никогда не
+// совпасть с номером карты (карты нумеруются с 000001).
+export function referralCodeFor(id) {
+  return '9' + String(id).padStart(5, '0');
 }
 
 // Настройки реферальной программы «Приведи друга»
@@ -49,7 +56,7 @@ export async function createClient({ full_name, phone, app_installed = false, no
       [full_name, phone || null, card_no, app_installed, note || null, referrer ? referrer.id : null]
     );
     // личный реферальный код
-    const code = 'GB' + String(c.id).padStart(4, '0');
+    const code = referralCodeFor(c.id);
     await cq('UPDATE clients SET referral_code = $2 WHERE id = $1', [c.id, code]);
     c.referral_code = code;
 

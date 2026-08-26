@@ -482,3 +482,10 @@ UPDATE services SET location_ids = ARRAY[location_id]
 CREATE INDEX IF NOT EXISTS idx_sales_location ON sales(location_id);
 CREATE INDEX IF NOT EXISTS idx_shifts_location ON cash_shifts(location_id);
 CREATE INDEX IF NOT EXISTS idx_products_location ON products(location_id);
+
+-- Коды клиентов — только цифры: номер карты легко продиктовать по телефону
+-- и набрать на любом сканере. Старые GAB-0002 → 000002, GB0002 → 900002.
+UPDATE clients SET card_no = lpad(substring(card_no from '[0-9]+'), 6, '0')
+ WHERE card_no ~ '^GAB-[0-9]+$';
+UPDATE clients SET referral_code = '9' || lpad(id::text, 5, '0')
+ WHERE referral_code IS NOT NULL AND referral_code !~ '^[0-9]+$';

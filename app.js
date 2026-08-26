@@ -122,9 +122,14 @@
       // Эквайринг доступен не всем ролям — кассиру не запрашиваем (иначе 403 в консоли)
       (ME && ME.role === 'cashier') ? Promise.resolve(null) : api('/settings/acquiring').catch(function () { return null; }),
       api('/reports/cashiers').catch(function () { return []; }),
+      api('/passes/types').catch(function () { return []; }),
     ]).then(function (res) {
       var cat = res[0], settings = res[1], cl = res[2], ld = res[3], sl = res[4], acq = res[5];
       DASH_USERS = (res[6] || []).map(function (u) { return { id: u.id, name: u.full_name }; });
+      // Абонементы — отдельная группа в кассе
+      window.PASS_TYPES = (res[7] || []).filter(function (t) { return t.is_active; }).map(function (t) {
+        return { id: t.id, name: t.name, price: Number(t.price), visits: t.visits, days: t.valid_days, loc: t.location_id || null };
+      });
 
       GROUPS = cat.groups.map(function (g) { return { id: g.id, name: g.name, kind: g.kind || 'goods' }; });
       TARIFFS = cat.products.map(function (p) {
@@ -486,6 +491,45 @@
       } else drop();
     };
 
+    // --- Правка карточки клиента ---
+    window.saveClientCard = function (id) {
+      var c = clients.find(function (x) { return x.id === id; }); if (!c) return;
+      var v = function (i) { var e = document.getElementById(i); return e ? e.value.trim() : ''; };
+      var name = v('ecName');
+      if (!name) { if (typeof toast === 'function') toast('Имя не может быть пустым', true); return; }
+      var body = { full_name: name, phone: v('ecPhone'), email: v('ecEmail'), note: v('ecNote') };
+      if (!SERVER) return;
+      api('/clients/' + id, { method: 'PUT', body: body })
+        .then(function (r) {
+          c.name = r.full_name; c.phone = r.phone || ''; c.email = r.email || ''; c.note = r.note || '';
+          if (typeof renderClients === 'function') renderClients();
+          if (typeof renderClientCard === 'function') renderClientCard();
+          if (typeof toast === 'function') toast('Данные клиента сохранены');
+        })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+
+    // --- Ручное начисление/списание бонусов (только владелец) ---
+    window.giveBonus = function (id) {
+      var c = clients.find(function (x) { return x.id === id; }); if (!c) return;
+      var pts = Math.round(Number((document.getElementById('bnPts') || {}).value || 0));
+      var reason = ((document.getElementById('bnReason') || {}).value || '').trim();
+      if (!pts) { if (typeof toast === 'function') toast('Укажите количество баллов', true); return; }
+      if (!reason) { if (typeof toast === 'function') toast('Напишите причину начисления', true); return; }
+      if (!SERVER) return;
+      api('/clients/' + id + '/bonus', { method: 'POST', body: { points: pts, reason: reason } })
+        .then(function (r) {
+          c.bonus = Number(r.bonus);
+          if (typeof renderClients === 'function') renderClients();
+          if (typeof renderClientCard === 'function') renderClientCard();
+          if (typeof toast === 'function') {
+            toast(pts > 0 ? ('Начислено ' + pts + ' бонусов ⭐ · у клиента ' + c.bonus)
+                          : ('Списано ' + Math.abs(pts) + ' бонусов · у клиента ' + c.bonus));
+          }
+        })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+
     // --- Настройки: реферальная программа ---
     window.saveReferral = function () {
       var body = {
@@ -832,6 +876,7 @@
       bonus: Number(c.bonus), buys: Number(c.buys || 0), app: !!c.app_installed,
       history: null, kids: null, kidBdayIn: c.kid_bday_in,
       passes: Number(c.active_passes || 0),
+      email: c.email || '', note: c.note || '',
     };
   }
 
@@ -1715,18 +1760,64 @@
         ? 'безлимит'
         : 'осталось ' + p.visits_left + (p.visits_total ? ' из ' + p.visits_total : '');
       var st = { used_up: 'использован', expired: 'истёк', cancelled: 'аннулирован' }[p.status] || '';
+      var args = p.id + ',' + clientId + ',\'' + containerId + '\',' + !!inCard;
       return '<div class="pass-row' + (dead ? ' dead' : '') + '">' +
         '<span class="pr-info">🎫 ' + pEsc(p.name) +
         '<small>' + (dead ? st : left + ' · до ' + pDate(p.valid_to)) + (p.visits_used ? ' · посещений: ' + p.visits_used : '') + '</small></span>' +
-        (!dead ? '<button class="btn btn-green btn-sm" onclick="passCheckin(' + p.id + ',' + clientId + ',\'' + containerId + '\',' + !!inCard + ')">✓ Посещение</button>' : '') +
+        (!dead ? '<button class="btn btn-green btn-sm" onclick="passCheckin(' + args + ')">✓ Посещение</button>' : '') +
+        // в карточке клиента — раскрыть покупку и все списания
+        (inCard ? '<button class="btn btn-ghost btn-sm" onclick="passHistToggle(' + args + ')">История</button>' : '') +
+        (inCard ? '<div class="pass-hist" id="ph' + p.id + '" hidden></div>' : '') +
         '</div>';
     }
+
+    // ---- История покупки и списаний по абонементу ----
+    window.passHistToggle = function (passId, clientId, containerId, inCard) {
+      var box = document.getElementById('ph' + passId);
+      if (!box) return;
+      if (!box.hidden) { box.hidden = true; return; }
+      box.hidden = false;
+      box.innerHTML = '<div class="ph-empty">Загрузка…</div>';
+      var buy = (PASS_CACHE[passId] || {});
+      var head = 'Куплен ' + pDate(buy.created_at) +
+        (buy.price != null ? ' · ' + fmtNum(Number(buy.price)) : '') +
+        (buy.pay_method ? ' · ' + ({ cash: 'наличные', card: 'карта', online: 'онлайн' }[buy.pay_method] || buy.pay_method) : ' · без чека') +
+        (buy.sold_by_name ? ' · продал(а) ' + pEsc(buy.sold_by_name) : '') +
+        (buy.location_name ? ' · ' + pEsc(buy.location_name) : '');
+      api('/passes/' + passId + '/visits').then(function (list) {
+        box = document.getElementById('ph' + passId); if (!box) return;
+        var rows = (list || []).map(function (v) {
+          var when = pDate(v.at) + ' ' + String(v.at).slice(11, 16);
+          return '<div class="ph-v"><span>➖ ' + when +
+            (v.user_name ? ' · ' + pEsc(v.user_name) : '') + '</span>' +
+            '<button class="btn btn-ghost btn-sm" title="Отменить ошибочное списание" onclick="passVisitCancel(' +
+            passId + ',' + v.id + ',' + clientId + ',\'' + containerId + '\',' + !!inCard + ')">✕ отменить</button></div>';
+        }).join('');
+        box.innerHTML = '<div class="ph-buy">🧾 ' + head + '</div>' +
+          (rows || '<div class="ph-empty">Посещений по абонементу ещё не было</div>');
+      }).catch(function () {
+        box = document.getElementById('ph' + passId); if (box) box.innerHTML = '<div class="ph-buy">🧾 ' + head + '</div>';
+      });
+    };
+    window.passVisitCancel = function (passId, visitId, clientId, containerId, inCard) {
+      if (!confirm('Вернуть посещение на абонемент? Списание будет отменено.')) return;
+      api('/passes/' + passId + '/visits/' + visitId, { method: 'DELETE' })
+        .then(function (p) {
+          if (typeof toast === 'function') {
+            toast('Посещение возвращено' + (p.visits_left == null ? '' : ' · осталось ' + p.visits_left));
+          }
+          window.loadClientPasses(clientId, containerId, inCard);
+        })
+        .catch(pErr);
+    };
+    var PASS_CACHE = {};
     window.loadClientPasses = function (clientId, containerId, inCard) {
       if (!SERVER || !localStorage.getItem(TOKEN_KEY)) return;
       var el = document.getElementById(containerId); if (!el) return;
       api('/passes/by-client/' + clientId).then(function (list) {
         el = document.getElementById(containerId); if (!el) return;
         list = list || [];
+        list.forEach(function (p) { PASS_CACHE[p.id] = p; });
         var show = inCard ? list : list.filter(function (p) { return p.status === 'active'; });
         var rows = show.map(function (p) { return passRow(p, clientId, containerId, inCard); }).join('');
         var sell = '<button class="btn btn-ghost btn-sm" onclick="openPassSell(' + clientId + ',\'' + containerId + '\',' + !!inCard + ')">🎫 Продать абонемент</button>';
@@ -1746,12 +1837,14 @@
 
     // ---- Продажа абонемента (модалка) ----
     var PASS_SELL = null;
-    window.openPassSell = function (clientId, containerId, inCard) {
+    window.openPassSell = function (clientId, containerId, inCard, presetTypeId) {
       api('/passes/types').then(function (list) {
         var d = (typeof deviceLoc === 'function') ? deviceLoc() : null;
         var types = (list || []).filter(function (t) { return t.is_active && (!d || !t.location_id || +t.location_id === +d); });
         if (!types.length) { if (typeof toast === 'function') toast('Нет видов абонементов — добавьте в Настройках → Абонементы', true); return; }
-        PASS_SELL = { clientId: clientId, containerId: containerId, inCard: !!inCard, typeId: types[0].id, types: types };
+        // из кассы приходит уже выбранный вид абонемента
+        var preset = presetTypeId && types.some(function (t) { return +t.id === +presetTypeId; }) ? +presetTypeId : types[0].id;
+        PASS_SELL = { clientId: clientId, containerId: containerId, inCard: !!inCard, typeId: preset, types: types };
         var body = document.getElementById('passSellBody');
         body.innerHTML =
           '<div class="cc-head"><div style="flex:1"><div style="font-size:17px;font-weight:800">🎫 Продажа абонемента</div>' +

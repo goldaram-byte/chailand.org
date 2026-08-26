@@ -203,7 +203,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 .grp-chips button:hover{border-color:#fdba74;color:var(--orange)}
 .grp-chips button.act{background:var(--orange);border-color:var(--orange);color:#fff;box-shadow:0 3px 10px rgba(234,88,12,.22)}
 .app-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;background:#eff6ff;color:var(--blue)}
-.pass-badge{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;background:#fff4e6;color:#b45309;border:1px solid #fcd9a8}
+.pass-badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;background:#fff4e6;color:#b45309;border:1px solid #fcd9a8}
 
 /* ===== CRM / ВОРОНКА ===== */
 .crm-board{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;align-items:start}
@@ -235,6 +235,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 @media(max-width:900px){.crm-board{grid-template-columns:1fr}}
 
 /* ===== КАРТОЧКА КЛИЕНТА ===== */
+
 .cc-head{display:flex;align-items:center;gap:14px;margin-bottom:16px}
 .cc-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:6px}
 .cc-stats .stat{padding:11px}
@@ -351,6 +352,13 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 .pass-row small{display:block;font-weight:500;color:#0369a1;font-size:11px}
 .pass-row.dead{background:#f8fafc;border-color:var(--line);color:var(--dim)}
 .pass-row.dead small{color:var(--dim)}
+/* история покупки и посещений по абонементу (в карточке клиента) */
+.pass-hist{flex-basis:100%;margin:6px 0 2px;padding:8px 10px;background:#fff;border:1px solid #bae6fd;border-radius:9px}
+.pass-hist .ph-buy{font-size:11.5px;color:#0369a1;font-weight:600;margin-bottom:6px}
+.pass-hist .ph-v{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:500;color:var(--ink);
+  padding:4px 0;border-top:1px dashed var(--line)}
+.pass-hist .ph-v span{flex:1}
+.pass-hist .ph-empty{font-size:11.5px;color:var(--dim);font-weight:500}
 .pass-type-btn{display:block;width:100%;text-align:left;border:2px solid var(--line);border-radius:12px;padding:12px 14px;
   margin-bottom:8px;background:#fff;cursor:pointer;font-weight:700;font-size:14px}
 .pass-type-btn small{display:block;font-weight:500;color:var(--dim);font-size:12px;margin-top:2px}
@@ -627,7 +635,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
       <div class="frm" style="grid-template-columns:1fr 1fr 1fr 1fr auto">
         <div><label>Имя</label><input id="ncName" placeholder="Имя Фамилия"></div>
         <div><label>Телефон</label><input id="ncPhone" placeholder="+7 ___ ___-__-__"></div>
-        <div><label>Код пригласившего</label><input id="ncRef" placeholder="напр. GB0001 (необязательно)"></div>
+        <div><label>Код пригласившего</label><input id="ncRef" placeholder="напр. 900001 (необязательно)"></div>
         <div><label>Номер карты</label><input id="ncCard" placeholder="выдаётся автоматически" disabled></div>
         <div style="align-self:end"><button class="btn btn-green" onclick="addClient()">Создать + карта</button></div>
       </div>
@@ -635,7 +643,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
     <div class="card">
       <h3>👥 База клиентов</h3>
       <div class="muted" style="font-size:12.5px;margin-bottom:12px">📱 База клиентов общая с мобильным приложением — карты, бонусы и покупки синхронизируются.</div>
-      <div class="tbl-wrap"><table><thead><tr><th>Имя</th><th>Телефон</th><th>Карта</th><th>Бонусы</th><th>Покупок</th><th>Приложение</th></tr></thead>
+      <div class="tbl-wrap"><table><thead><tr><th>Имя</th><th>Телефон</th><th>Карта</th><th>Бонусы</th><th>Покупок</th><th>Абонемент</th><th>Приложение</th></tr></thead>
       <tbody id="cliTbl"></tbody></table></div>
     </div>
   </div>
@@ -1179,13 +1187,13 @@ document.addEventListener('click', e=>{
 
 /* ================= ДАННЫЕ ================= */
 let clients = [
-  {id:1, name:"Мария Иванова", phone:"+7 900 123-45-67", card:"GAB-0001", bonus:40, buys:2, app:true,
+  {id:1, name:"Мария Иванова", phone:"+7 900 123-45-67", card:"000001", bonus:40, buys:2, app:true,
     history:[
       {date:"2026-06-20", items:"Будний день ×2", total:1380, method:"cash"},
       {date:"2026-05-14", items:"Выходные и праздники ×1, Попкорн ×2", total:1490, method:"card"},
     ],
     kids:[{name:"Соня", birth:birthSoon(9)}]},
-  {id:2, name:"Пётр Смирнов", phone:"+7 901 555-11-22", card:"GAB-0002", bonus:120, buys:5, app:false,
+  {id:2, name:"Пётр Смирнов", phone:"+7 901 555-11-22", card:"000002", bonus:120, buys:5, app:false,
     history:[
       {date:"2026-06-28", items:"Почти выходной ×3", total:2370, method:"online"},
       {date:"2026-06-10", items:"Многодетным (выходные) ×2, Лимонад ×2", total:1880, method:"card"},
@@ -1249,12 +1257,33 @@ const DAY_RU = {workweek:'Будни (Пн–Пт)', weekday:'Пн–Чт', frid
 // Подходит ли билет под тип дня: «Будни» покрывают и Пн–Чт, и пятницу
 const dayFits = (day, kind) => day==='any' || day===kind || (day==='workweek' && (kind==='weekday' || kind==='friday'));
 function setPosGroup(id){ posGroup = id; renderTariffs(); }
+// Абонементы показываются в кассе отдельной группой (заполняется с сервера)
+let PASS_TYPES = [];
+// абонемент доступен в текущем ТЦ, если он не привязан к точке или привязан к ней
+function passInLoc(t){
+  const d = (typeof deviceLoc==='function') ? deviceLoc() : null;
+  return !d || !t.loc || +t.loc === +d;
+}
+function posPassList(){ return (window.PASS_TYPES||[]).filter(passInLoc); }
 function renderTariffs(){
   const kind = dayKindOf($('posDate').value);
   $('dayKind').textContent = KIND_RU[kind];
-  if(!GROUPS.find(g=>g.id===posGroup)) posGroup = GROUPS.length ? GROUPS[0].id : null;
+  const passes = posPassList();
+  if(posGroup!=='passes' && !GROUPS.find(g=>g.id===posGroup)) posGroup = GROUPS.length ? GROUPS[0].id : (passes.length?'passes':null);
+  if(posGroup==='passes' && !passes.length) posGroup = GROUPS.length ? GROUPS[0].id : null;
   $('posGroups').innerHTML = GROUPS.map(g=>
-    `<button class="${g.id===posGroup?'act':''}" onclick="setPosGroup(${g.id})">${g.name}</button>`).join('');
+    `<button class="${g.id===posGroup?'act':''}" onclick="setPosGroup(${g.id})">${g.name}</button>`).join('')
+    + (passes.length ? `<button class="${posGroup==='passes'?'act':''}" onclick="setPosGroup('passes')">🎫 Абонементы</button>` : '');
+
+  if(posGroup==='passes'){
+    $('tariffGrid').innerHTML = passes.map(t=>`
+      <button class="tariff" title="${String(t.name).replace(/"/g,'&quot;')}" onclick="posSellPass(${t.id})">
+        <div class="tn">🎫 ${t.name}</div>
+        <div class="tp">${(+t.price).toLocaleString('ru-RU')} ₽</div>
+        <div class="doc">${t.visits==null?'безлимит':t.visits+' посещений'} · ${t.days} дн.</div>
+      </button>`).join('');
+    return;
+  }
   // Билеты (позиции с привязкой ко дню) фильтруются по дню недели, позиции any показываются всегда
   const list = TARIFFS.filter(t=>t.group===posGroup && dayFits(t.day, kind) && (typeof prodInLoc!=='function'||prodInLoc(t)));
   $('tariffGrid').innerHTML = list.length ? list.map(t=>`
@@ -1265,6 +1294,15 @@ function renderTariffs(){
       ${t.track?`<div class="doc" style="color:${(+t.stock<=0)?'var(--red)':'var(--dim)'}">📦 остаток: ${+t.stock}</div>`:''}
     </button>`).join('')
     : '<div class="muted" style="padding:12px 0;grid-column:1/-1">В этой группе нет позиций</div>';
+}
+
+// Продажа абонемента из кассы: оформляется на карту клиента, поэтому
+// сначала нужно найти клиента в чеке.
+function posSellPass(typeId){
+  if(!shift) return toast('Сначала откройте смену', true);
+  if(!checkClient) return toast('Абонемент оформляется на карту клиента — сначала найдите клиента', true);
+  if(typeof openPassSell!=='function') return toast('Абонементы доступны при работе с сервером', true);
+  openPassSell(checkClient.id, 'clientPasses', false, typeId);
 }
 
 /* ================= ЧЕК (Шаг 1) ================= */
@@ -1294,7 +1332,7 @@ function clearCheck(){ check=[]; checkClient=null; renderClientSlot(); renderChe
 function findCard(){
   const v = $('cardInput').value.trim().toUpperCase();
   const c = clients.find(x=>x.card.toUpperCase()===v);
-  if(!c) return toast('Карта не найдена. Попробуйте GAB-0001 или GAB-0002', true);
+  if(!c) return toast('Карта не найдена. Попробуйте 000001 или 000002', true);
   checkClient=c; renderClientSlot();
   toast('Карта считана: '+c.name+' · '+c.bonus+' бонусов');
 }
@@ -1303,7 +1341,7 @@ function renderClientSlot(){
   $('clientSlot').innerHTML = checkClient
     ? `<div class="client-tag"><span>💳 ${checkClient.name} · ${checkClient.card} · ${checkClient.bonus} бонусов</span><button onclick="dropClient()" style="font-size:15px;color:#065f46">✕</button></div>
        <div id="clientPasses"></div>`
-    : `<div class="client-box"><input id="cardInput" placeholder="📷 Сканируйте карту клиента (GAB-0001)" onkeydown="if(event.key==='Enter')findCard()"><button class="btn btn-ghost" onclick="findCard()">Найти</button></div>`;
+    : `<div class="client-box"><input id="cardInput" placeholder="📷 Сканируйте карту клиента (000001)" onkeydown="if(event.key==='Enter')findCard()"><button class="btn btn-ghost" onclick="findCard()">Найти</button></div>`;
   if(checkClient && typeof loadClientPasses==='function') loadClientPasses(checkClient.id, 'clientPasses');
 }
 
@@ -1851,7 +1889,7 @@ function roomDel(id){
 function addClient(){
   const name=$('ncName').value.trim(), phone=$('ncPhone').value.trim();
   if(!name||!phone) return toast('Заполните имя и телефон', true);
-  const card='GAB-'+String(cardSeq++).padStart(4,'0');
+  const card=String(cardSeq++).padStart(6,'0');
   clients.push({id:Date.now(), name, phone, card, bonus:0, buys:0, app:false, history:[], kids:[]});
   $('ncName').value=''; $('ncPhone').value='';
   renderClients(); toast('Клиент создан. Выдана карта '+card+' ⭐');
@@ -1860,13 +1898,33 @@ function renderClients(){
   $('cliTbl').innerHTML = clients.map(c=>{
     const soon = (c.kids||[]).some(k=>daysToBirthday(k.birth)<=30);
     return `<tr style="cursor:pointer" onclick="openClientCard(${c.id})" title="Открыть карточку клиента">
-    <td>${c.name} ${soon?'<span title="Скоро день рождения ребёнка">🎂</span>':''}${c.passes?`<span class="pass-badge" title="Действующих абонементов: ${c.passes}">🎟 ${c.passes}</span>`:''}</td>
+    <td>${c.name} ${soon?'<span title="Скоро день рождения ребёнка">🎂</span>':''}</td>
     <td>${c.phone}</td><td><b style="color:var(--orange)">${c.card}</b></td><td>${c.bonus}</td><td>${c.buys}</td>
+    <td>${c.passes?`<span class="pass-badge" title="Действующих абонементов: ${c.passes}">🎟 ${c.passes>1?c.passes+' шт.':'есть'}</span>`:'<span class="muted">—</span>'}</td>
     <td>${c.app?'<span class="app-badge">✓ есть</span>':'<span class="muted">—</span>'}</td></tr>`;
   }).join('');
 }
 
 /* ===== КАРТОЧКА КЛИЕНТА ===== */
+// Правка данных клиента и ручное начисление бонусов.
+// В демо-режиме меняем только локально, с сервером — через app.js.
+function saveClientCard(id){
+  const c=clients.find(x=>x.id===id); if(!c) return;
+  const name=$('ecName').value.trim();
+  if(!name) return toast('Имя не может быть пустым', true);
+  c.name=name; c.phone=$('ecPhone').value.trim(); c.email=$('ecEmail').value.trim(); c.note=$('ecNote').value.trim();
+  renderClients(); renderClientCard(); toast('Данные клиента сохранены');
+}
+function giveBonus(id){
+  const c=clients.find(x=>x.id===id); if(!c) return;
+  const pts=Math.round(+$('bnPts').value||0), reason=$('bnReason').value.trim();
+  if(!pts) return toast('Укажите количество баллов', true);
+  if(!reason) return toast('Напишите причину начисления', true);
+  if(c.bonus+pts<0) return toast('У клиента только '+c.bonus+' бонусов — списать больше нельзя', true);
+  c.bonus+=pts;
+  renderClients(); renderClientCard();
+  toast(pts>0?('Начислено '+pts+' бонусов ⭐'):('Списано '+Math.abs(pts)+' бонусов'));
+}
 // дата рождения, у которой ближайший ДР через daysAhead дней (для демо-данных)
 function birthSoon(daysAhead){
   const d=new Date(); d.setDate(d.getDate()+daysAhead);
@@ -1949,6 +2007,23 @@ function renderClientCard(){
       <div class="stat"><div class="sv ${c.app?'gr':''}">${c.app?'В приложении':'Нет'}</div><div class="sl">Мобильное приложение</div></div>
       <div class="stat"><div class="sv">${kids.length}</div><div class="sl">Детей</div></div>
     </div>
+    ${role!=='cashier'?`<div class="cc-sec"><h4>✏️ Данные клиента</h4>
+      <div class="frm" style="grid-template-columns:1fr 1fr;margin-bottom:0">
+        <div><label>Имя</label><input id="ecName" value="${String(c.name).replace(/"/g,'&quot;')}"></div>
+        <div><label>Телефон</label><input id="ecPhone" value="${String(c.phone||'').replace(/"/g,'&quot;')}"></div>
+        <div><label>E-mail</label><input id="ecEmail" type="email" placeholder="не указан" value="${String(c.email||'').replace(/"/g,'&quot;')}"></div>
+        <div><label>Примечание</label><input id="ecNote" placeholder="что важно помнить о клиенте" value="${String(c.note||'').replace(/"/g,'&quot;')}"></div>
+      </div>
+      <div style="margin-top:10px"><button class="btn btn-green btn-sm" onclick="saveClientCard(${c.id})">Сохранить изменения</button></div>
+    </div>`:''}
+    ${role==='owner'?`<div class="cc-sec"><h4>⭐ Начисление бонусов вручную</h4>
+      <div class="muted" style="font-size:12.5px;margin-bottom:10px">Начислить — положительное число, списать — со знаком минус. Операция попадёт в историю бонусов клиента.</div>
+      <div class="frm" style="grid-template-columns:140px 1fr auto;margin-bottom:0">
+        <div><label>Баллы</label><input id="bnPts" type="number" step="1" placeholder="например, 500"></div>
+        <div><label>Причина</label><input id="bnReason" placeholder="Компенсация, подарок, извинение…"></div>
+        <div style="align-self:end"><button class="btn btn-orange btn-sm" onclick="giveBonus(${c.id})">Провести</button></div>
+      </div>
+    </div>`:''}
     <div class="cc-sec"><h4>🧾 История покупок</h4>${histHtml}</div>
     <div class="cc-sec"><h4>🧒 Дети</h4>
       ${kidsHtml}
@@ -2176,7 +2251,7 @@ function addLeadNote(id){ const l=leads.find(x=>x.id===id); if(!l) return; const
 function convertLead(id){
   const l=leads.find(x=>x.id===id); if(!l) return;
   if(!confirm('Добавить «'+l.name+'» в базу клиентов и выдать карту? Заявка останется в воронке.')) return;
-  const card='GAB-'+String(cardSeq++).padStart(4,'0');
+  const card=String(cardSeq++).padStart(6,'0');
   const cid=Date.now();
   clients.push({id:cid, name:l.name, phone:l.phone, card, bonus:0, buys:0, app:false, history:[], kids:[]});
   l.client_id=cid; // заявка остаётся в воронке с меткой «уже клиент»

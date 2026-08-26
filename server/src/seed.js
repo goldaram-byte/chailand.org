@@ -184,11 +184,11 @@ export async function seed() {
   if (clientsCount === 0) {
     const c1 = await q1(
       `INSERT INTO clients (full_name, phone, card_no, bonus, app_installed, referral_code)
-       VALUES ('Мария Иванова','+7 900 123-45-67','GAB-0001',40,true,'GB0001') RETURNING id`
+       VALUES ('Мария Иванова','+7 900 123-45-67','000001',40,true,'900001') RETURNING id`
     );
     const c2 = await q1(
       `INSERT INTO clients (full_name, phone, card_no, bonus, app_installed, referral_code)
-       VALUES ('Пётр Смирнов','+7 901 555-11-22','GAB-0002',120,false,'GB0002') RETURNING id`
+       VALUES ('Пётр Смирнов','+7 901 555-11-22','000002',120,false,'900002') RETURNING id`
     );
     await q(`INSERT INTO client_kids (client_id, name, birth_date) VALUES ($1,'Соня','2017-07-15')`, [c1.id]);
     await q(`INSERT INTO client_kids (client_id, name, birth_date) VALUES ($1,'Артём','2017-11-03')`, [c2.id]);
@@ -216,7 +216,7 @@ export async function seed() {
   }
 
   // Выдать реферальный код всем клиентам, у кого его ещё нет
-  await q(`UPDATE clients SET referral_code = 'GB' || lpad(id::text, 4, '0') WHERE referral_code IS NULL`);
+  await q(`UPDATE clients SET referral_code = '9' || lpad(id::text, 5, '0') WHERE referral_code IS NULL`);
 
   // СКУД: завести персонал из учёток пользователей (один раз, если пусто)
   const personnelCount = (await q1('SELECT count(*)::int AS c FROM personnel')).c;

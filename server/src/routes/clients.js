@@ -107,16 +107,28 @@ clientsRouter.post(
 clientsRouter.put(
   '/:id',
   ah(async (req, res) => {
-    const { full_name, phone, app_installed, note } = req.body || {};
+    const { full_name, phone, app_installed, note, email } = req.body || {};
+    if (full_name != null && !String(full_name).trim()) {
+      return res.status(400).json({ error: 'Имя клиента не может быть пустым' });
+    }
+    // Телефон уникален по базе — не даём случайно склеить двух клиентов
+    if (phone != null && String(phone).trim()) {
+      const dup = await q1('SELECT id FROM clients WHERE phone=$2 AND id<>$1 LIMIT 1', [req.params.id, String(phone).trim()]);
+      if (dup) return res.status(409).json({ error: 'Этот телефон уже записан за другим клиентом' });
+    }
     const row = await q1(
       `UPDATE clients SET
-         full_name = COALESCE($2, full_name),
-         phone = COALESCE($3, phone),
+         full_name = COALESCE(NULLIF(trim($2),''), full_name),
+         phone = COALESCE(NULLIF(trim($3),''), phone),
          app_installed = COALESCE($4, app_installed),
-         note = COALESCE($5, note)
+         note = COALESCE($5, note),
+         email = COALESCE($6, email)
        WHERE id=$1 RETURNING *`,
-      [req.params.id, full_name, phone, app_installed, note]
+      [req.params.id, full_name == null ? null : String(full_name), phone == null ? null : String(phone),
+       app_installed, note, email == null ? null : String(email).trim()]
     );
+    if (!row) return res.status(404).json({ error: 'Клиент не найден' });
+    await audit(req, 'client.update', { entity: 'client', entityId: row.id });
     res.json(row);
   })
 );
@@ -169,14 +181,25 @@ clientsRouter.delete(
 clientsRouter.post(
   '/:id/bonus',
   ah(async (req, res) => {
-    const { points, reason = 'Ручная корректировка' } = req.body || {};
-    const p = Number(points);
+    if (req.user.role !== 'owner') {
+      return res.status(403).json({ error: 'Начислять и списывать бонусы вручную может только владелец' });
+    }
+    const { points, reason = 'Ручное начисление' } = req.body || {};
+    const p = Math.round(Number(points));
     if (!p) return res.status(400).json({ error: 'Укажите количество баллов' });
+    if (!String(reason || '').trim()) return res.status(400).json({ error: 'Напишите причину начисления' });
+    if (p < 0) {
+      const cur = await q1('SELECT bonus FROM clients WHERE id=$1', [req.params.id]);
+      if (!cur) return res.status(404).json({ error: 'Клиент не найден' });
+      if (Number(cur.bonus) + p < 0) {
+        return res.status(400).json({ error: 'У клиента только ' + cur.bonus + ' бонусов — списать больше нельзя' });
+      }
+    }
     const row = await tx(async ({ q1: cq1 }) => {
       await cq1('INSERT INTO loyalty_transactions (client_id, points, reason) VALUES ($1,$2,$3)', [
         req.params.id,
         p,
-        reason,
+        String(reason).trim(),
       ]);
       return cq1('UPDATE clients SET bonus = bonus + $2 WHERE id=$1 RETURNING *', [req.params.id, p]);
     });
