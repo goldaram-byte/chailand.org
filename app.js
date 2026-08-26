@@ -104,7 +104,10 @@
       method: mapMethod(s.method),
       paid: Number(s.cash_amount) + Number(s.card_amount),
       bonus: Number(s.bonus_used), earned: Number(s.bonus_earned),
-      fd: s.fiscal && s.fiscal.fd_number ? 'ФД №' + String(s.fiscal.fd_number).padStart(6, '0') : '—',
+      fd: s.fd_number ? 'ФД №' + String(s.fd_number).padStart(6, '0')
+        : (s.fiscal && s.fiscal.fd_number ? 'ФД №' + String(s.fiscal.fd_number).padStart(6, '0') : '—'),
+      // Чек пробит на реальной кассе/ОФД — удалять такую оплату нельзя
+      fiscalLocked: s.fiscal_status === 'registered' && s.fiscal_driver && s.fiscal_driver !== 'emulation',
       status: s.status === 'returned' ? 'refunded' : 'done',
     };
   }
@@ -1854,6 +1857,25 @@
         send(null);
       }
     });
+
+    // Удаление ошибочной оплаты (владелец/администратор, кроме фискализированных)
+    window.delSale = function (id) {
+      var s = sales.find(function (x) { return x.id === id; });
+      if (!s) return;
+      if (typeof canDeleteSale === 'function' && !canDeleteSale(s)) {
+        if (typeof toast === 'function') toast('Фискализированный чек удалить нельзя — оформите возврат', true);
+        return;
+      }
+      if (!confirm('Удалить оплату на ' + fmtNum(s.total) + '?\nОперация будет убрана из кассы и отчётов.')) return;
+      var serverId = s.serverId || s.id;
+      api('/pos/sales/' + serverId, { method: 'DELETE' })
+        .then(function () {
+          if (typeof toast === 'function') toast('Оплата удалена');
+          return hydrateAll();
+        })
+        .then(function () { safe(function () { if (curPage === 'report') renderReport(); if (curPage === 'dash') renderDash(); }); })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
 
     // Возврат
     wrap('confirmRefund', function () {

@@ -1460,6 +1460,20 @@ function confirmRefund(){
 function finishRefund(){ $('refundOverlay').classList.remove('open'); REFUND=null; }
 
 const M_RU = {cash:'наличные', card:'безналичные', online:'онлайн'};
+// Удалять ошибочные оплаты может только владелец или администратор,
+// и только пока чек не фискализирован (пробитый чек аннулируется возвратом).
+function canDeleteSale(s){
+  if(role!=='owner' && role!=='admin') return false;
+  return !s.fiscalLocked; // пробитый на ККТ/ОФД чек удалить нельзя
+}
+// Демо-режим (в app.js переопределяется удалением на сервере)
+function delSale(id){
+  const s = sales.find(x=>x.id===id); if(!s) return;
+  if(!canDeleteSale(s)) return toast('Фискализированный чек удалить нельзя — оформите возврат', true);
+  if(!confirm('Удалить оплату на '+fmt(s.total)+'?\nОперация будет убрана из кассы и отчётов.')) return;
+  sales = sales.filter(x=>x.id!==id);
+  renderSales(); renderReport(); toast('Оплата удалена');
+}
 function renderSales(){
   $('salesTbl').innerHTML = sales.length ? sales.map(s=>`
     <tr><td>${s.time}</td><td>${s.items.map(i=>i.name+' ×'+i.qty).join('<br>')}</td><td>${s.client}</td>
@@ -1467,7 +1481,7 @@ function renderSales(){
     <td><span class="tag m-${s.method}">${M_RU[s.method]}</span> ${fmt(s.paid)}</td>
     <td>−${s.bonus} / +${s.earned}</td><td class="muted">${s.fd}</td>
     <td><span class="tag ${s.status==='done'?'done2':'refunded'}"${s.status==='refunded'&&s.refundReason?` title="Причина: ${s.refundReason}${s.refundComment?' — '+s.refundComment:''} · возврат ${RM_RU[s.refundMethod]||''}"`:''}>${s.status==='done'?'проведён':'возврат'}</span>${s.status==='refunded'&&s.refundReason?`<br><span class="muted" style="font-size:11px">${s.refundReason}</span>`:''}</td>
-    <td>${s.status==='done'?'<button class="btn btn-ghost btn-sm" onclick="openRefund('+s.id+')">Возврат</button>':''}</td></tr>`).join('')
+    <td style="white-space:nowrap">${s.status==='done'?'<button class="btn btn-ghost btn-sm" onclick="openRefund('+s.id+')">Возврат</button>':''}${canDeleteSale(s)?' <button class="btn btn-red btn-sm" title="Удалить ошибочную оплату" onclick="delSale('+s.id+')">🗑</button>':''}</td></tr>`).join('')
     : '<tr><td colspan="9" class="muted">Пока нет продаж</td></tr>';
 }
 
