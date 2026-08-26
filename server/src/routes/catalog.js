@@ -6,6 +6,17 @@ import { ah, audit } from '../util.js';
 export const catalogRouter = Router();
 catalogRouter.use(requireAuth);
 
+// Список ТЦ позиции: пустой массив = позиция работает во всех точках.
+// Принимаем и новый location_ids, и старый location_id (совместимость).
+function locIdsFrom(body) {
+  if (Array.isArray(body?.location_ids)) {
+    const ids = body.location_ids.map(Number).filter((n) => Number.isFinite(n) && n > 0);
+    return [...new Set(ids)];
+  }
+  if (body?.location_id) return [Number(body.location_id)];
+  return [];
+}
+
 // Определить тип дня для даты (учитывая праздники из настроек)
 async function dayKindFor(dateStr) {
   const d = dateStr ? new Date(dateStr) : new Date();
@@ -98,11 +109,12 @@ catalogRouter.post(
   '/products',
   canEdit,
   ah(async (req, res) => {
-    const { group_id, name, day_kind = 'any', price = 0, requires_document = false, sort = 0, location_id = null } = req.body || {};
+    const { group_id, name, day_kind = 'any', price = 0, requires_document = false, sort = 0 } = req.body || {};
+    const locIds = locIdsFrom(req.body);
     const row = await q1(
-      `INSERT INTO products (group_id, name, day_kind, price, requires_document, sort, location_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [group_id, name, day_kind, price, requires_document, sort, location_id || null]
+      `INSERT INTO products (group_id, name, day_kind, price, requires_document, sort, location_id, location_ids)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [group_id, name, day_kind, price, requires_document, sort, locIds[0] || null, locIds]
     );
     await audit(req, 'catalog.product.create', { entity: 'product', entityId: row.id });
     res.json(row);
@@ -113,8 +125,11 @@ catalogRouter.put(
   '/products/:id',
   canEdit,
   ah(async (req, res) => {
-    const { group_id, name, day_kind, price, requires_document, is_active, location_id, track_stock } = req.body || {};
-    const locProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'location_id');
+    const { group_id, name, day_kind, price, requires_document, is_active, track_stock } = req.body || {};
+    const b = req.body || {};
+    const locProvided = Object.prototype.hasOwnProperty.call(b, 'location_ids')
+      || Object.prototype.hasOwnProperty.call(b, 'location_id');
+    const locIds = locIdsFrom(b);
     const row = await q1(
       `UPDATE products SET
          group_id = COALESCE($2, group_id),
@@ -123,10 +138,12 @@ catalogRouter.put(
          price = COALESCE($5, price),
          requires_document = COALESCE($6, requires_document),
          is_active = COALESCE($7, is_active),
-         location_id = CASE WHEN $8::bool THEN $9 ELSE location_id END,
-         track_stock = COALESCE($10, track_stock)
+         location_ids = CASE WHEN $8::bool THEN $9::bigint[] ELSE location_ids END,
+         location_id = CASE WHEN $8::bool THEN $10 ELSE location_id END,
+         track_stock = COALESCE($11, track_stock)
        WHERE id=$1 RETURNING *`,
-      [req.params.id, group_id, name, day_kind, price, requires_document, is_active, locProvided, location_id || null, track_stock]
+      [req.params.id, group_id, name, day_kind, price, requires_document, is_active,
+       locProvided, locIds, locIds[0] || null, track_stock]
     );
     await audit(req, 'catalog.product.update', { entity: 'product', entityId: req.params.id });
     res.json(row);
@@ -148,7 +165,11 @@ catalogRouter.post(
   canEdit,
   ah(async (req, res) => {
     const { name, price = 0, unit = 'шт', options = null } = req.body || {};
-    const row = await q1('INSERT INTO services (name, price, unit, options) VALUES ($1,$2,$3,$4) RETURNING *', [name, price, unit, options]);
+    const locIds = locIdsFrom(req.body);
+    const row = await q1(
+      'INSERT INTO services (name, price, unit, options, location_id, location_ids) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+      [name, price, unit, options, locIds[0] || null, locIds]
+    );
     res.json(row);
   })
 );
@@ -158,16 +179,23 @@ catalogRouter.put(
   canEdit,
   ah(async (req, res) => {
     const { name, price, unit, options, is_active } = req.body || {};
-    const optProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'options');
+    const b = req.body || {};
+    const optProvided = Object.prototype.hasOwnProperty.call(b, 'options');
+    const locProvided = Object.prototype.hasOwnProperty.call(b, 'location_ids')
+      || Object.prototype.hasOwnProperty.call(b, 'location_id');
+    const locIds = locIdsFrom(b);
     const row = await q1(
       `UPDATE services SET
          name = COALESCE($2, name),
          price = COALESCE($3, price),
          unit = COALESCE($4, unit),
          options = CASE WHEN $5::bool THEN $6 ELSE options END,
-         is_active = COALESCE($7, is_active)
+         is_active = COALESCE($7, is_active),
+         location_ids = CASE WHEN $8::bool THEN $9::bigint[] ELSE location_ids END,
+         location_id = CASE WHEN $8::bool THEN $10 ELSE location_id END
        WHERE id=$1 RETURNING *`,
-      [req.params.id, name, price, unit, optProvided, options || null, is_active]
+      [req.params.id, name, price, unit, optProvided, options || null, is_active,
+       locProvided, locIds, locIds[0] || null]
     );
     res.json(row);
   })

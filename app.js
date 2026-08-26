@@ -125,9 +125,9 @@
 
       GROUPS = cat.groups.map(function (g) { return { id: g.id, name: g.name, kind: g.kind || 'goods' }; });
       TARIFFS = cat.products.map(function (p) {
-        return { id: p.id, pid: p.id, name: p.name, day: p.day_kind || 'any', price: Number(p.price), doc: p.requires_document, group: p.group_id, loc: p.location_id || null, track: !!p.track_stock, stock: Number(p.stock || 0) };
+        return { id: p.id, pid: p.id, name: p.name, day: p.day_kind || 'any', price: Number(p.price), doc: p.requires_document, group: p.group_id, loc: p.location_id || null, locs: (p.location_ids || []).map(Number), track: !!p.track_stock, stock: Number(p.stock || 0) };
       });
-      SERVICES = cat.services.map(function (s) { return { id: s.id, name: s.name, price: Number(s.price), options: s.options || '' }; });
+      SERVICES = cat.services.map(function (s) { return { id: s.id, name: s.name, price: Number(s.price), options: s.options || '', locs: (s.location_ids || []).map(Number) }; });
       ROOMS = cat.rooms.map(function (r) { return { id: r.id, name: r.name, cap: r.capacity, price: 2000, loc: r.location_id || null }; });
 
       if (settings.cashback != null) CFG.cashback = Number(settings.cashback);
@@ -551,17 +551,33 @@
       }
       return _delT ? _delT.apply(this, arguments) : undefined;
     };
-    window.addTariff = function () {
+    window.addTariff = function (groupId) {
       if (!SERVER) {
-        var g = (typeof ticketGroupIds === 'function' ? ticketGroupIds()[0] : null);
-        TARIFFS.push({ id: Date.now(), name: 'Новый билет', day: 'any', price: 0, doc: false, group: g || 1 });
+        var g = groupId || (typeof ticketGroupIds === 'function' ? ticketGroupIds()[0] : null);
+        TARIFFS.push({ id: Date.now(), name: 'Новый билет', day: 'any', price: 0, doc: false, group: g || 1, locs: [] });
         renderSettings(); renderTariffs(); return;
       }
-      var gid = (typeof ticketGroupIds === 'function' ? ticketGroupIds()[0] : null);
-      if (!gid) { if (typeof toast === 'function') toast('Сначала создайте группу раздела «Билеты» на вкладке «Группы продаж»', true); return; }
+      var gid = groupId || (typeof ticketGroupIds === 'function' ? ticketGroupIds()[0] : null);
+      if (!gid) { if (typeof toast === 'function') toast('Сначала создайте группу билетов кнопкой «+ Группа билетов»', true); return; }
       api('/catalog/products', { method: 'POST', body: { group_id: gid, name: 'Новый билет', day_kind: 'any', price: 0 } })
         .then(function () { return hydrateAll(); })
         .then(function () { if (typeof renderSettings === 'function') renderSettings(); if (typeof toast === 'function') toast('Билет добавлен — отредактируйте название и цену'); })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+
+    // --- Выбор нескольких ТЦ у позиции каталога (билет / товар / услуга) ---
+    window.saveLocSel = function (kind, id, ids) {
+      var path = kind === 'service' ? '/catalog/services/' : '/catalog/products/';
+      var arr = kind === 'service' ? SERVICES : TARIFFS;
+      var it = arr.find(function (x) { return x.id === id; });
+      if (it) { it.locs = ids; it.loc = ids.length === 1 ? ids[0] : null; }
+      if (!SERVER) return;
+      api(path + id, { method: 'PUT', body: { location_ids: ids } })
+        .then(function () {
+          if (typeof toast === 'function') toast(ids.length ? 'Позиция работает в: ' + locsLabel(ids) : 'Позиция работает во всех ТЦ');
+          if (typeof renderTariffs === 'function') renderTariffs();
+          if (typeof renderPartyForm === 'function') renderPartyForm();
+        })
         .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
     };
 
@@ -606,6 +622,16 @@
       }
       return _updGKind ? _updGKind.apply(this, arguments) : undefined;
     };
+    window.addTicketGroup = function () {
+      var name = prompt('Название группы билетов (например «Будни», «Выходные», «Льготные»):');
+      if (!name || !name.trim()) return;
+      if (!SERVER) { GROUPS.push({ id: Date.now(), name: name.trim(), kind: 'tickets' }); renderSettings(); renderTariffs(); return; }
+      api('/catalog/groups', { method: 'POST', body: { name: name.trim(), kind: 'tickets' } })
+        .then(function () { return hydrateAll(); })
+        .then(function () { if (typeof renderSettings === 'function') renderSettings(); if (typeof toast === 'function') toast('Группа билетов создана: ' + name.trim()); })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+
     var _addGroup = window.addGroup;
     window.addGroup = function () {
       if (!SERVER) return _addGroup ? _addGroup.apply(this, arguments) : undefined;
@@ -659,7 +685,7 @@
               '<td>' + eH(p.name) + '</td>' +
               '<td>' + eH(gname[p.group_id] || '—') + '</td>' +
               '<td><input type="number" value="' + Number(p.price) + '" style="width:90px" onchange="editProductPrice(' + p.id + ',this.value)"></td>' +
-              '<td><select onchange="editProductLoc(' + p.id + ',this.value)" style="width:110px">' + locOpts(p.location_id) + '</select></td>' +
+              '<td>' + (typeof locSelHtml === 'function' ? locSelHtml('product', p.id, (p.location_ids || []).map(Number)) : '') + '</td>' +
               '<td style="text-align:center"><input type="checkbox" ' + (p.track_stock ? 'checked' : '') + ' title="Вести учёт остатков" onchange="toggleTrackStock(' + p.id + ',this.checked)"></td>' +
               '<td>' + (p.track_stock ? '<b style="color:' + (st <= 0 ? 'var(--red)' : 'var(--green)') + '">' + st + '</b>' : '<span class="muted">—</span>') + '</td>' +
               '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="stockReceipt(' + p.id + ')">+ Приход</button> ' +
@@ -688,7 +714,7 @@
       if (!n || !n.value.trim()) { if (n) n.focus(); return; }
       if (!g || !g.value) { if (typeof toast === 'function') toast('Нет товарных групп — создайте группу раздела «Товары» на вкладке «Группы продаж»', true); return; }
       var stock = st && st.value !== '' ? Number(st.value) : null;
-      api('/catalog/products', { method: 'POST', body: { group_id: +g.value || null, name: n.value.trim(), price: +p.value || 0, location_id: (lc && lc.value) ? +lc.value : null } })
+      api('/catalog/products', { method: 'POST', body: { group_id: +g.value || null, name: n.value.trim(), price: +p.value || 0, location_ids: (lc && lc.value) ? [+lc.value] : [] } })
         .then(function (row) {
           // Начальный остаток указан — сразу оприходуем и включаем учёт
           if (stock != null && stock > 0 && row && row.id) {
@@ -1250,7 +1276,12 @@
   function deviceLoc() { var v = localStorage.getItem(LOC_KEY); return v ? Number(v) : null; }
   window.deviceLoc = deviceLoc; // чтобы касса (index.html) фильтровала товары по своему ТЦ
   // Показывать ли товар на этой кассе: без привязки товара — везде; иначе только в своём ТЦ.
-  window.prodInLoc = function (t) { var d = deviceLoc(); return !t || !t.loc || !d || Number(t.loc) === d; };
+  window.prodInLoc = function (t) {
+    var d = deviceLoc();
+    if (!t || !d) return true;
+    var ids = t.locs && t.locs.length ? t.locs : (t.loc ? [Number(t.loc)] : []);
+    return !ids.length || ids.indexOf(Number(d)) !== -1; // пустой список — во всех ТЦ
+  };
   function setDeviceLoc(id) {
     if (id) localStorage.setItem(LOC_KEY, String(id)); else localStorage.removeItem(LOC_KEY);
     renderLocBadge();

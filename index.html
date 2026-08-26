@@ -354,6 +354,21 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
   margin-bottom:8px;background:#fff;cursor:pointer;font-weight:700;font-size:14px}
 .pass-type-btn small{display:block;font-weight:500;color:var(--dim);font-size:12px;margin-top:2px}
 .pass-type-btn.on{border-color:var(--orange);background:#fff7ed}
+/* заголовок группы билетов в таблице тарифов */
+.grp-row td{background:#f8fafc;border-top:2px solid var(--line);font-size:13.5px;padding:9px 8px}
+/* выбор нескольких ТЦ у позиции каталога */
+.locsel{position:relative;display:inline-block}
+.locsel>button{border:1px solid #cbd5e1;background:#fff;border-radius:9px;padding:7px 11px;font-size:12.5px;font-weight:600;
+  color:var(--ink);min-height:36px;max-width:190px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
+.locsel>button:hover{border-color:var(--orange);color:var(--orange)}
+.locsel>button.some{border-color:#fdba74;background:#fff7ed;color:var(--orange)}
+.locsel-menu{position:absolute;z-index:70;top:calc(100% + 4px);left:0;min-width:210px;background:#fff;border:1px solid var(--line);
+  border-radius:12px;box-shadow:0 12px 34px rgba(15,23,42,.16);padding:8px;display:none}
+.locsel-menu.open{display:block}
+.locsel-menu label{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer}
+.locsel-menu label:hover{background:var(--bg)}
+.locsel-menu label input{width:auto;margin:0}
+.locsel-menu .sep{height:1px;background:var(--line);margin:5px 2px}
 /* переключатель вида журнала */
 .jr-views{display:inline-flex;gap:6px}
 .jr-views button{padding:7px 15px;border-radius:18px;background:#fff;border:1px solid var(--line);font-weight:600;font-size:12.5px;color:var(--dim);min-height:34px}
@@ -762,8 +777,12 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
       <button id="tabStaff" onclick="setTab('staff',this)" style="display:none">Сотрудники</button>
     </div>
     <div class="card set-pane" id="s-tariffs">
-      <h3>🎟️ Тарифы — билеты в парк <button class="btn btn-green btn-sm" style="margin-left:auto" onclick="addTariff()">+ Добавить билет</button></h3>
-      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Здесь только входные билеты в парк (группы «Билеты»). Столбец «ТЦ» задаёт, в какой точке продаётся билет: «Все ТЦ» — во всех, иначе — только на кассах выбранного ТЦ. Товары кафе и сувениры — на вкладке «Товары», услуги праздников — на вкладке «Праздники».</div>
+      <h3>🎟️ Тарифы — билеты в парк
+        <span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="addTicketGroup()">+ Группа билетов</button>
+          <button class="btn btn-green btn-sm" onclick="addTariff()">+ Добавить билет</button>
+        </span></h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Здесь только входные билеты в парк (группы «Билеты»). Билеты распределяются по группам — по ним раскладываются вкладки на кассе (например «Билеты будни», «Билеты выходные», «Льготные»). Группу билета можно сменить в его строке. Столбец «ТЦ» задаёт, где продаётся билет: можно отметить сразу несколько точек, «Все ТЦ» — во всех. Товары кафе и сувениры — на вкладке «Товары», услуги праздников — на вкладке «Праздники».</div>
       <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Группа</th><th>День</th><th>Цена, ₽</th><th>Документ</th><th>ТЦ</th><th></th></tr></thead><tbody id="setTariffs"></tbody></table></div>
     </div>
     <div class="card set-pane" id="s-products" hidden>
@@ -792,8 +811,8 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
     </div>
     <div class="card set-pane" id="s-services" hidden>
       <h3>🎉 Праздники <button class="btn btn-green btn-sm" style="margin-left:auto" onclick="addService()">+ Добавить позицию</button></h3>
-      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Перечень для праздников и дней рождения: пакетные предложения, анимация, шоу-программы, продление комнат и другие услуги. Список ведёте сами — эти позиции доступны при бронировании в разделе «Праздники».</div>
-      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Цена, ₽</th><th>Варианты (через |)</th><th></th></tr></thead><tbody id="setServices"></tbody></table></div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Перечень для праздников и дней рождения: пакетные предложения, анимация, шоу-программы, продление комнат и другие услуги. Список ведёте сами — эти позиции доступны при бронировании в разделе «Праздники». В столбце «ТЦ» можно отметить точки, где услуга доступна (сразу несколько).</div>
+      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Цена, ₽</th><th>Варианты (через |)</th><th>ТЦ</th><th></th></tr></thead><tbody id="setServices"></tbody></table></div>
     </div>
     <div class="card set-pane" id="s-passes" hidden>
       <h3>🎫 Абонементы в парк</h3>
@@ -999,9 +1018,62 @@ const ticketGroupIds = () => {
   return t.length ? t : (GROUPS[0] ? [GROUPS[0].id] : []);
 };
 const isTicketGroup = id => ticketGroupIds().includes(id);
-// Список ТЦ («проектов») для выбора у билета: пусто = продаётся во всех точках
-const tariffLocOpts = cur => '<option value="">Все ТЦ</option>' +
-  (window.ALL_LOCS||[]).map(l=>`<option value="${l.id}" ${Number(cur)===l.id?'selected':''}>${l.name}</option>`).join('');
+/* ===== Выбор нескольких ТЦ у позиции каталога =====
+   Пустой список = позиция работает во всех точках. */
+const locsLabel = ids => {
+  const all = window.ALL_LOCS||[];
+  if(!ids || !ids.length) return 'Все ТЦ';
+  if(ids.length===1){ const l=all.find(x=>x.id===+ids[0]); return l?l.name:'1 ТЦ'; }
+  if(ids.length===all.length && all.length) return 'Все ТЦ';
+  return ids.length+' ТЦ';
+};
+// kind: 'product' | 'service' — какую функцию сохранения вызвать
+function locSelHtml(kind, id, ids){
+  const all = window.ALL_LOCS||[];
+  ids = (ids||[]).map(Number);
+  const some = ids.length>0 && ids.length<all.length;
+  const key = kind+'-'+id;
+  return `<span class="locsel" id="locsel-${key}">
+    <button type="button" class="${some?'some':''}" title="Где работает позиция" onclick="locSelToggle('${key}',event)">📍 ${locsLabel(ids)}</button>
+    <span class="locsel-menu" id="locmenu-${key}">
+      <label><input type="checkbox" ${ids.length?'':'checked'} onchange="locSelAll('${kind}',${id},this.checked)"> Все ТЦ</label>
+      <span class="sep"></span>
+      ${all.map(l=>`<label><input type="checkbox" value="${l.id}" ${ids.includes(l.id)?'checked':''} onchange="locSelOne('${kind}',${id})"> ${l.name}</label>`).join('')
+        || '<span class="muted" style="font-size:12px;padding:4px 8px;display:block">Точки не заведены</span>'}
+    </span></span>`;
+}
+function locSelToggle(key, e){
+  if(e) e.stopPropagation();
+  const m = $('locmenu-'+key); if(!m) return;
+  const wasOpen = m.classList.contains('open');
+  document.querySelectorAll('.locsel-menu.open').forEach(x=>x.classList.remove('open'));
+  if(!wasOpen) m.classList.add('open');
+}
+document.addEventListener('click', e=>{
+  if(!e.target.closest('.locsel')) document.querySelectorAll('.locsel-menu.open').forEach(x=>x.classList.remove('open'));
+});
+function locSelRead(kind, id){
+  const m = $('locmenu-'+kind+'-'+id); if(!m) return [];
+  return [...m.querySelectorAll('input[value]')].filter(i=>i.checked).map(i=>+i.value);
+}
+function locSelAll(kind, id, checked){
+  const m = $('locmenu-'+kind+'-'+id); if(!m) return;
+  if(checked) m.querySelectorAll('input[value]').forEach(i=>i.checked=false);
+  saveLocSel(kind, id, checked ? [] : locSelRead(kind,id));
+}
+function locSelOne(kind, id){
+  const ids = locSelRead(kind, id);
+  const m = $('locmenu-'+kind+'-'+id);
+  const allBox = m.querySelector('input:not([value])');
+  if(allBox) allBox.checked = ids.length===0;
+  saveLocSel(kind, id, ids);
+}
+// Сохранение (в app.js переопределяется серверным вызовом)
+function saveLocSel(kind, id, ids){
+  const arr = kind==='service' ? SERVICES : TARIFFS;
+  const it = arr.find(x=>x.id===id); if(it) it.locs = ids;
+  toast(ids.length ? 'Позиция работает в: '+locsLabel(ids) : 'Позиция работает во всех ТЦ');
+}
 let TARIFFS = [
   {id:1, name:"Будний день (Пн–Чт)", day:"weekday", price:690, doc:false, group:1},
   {id:2, name:"Почти выходной (Пятница)", day:"friday", price:790, doc:false, group:1},
@@ -1403,7 +1475,7 @@ function addExpense(){
 let pbSel = {};
 function renderPartyForm(){
   $('pbRoom').innerHTML = ROOMS.map(r=>`<option value="${r.id}">${r.name} · ${fmt(r.price)}</option>`).join('');
-  $('pbServices').innerHTML = SERVICES.map(s=>{
+  $('pbServices').innerHTML = SERVICES.filter(s=>typeof prodInLoc!=='function'||prodInLoc(s)).map(s=>{
     const opts = s.options ? s.options.split('|') : [];
     return `<div class="svc ${pbSel[s.id]?'on':''}" onclick="toggleSvc(${s.id},event)">
       <div>${s.name}</div><div class="sp">${fmt(s.price)}</div>
@@ -1908,7 +1980,8 @@ function renderSettings(){
   const tg = ticketGroupIds();
   const ticketGroups = GROUPS.filter(g=>tg.includes(g.id));
   const tariffRows = TARIFFS.filter(t=>tg.includes(t.group));
-  $('setTariffs').innerHTML = (tariffRows.map(t=>`
+  // Билеты показываем по группам: заголовок группы + её билеты
+  const ticketRow = t => `
     <tr><td><input value="${t.name}" onchange="updT(${t.id},'name',this.value)" style="width:100%;min-width:200px"></td>
     <td><select onchange="updT(${t.id},'group',+this.value)">
       ${ticketGroups.map(g=>`<option value="${g.id}" ${t.group===g.id?'selected':''}>${g.name}</option>`).join('')}</select></td>
@@ -1916,9 +1989,17 @@ function renderSettings(){
       ${Object.entries(DAY_RU).map(([k,v])=>`<option value="${k}" ${t.day===k?'selected':''}>${v}</option>`).join('')}</select></td>
     <td><input type="number" value="${t.price}" onchange="updT(${t.id},'price',+this.value)" style="width:90px"></td>
     <td><input type="checkbox" ${t.doc?'checked':''} onchange="updT(${t.id},'doc',this.checked)"></td>
-    <td><select onchange="updT(${t.id},'loc',this.value)" style="width:130px">${tariffLocOpts(t.loc)}</select></td>
-    <td><button class="btn btn-red btn-sm" onclick="delT(${t.id})">Удалить</button></td></tr>`).join(''))
-    || '<tr><td colspan="7" class="muted">Пока нет билетов — добавьте позицию или создайте группу раздела «Билеты»</td></tr>';
+    <td>${locSelHtml('product', t.id, t.locs)}</td>
+    <td><button class="btn btn-red btn-sm" onclick="delT(${t.id})">Удалить</button></td></tr>`;
+  $('setTariffs').innerHTML = (ticketGroups.map(g=>{
+    const rows = tariffRows.filter(t=>t.group===g.id);
+    return `<tr class="grp-row"><td colspan="7">
+        <b>${g.name}</b> <span class="muted" style="font-weight:500">· билетов: ${rows.length}</span>
+        <button class="btn btn-ghost btn-sm" style="margin-left:10px" onclick="addTariff(${g.id})">+ билет в группу</button>
+      </td></tr>` +
+      (rows.map(ticketRow).join('') || `<tr><td colspan="7" class="muted" style="padding-left:18px">в группе пока нет билетов</td></tr>`);
+  }).join(''))
+    || '<tr><td colspan="7" class="muted">Пока нет групп билетов — нажмите «+ Группа билетов»</td></tr>';
   const KIND_OPT = {tickets:'Билеты', cafe:'Товары (кафе)', goods:'Товары'};
   $('setGroups').innerHTML = GROUPS.map(g=>{
     const cnt = TARIFFS.filter(t=>t.group===g.id).length;
@@ -1932,6 +2013,7 @@ function renderSettings(){
     <tr><td><input value="${s.name}" onchange="updS(${s.id},'name',this.value)" style="width:100%;min-width:180px"></td>
     <td><input type="number" value="${s.price}" onchange="updS(${s.id},'price',+this.value)" style="width:90px"></td>
     <td><input value="${s.options}" onchange="updS(${s.id},'options',this.value)" style="width:100%;min-width:200px" placeholder="Вариант 1|Вариант 2"></td>
+    <td>${locSelHtml('service', s.id, s.locs)}</td>
     <td><button class="btn btn-red btn-sm" onclick="delS(${s.id})">Удалить</button></td></tr>`).join('');
   var _sr=$('setRooms'); if(_sr) _sr.innerHTML = ROOMS.map(r=>`
     <tr><td><input value="${r.name}" onchange="updR(${r.id},'name',this.value)" style="min-width:160px"></td>
@@ -1994,7 +2076,14 @@ function updR(id,f,v){ ROOMS.find(r=>r.id===id)[f]=v; renderPartyForm(); toast('
 function delT(id){ TARIFFS=TARIFFS.filter(t=>t.id!==id); renderSettings(); renderTariffs(); toast('Тариф удалён'); }
 function delS(id){ SERVICES=SERVICES.filter(s=>s.id!==id); renderSettings(); renderPartyForm(); toast('Услуга удалена'); }
 function delR(id){ ROOMS=ROOMS.filter(r=>r.id!==id); renderSettings(); renderPartyForm(); toast('Комната удалена'); }
-function addTariff(){ const g=ticketGroupIds()[0]; TARIFFS.push({id:seq++, name:"Новый билет", day:"any", price:0, doc:false, group:(g||1)}); renderSettings(); renderTariffs(); }
+function addTariff(groupId){ const g=groupId||ticketGroupIds()[0]; TARIFFS.push({id:seq++, name:"Новый билет", day:"any", price:0, doc:false, group:(g||1), locs:[]}); renderSettings(); renderTariffs(); }
+// Быстрое создание группы билетов (раздел «Билеты»)
+function addTicketGroup(){
+  const name = prompt('Название группы билетов (например «Будни», «Выходные», «Льготные»):');
+  if(!name || !name.trim()) return;
+  GROUPS.push({id:seq++, name:name.trim(), kind:'tickets'});
+  renderSettings(); renderTariffs(); toast('Группа билетов создана: '+name.trim());
+}
 function addService(){ SERVICES.push({id:seq++, name:"Новая услуга", price:0, options:""}); renderSettings(); renderPartyForm(); }
 // Инвентаризация работает только с сервером (в app.js функция переопределяется)
 function applyInventory(){ toast('Инвентаризация доступна при работе с сервером', true); }
