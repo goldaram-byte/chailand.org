@@ -325,6 +325,25 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 .card.closed{padding-bottom:12px}
 .card.closed>h3{margin-bottom:0}
 
+/* ===== Сворачивание левого меню (десктоп) ===== */
+.side-toggle{display:none;font-size:15px;padding:5px 10px;border-radius:8px;color:var(--dim)}
+.side-toggle:hover{background:var(--bg);color:var(--ink)}
+@media(min-width:901px){
+  .side-toggle{display:block}
+  aside{transition:transform .25s, width .2s}
+  .main{transition:margin-left .2s}
+  .nav-main button,.nav-bottom button{position:relative}
+  body.side-min aside{width:72px}
+  body.side-min .main{margin-left:72px}
+  body.side-min .side-head{padding:12px 6px;justify-content:center}
+  body.side-min .side-head img{max-width:52px!important}
+  body.side-min aside nav{padding:12px 8px}
+  body.side-min .nav-main button,body.side-min .nav-bottom button,body.side-min .side-foot button{justify-content:center;gap:0;padding-left:0;padding-right:0}
+  body.side-min .nav-main button .ic{width:auto}
+  body.side-min .lbl{display:none}
+  body.side-min .nav-badge{position:absolute;top:5px;right:5px;margin-left:0}
+}
+
 /* ===== Касса: подгонка под экран, без прокрутки страницы ===== */
 @media(min-width:1000px){
   body.pos-mode{overflow:hidden}
@@ -353,12 +372,13 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
     <div class="nav-main" id="navMain"></div>
     <div class="nav-bottom" id="navBottom"></div>
   </nav>
-  <div class="side-foot"><button onclick="toast('В реальном приложении — выход из аккаунта')"><span class="ic">🚪</span> Выйти</button></div>
+  <div class="side-foot"><button title="Выйти" onclick="toast('В реальном приложении — выход из аккаунта')"><span class="ic">🚪</span><span class="lbl">Выйти</span></button></div>
 </aside>
 
 <div class="main">
   <div class="topbar">
     <button class="burger" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+    <button class="side-toggle" id="sideToggle" title="Свернуть меню" onclick="toggleSide()">◀</button>
     <div class="page-title" id="pageTitle">Касса</div>
     <div class="shift-chip"><span class="dot" id="shiftDot"></span><span id="shiftLbl">Смена закрыта</span></div>
     <div class="profile">
@@ -917,9 +937,16 @@ function setRole(r){
 function renderNav(){
   const u = ROLES[role];
   document.getElementById('navMain').innerHTML = u.main.map(p=>
-    `<button class="${p===curPage?'act':''}" onclick="go('${p}')"><span class="ic">${PAGES[p].ic}</span> ${PAGES[p].t}</button>`).join('');
+    `<button class="${p===curPage?'act':''}" title="${PAGES[p].t}" onclick="go('${p}')"><span class="ic">${PAGES[p].ic}</span><span class="lbl">${PAGES[p].t}</span></button>`).join('');
   document.getElementById('navBottom').innerHTML = u.bottom.map(p=>
-    `<button class="${p===curPage?'act':''}" onclick="go('${p}')"><span class="ic">${PAGES[p].ic}</span> ${PAGES[p].t}</button>`).join('');
+    `<button class="${p===curPage?'act':''}" title="${PAGES[p].t}" onclick="go('${p}')"><span class="ic">${PAGES[p].ic}</span><span class="lbl">${PAGES[p].t}</span></button>`).join('');
+}
+/* Сворачивание левого меню (десктоп): узкая полоска с иконками, выбор запоминается */
+function toggleSide(force){
+  const min = typeof force==='boolean' ? document.body.classList.toggle('side-min', force) : document.body.classList.toggle('side-min');
+  const b = document.getElementById('sideToggle');
+  if(b){ b.textContent = min ? '▶' : '◀'; b.title = min ? 'Развернуть меню' : 'Свернуть меню'; }
+  try{ localStorage.setItem('side_min', min?'1':'0'); }catch(_){}
 }
 function go(p){
   curPage = p;
@@ -1805,6 +1832,8 @@ genDashData();
 setRole('owner');
 renderTariffs(); renderPartyForm(); renderBookings(); renderClients(); renderClientSlot(); renderCheck(); renderSales();
 initFold();
+// Восстановить свёрнутое меню, если так оставили в прошлый раз
+try{ if(localStorage.getItem('side_min')==='1') toggleSide(true); }catch(_){}
 
 </script>
 <script src="app.js"></script>
