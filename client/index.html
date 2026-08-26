@@ -94,6 +94,25 @@
   .amt.minus{color:var(--bad)}
   .empty{color:var(--muted);text-align:center;padding:22px 8px;font-size:14px}
 
+  /* Абонементы */
+  .pass{background:linear-gradient(135deg,rgba(244,98,42,.16),rgba(255,197,49,.08));
+        border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px}
+  .pass:last-child{margin-bottom:0}
+  .pass.off{opacity:.55;background:rgba(255,255,255,.04)}
+  .pass .p-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .pass .p-n{font-size:15px;font-weight:700}
+  .pass .p-st{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+               padding:4px 9px;border-radius:999px;white-space:nowrap}
+  .pass .p-st.on{background:rgba(94,217,107,.16);color:var(--ok);border:1px solid rgba(94,217,107,.35)}
+  .pass .p-st.no{background:rgba(255,90,78,.14);color:var(--bad);border:1px solid rgba(255,90,78,.32)}
+  .pass .p-left{display:flex;align-items:baseline;gap:8px;margin-top:10px}
+  .pass .p-left .n{font-size:30px;font-weight:800;color:var(--gold)}
+  .pass .p-left .u{font-size:13px;color:var(--muted)}
+  .pass .p-bar{height:7px;border-radius:999px;background:rgba(255,255,255,.1);overflow:hidden;margin-top:9px}
+  .pass .p-bar i{display:block;height:100%;border-radius:999px;
+                 background:linear-gradient(90deg,var(--accent2),var(--gold))}
+  .pass .p-meta{font-size:12.5px;color:var(--muted);margin-top:9px;line-height:1.5}
+
   /* Chips / stats */
   .stats{display:flex;gap:10px;margin:12px 0}
   .stat{flex:1;background:rgba(255,154,31,.09);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center}
@@ -187,7 +206,7 @@
       </label>
       <label class="fld hidden" id="fldRef">
         <span class="lbl">Код друга (необязательно)</span>
-        <input id="aRef" type="text" placeholder="GB0001" autocomplete="off" />
+        <input id="aRef" type="text" inputmode="numeric" placeholder="900001" autocomplete="off" />
       </label>
       <div style="margin-top:18px">
         <button id="authBtn" class="btn primary" onclick="doAuth()">Войти</button>
@@ -216,13 +235,17 @@
     <div id="v-card" class="view">
       <div class="loyalty">
         <div class="lname" id="cName">—</div>
-        <div class="lcard" id="cCard">GAB-0000</div>
+        <div class="lcard" id="cCard">000000</div>
         <div class="bonus"><span class="n" id="cBonus">0</span><span class="u">бонусов ⭐</span></div>
       </div>
       <div class="panel">
         <h2>🎫 Карта клиента</h2>
         <div class="qrbox" id="qrbox"><div class="spin"></div></div>
         <div class="qrhint">Покажите QR на кассе, чтобы начислить и списать бонусы</div>
+      </div>
+      <div class="panel" id="passPanel" hidden>
+        <h2>🎟 Мои абонементы</h2>
+        <div id="passList"><div class="spin"></div></div>
       </div>
       <div class="panel">
         <h2>📈 История бонусов</h2>
@@ -394,7 +417,7 @@
   function enterApp(){
     $('authScreen').className = 'hidden';
     $('appScreen').className = '';
-    loadMe(); loadQR(); loadHistory();
+    loadMe(); loadQR(); loadHistory(); loadPasses();
   }
 
   window.go = function(v){
@@ -458,6 +481,40 @@
           '<div class="amt '+(plus?'plus':'minus')+'">'+(plus?'+':'')+fmt(p)+' ⭐</div></div>';
       }).join('');
     }).catch(function(){ $('histList').innerHTML = '<div class="empty">Не удалось загрузить</div>'; });
+  }
+
+  // ---- Абонементы ----
+  function loadPasses(){
+    api('/passes').then(function(rows){
+      var panel = $('passPanel'), el = $('passList');
+      if (!rows || !rows.length){ panel.hidden = true; return; }
+      panel.hidden = false;
+      el.innerHTML = rows.map(function(p){
+        var live = p.status === 'active';
+        var ST = { active:'действует', expired:'истёк', used_up:'использован', cancelled:'аннулирован' };
+        var unlim = p.visits_left == null;
+        var left = Number(p.visits_left)||0, total = Number(p.visits_total)||0;
+        var pct = (unlim || !total) ? 100 : Math.max(0, Math.min(100, Math.round(left/total*100)));
+        var cnt = unlim
+          ? '<div class="p-left"><span class="n">∞</span><span class="u">безлимит — ходите сколько хотите</span></div>'
+          : '<div class="p-left"><span class="n">'+fmt(left)+'</span><span class="u">'+plural(left)+' из '+fmt(total)+'</span></div>'+
+            '<div class="p-bar"><i style="width:'+pct+'%"></i></div>';
+        var meta = 'Действует до ' + dmy(p.valid_to);
+        if (p.location_name) meta += ' · ' + esc(p.location_name);
+        if (p.last_visit_at) meta += '<br>Последнее посещение: ' + dmy(p.last_visit_at);
+        return '<div class="pass'+(live?'':' off')+'">'+
+          '<div class="p-top"><div class="p-n">'+esc(p.name)+'</div>'+
+          '<span class="p-st '+(live?'on':'no')+'">'+(ST[p.status]||p.status)+'</span></div>'+
+          cnt + '<div class="p-meta">'+meta+'</div></div>';
+      }).join('');
+    }).catch(function(){ $('passPanel').hidden = true; });
+  }
+  function plural(n){
+    var a = Math.abs(n) % 100, b = a % 10;
+    if (a > 10 && a < 20) return 'посещений';
+    if (b > 1 && b < 5) return 'посещения';
+    if (b === 1) return 'посещение';
+    return 'посещений';
   }
 
   // ---- Рефералы ----

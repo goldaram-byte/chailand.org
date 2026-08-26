@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { q, q1, tx } from '../db.js';
 import { requireAuth, requirePerm } from '../auth.js';
 import { ah, audit } from '../util.js';
+import { nextCardNo, referralCodeFor } from '../services/clients.js';
 
 export const crmRouter = Router();
 crmRouter.use(requireAuth, requirePerm('crm'));
@@ -125,15 +126,15 @@ crmRouter.post(
     const lead = await q1('SELECT * FROM leads WHERE id=$1', [req.params.id]);
     if (!lead) return res.status(404).json({ error: 'Лид не найден' });
     if (lead.client_id) return res.status(409).json({ error: 'Лид уже в базе клиентов' });
-    // Номер карты
-    const cardRow = await q1(`SELECT card_no FROM clients WHERE card_no ~ '^GAB-[0-9]+$' ORDER BY card_no DESC LIMIT 1`);
-    const n = cardRow ? parseInt(cardRow.card_no.slice(4), 10) + 1 : 1;
-    const card_no = 'GAB-' + String(n).padStart(4, '0');
+    const card_no = await nextCardNo();
     const client = await tx(async ({ q1: cq1 }) => {
       const c = await cq1(
         'INSERT INTO clients (full_name, phone, card_no, note) VALUES ($1,$2,$3,$4) RETURNING *',
         [lead.name, lead.phone, card_no, lead.note]
       );
+      // Реферальный код нужен и клиенту из воронки — иначе он не сможет звать друзей
+      c.referral_code = referralCodeFor(c.id);
+      await cq1('UPDATE clients SET referral_code=$2 WHERE id=$1 RETURNING id', [c.id, c.referral_code]);
       // Статус НЕ меняем: заявка остаётся на своём этапе воронки,
       // просто получает связь с созданным клиентом (метка «уже клиент»).
       await cq1('UPDATE leads SET client_id=$2, updated_at=now() WHERE id=$1', [lead.id, c.id]);

@@ -123,8 +123,15 @@ passesRouter.get(
     // Лениво помечаем истёкшие
     await q(`UPDATE passes SET status='expired' WHERE client_id=$1 AND status='active' AND valid_to < current_date`, [req.params.clientId]);
     const rows = await q(
-      `SELECT p.*, (SELECT count(*)::int FROM pass_visits v WHERE v.pass_id = p.id) AS visits_used
-         FROM passes p WHERE p.client_id=$1 ORDER BY p.created_at DESC LIMIT 20`,
+      `SELECT p.*, (SELECT count(*)::int FROM pass_visits v WHERE v.pass_id = p.id) AS visits_used,
+              u.full_name AS sold_by_name, l.name AS location_name,
+              COALESCE(s.total, t.price) AS price, s.method AS pay_method
+         FROM passes p
+         LEFT JOIN users u ON u.id = p.sold_by
+         LEFT JOIN locations l ON l.id = p.location_id
+         LEFT JOIN sales s ON s.id = p.sale_id
+         LEFT JOIN pass_types t ON t.id = p.pass_type_id
+        WHERE p.client_id=$1 ORDER BY p.created_at DESC LIMIT 20`,
       [req.params.clientId]
     );
     res.json(rows);
@@ -164,6 +171,37 @@ passesRouter.post(
       return { id: p.id, name: p.name, visits_left: left, unlimited: p.visits_left == null, valid_to: p.valid_to };
     });
     await audit(req, 'pass.checkin', { entity: 'pass', entityId: req.params.id });
+    res.json(result);
+  })
+);
+
+// DELETE /api/passes/:id/visits/:visitId — отменить ошибочно списанное посещение.
+// Посещение возвращается на абонемент; если он был «использован» — снова активен.
+passesRouter.delete(
+  '/:id/visits/:visitId',
+  canSell,
+  ah(async (req, res) => {
+    const result = await tx(async ({ q1: cq1 }) => {
+      const p = await cq1('SELECT * FROM passes WHERE id=$1 FOR UPDATE', [req.params.id]);
+      if (!p) throw Object.assign(new Error('Абонемент не найден'), { status: 404 });
+      const v = await cq1('SELECT * FROM pass_visits WHERE id=$1 AND pass_id=$2', [req.params.visitId, p.id]);
+      if (!v) throw Object.assign(new Error('Посещение не найдено'), { status: 404 });
+      await cq1('DELETE FROM pass_visits WHERE id=$1 RETURNING id', [v.id]);
+      let left = p.visits_left;
+      if (left != null) {
+        left = Number(left) + 1;
+        if (p.visits_total != null && left > Number(p.visits_total)) left = Number(p.visits_total);
+      }
+      // «Использован» снимаем, а истёкший по сроку так и остаётся истёкшим
+      const back = await cq1(
+        `UPDATE passes SET visits_left=$2,
+            status = CASE WHEN status='used_up' AND valid_to >= current_date THEN 'active' ELSE status END
+          WHERE id=$1 RETURNING *`,
+        [p.id, left]
+      );
+      return back;
+    });
+    await audit(req, 'pass.visit.cancel', { entity: 'pass', entityId: req.params.id, meta: { visit_id: req.params.visitId } });
     res.json(result);
   })
 );
