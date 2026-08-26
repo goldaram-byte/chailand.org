@@ -109,17 +109,18 @@
       api('/clients'),
       api('/crm/leads').catch(function () { return []; }),
       api('/pos/sales?limit=200').catch(function () { return []; }),
-      api('/settings/acquiring').catch(function () { return null; }),
+      // Эквайринг доступен не всем ролям — кассиру не запрашиваем (иначе 403 в консоли)
+      (ME && ME.role === 'cashier') ? Promise.resolve(null) : api('/settings/acquiring').catch(function () { return null; }),
       api('/reports/cashiers').catch(function () { return []; }),
     ]).then(function (res) {
       var cat = res[0], settings = res[1], cl = res[2], ld = res[3], sl = res[4], acq = res[5];
       DASH_USERS = (res[6] || []).map(function (u) { return { id: u.id, name: u.full_name }; });
 
-      GROUPS = cat.groups.map(function (g) { return { id: g.id, name: g.name }; });
+      GROUPS = cat.groups.map(function (g) { return { id: g.id, name: g.name, kind: g.kind || 'goods' }; });
       TARIFFS = cat.products.map(function (p) {
-        return { id: p.id, pid: p.id, name: p.name, day: p.day_kind || 'any', price: Number(p.price), doc: p.requires_document, group: p.group_id, loc: p.location_id || null };
+        return { id: p.id, pid: p.id, name: p.name, day: p.day_kind || 'any', price: Number(p.price), doc: p.requires_document, group: p.group_id, loc: p.location_id || null, track: !!p.track_stock, stock: Number(p.stock || 0) };
       });
-      SERVICES = cat.services.map(function (s) { return { id: s.id, name: s.name, price: Number(s.price), options: '' }; });
+      SERVICES = cat.services.map(function (s) { return { id: s.id, name: s.name, price: Number(s.price), options: s.options || '' }; });
       ROOMS = cat.rooms.map(function (r) { return { id: r.id, name: r.name, cap: r.capacity, price: 2000 }; });
 
       if (settings.cashback != null) CFG.cashback = Number(settings.cashback);
@@ -385,16 +386,36 @@
     var findLead = function (id) { return leads.find(function (x) { return x.id === id; }); };
 
     // --- Воронка: операции через сервер ---
+    // Смена этапа (кнопки в карточке заявки и перетаскивание по доске)
+    var _setStage = window.setLeadStage;
+    window.setLeadStage = function (id, stage) {
+      var l = findLead(id); if (!l || l.stage === stage) return;
+      if (typeof _setStage === 'function') _setStage(id, stage); else { l.stage = stage; rc(); }
+      if (SERVER) api('/crm/leads/' + id, { method: 'PUT', body: { status: STAGE_CODE[stage] || 'new' } }).catch(function () {});
+    };
     window.moveLead = function (id, dir) {
-      var l = findLead(id); if (!l || l.converted) return;
+      var l = findLead(id); if (!l) return;
       var i = STAGES.indexOf(l.stage) + dir; if (i < 0 || i >= STAGES.length) return;
-      l.stage = STAGES[i]; rc();
-      if (SERVER) api('/crm/leads/' + id, { method: 'PUT', body: { status: STAGE_CODE[l.stage] } }).catch(function () {});
+      window.setLeadStage(id, STAGES[i]);
     };
     window.closeOrder = function (id) {
+      window.setLeadStage(id, 'Купил');
+      if (typeof toast === 'function') toast('Заказ закрыт — «Купил»');
+    };
+    // Удаление заявки из воронки
+    window.deleteLead = function (id) {
       var l = findLead(id); if (!l) return;
-      l.stage = 'Купил'; rc(); if (typeof toast === 'function') toast('Заказ закрыт — «Купил»');
-      if (SERVER) api('/crm/leads/' + id, { method: 'PUT', body: { status: 'won' } }).catch(function () {});
+      if (!confirm('Удалить заявку «' + l.name + '» из воронки? Действие необратимо.')) return;
+      var drop = function () {
+        leads = leads.filter(function (x) { return x.id !== id; });
+        if (typeof closeLeadCard === 'function') closeLeadCard();
+        rc();
+        if (typeof toast === 'function') toast('Заявка удалена');
+      };
+      if (SERVER) {
+        api('/crm/leads/' + id, { method: 'DELETE' }).then(drop)
+          .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+      } else drop();
     };
     window.addLeadTask = function (id) {
       var l = findLead(id); if (!l) return;
@@ -425,12 +446,32 @@
     };
     window.convertLead = function (id) {
       var l = findLead(id); if (!l) return;
-      if (!confirm('Перенести лида «' + l.name + '» в базу клиентов и выдать карту?')) return;
+      if (!confirm('Добавить «' + l.name + '» в базу клиентов и выдать карту? Заявка останется в воронке.')) return;
       if (SERVER) {
         api('/crm/leads/' + id + '/convert', { method: 'POST', body: {} })
-          .then(function (c) { l.converted = true; rc(); if (typeof toast === 'function') toast('Лид перенесён · карта ' + (c.card_no || '')); hydrateAll().catch(function () {}); })
+          .then(function (c) {
+            // Заявка остаётся в воронке — просто помечаем «уже клиент»
+            l.client_id = c.id; rc();
+            if (typeof toast === 'function') toast('Клиент создан · карта ' + (c.card_no || '') + ' ⭐ Заявка осталась в воронке');
+            hydrateAll().catch(function () {});
+          })
           .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
-      } else { l.converted = true; rc(); }
+      } else { l.client_id = Date.now(); rc(); }
+    };
+    // Удаление клиента из базы (карточка клиента)
+    window.delClient = function (id) {
+      var c = clients.find(function (x) { return x.id === id; }); if (!c) return;
+      if (!confirm('Удалить клиента «' + c.name + '» из базы?\nКарта, бонусы и данные о детях будут удалены безвозвратно. История продаж останется без привязки к клиенту.')) return;
+      var drop = function () {
+        clients = clients.filter(function (x) { return x.id !== id; });
+        if (typeof closeClientCard === 'function') closeClientCard();
+        if (typeof renderClients === 'function') renderClients();
+        if (typeof toast === 'function') toast('Клиент удалён из базы');
+      };
+      if (SERVER) {
+        api('/clients/' + id, { method: 'DELETE' }).then(drop)
+          .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+      } else drop();
     };
 
     // --- Настройки: реферальная программа ---
@@ -480,16 +521,119 @@
       }).catch(function () {});
     };
 
+    // --- Настройки → «Тарифы» (билеты): изменения сразу на сервер ---
+    var T_FIELD = { name: 'name', group: 'group_id', day: 'day_kind', price: 'price', doc: 'requires_document' };
+    var _updT = window.updT;
+    window.updT = function (id, f, v) {
+      if (SERVER && T_FIELD[f]) {
+        var body = {}; body[T_FIELD[f]] = v;
+        api('/catalog/products/' + id, { method: 'PUT', body: body })
+          .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+      }
+      return _updT ? _updT.apply(this, arguments) : undefined;
+    };
+    var _delT = window.delT;
+    window.delT = function (id) {
+      if (SERVER) {
+        api('/catalog/products/' + id, { method: 'DELETE' })
+          .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+      }
+      return _delT ? _delT.apply(this, arguments) : undefined;
+    };
+    window.addTariff = function () {
+      if (!SERVER) {
+        var g = (typeof ticketGroupIds === 'function' ? ticketGroupIds()[0] : null);
+        TARIFFS.push({ id: Date.now(), name: 'Новый билет', day: 'any', price: 0, doc: false, group: g || 1 });
+        renderSettings(); renderTariffs(); return;
+      }
+      var gid = (typeof ticketGroupIds === 'function' ? ticketGroupIds()[0] : null);
+      if (!gid) { if (typeof toast === 'function') toast('Сначала создайте группу раздела «Билеты» на вкладке «Группы продаж»', true); return; }
+      api('/catalog/products', { method: 'POST', body: { group_id: gid, name: 'Новый билет', day_kind: 'any', price: 0 } })
+        .then(function () { return hydrateAll(); })
+        .then(function () { if (typeof renderSettings === 'function') renderSettings(); if (typeof toast === 'function') toast('Билет добавлен — отредактируйте название и цену'); })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+
+    // --- Настройки → «Праздники» (услуги): изменения сразу на сервер ---
+    var S_FIELD = { name: 'name', price: 'price', options: 'options' };
+    var _updS = window.updS;
+    window.updS = function (id, f, v) {
+      if (SERVER && S_FIELD[f]) {
+        var body = {}; body[S_FIELD[f]] = v;
+        api('/catalog/services/' + id, { method: 'PUT', body: body })
+          .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+      }
+      return _updS ? _updS.apply(this, arguments) : undefined;
+    };
+    var _delS = window.delS;
+    window.delS = function (id) {
+      if (SERVER) {
+        api('/catalog/services/' + id, { method: 'DELETE' })
+          .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+      }
+      return _delS ? _delS.apply(this, arguments) : undefined;
+    };
+    window.addService = function () {
+      if (!SERVER) {
+        SERVICES.push({ id: Date.now(), name: 'Новая услуга', price: 0, options: '' });
+        renderSettings(); renderPartyForm(); return;
+      }
+      api('/catalog/services', { method: 'POST', body: { name: 'Новая услуга', price: 0 } })
+        .then(function () { return hydrateAll(); })
+        .then(function () { if (typeof renderSettings === 'function') renderSettings(); if (typeof toast === 'function') toast('Позиция добавлена — отредактируйте название и цену'); })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+
+    // --- Настройки → «Группы продаж»: создание/раздел/удаление на сервер ---
+    var _updGKind = window.updGKind;
+    window.updGKind = function (id, v) {
+      if (SERVER) {
+        api('/catalog/groups/' + id, { method: 'PUT', body: { kind: v } })
+          .then(function () { return hydrateAll(); })
+          .then(function () { if (typeof renderSettings === 'function') renderSettings(); })
+          .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+      }
+      return _updGKind ? _updGKind.apply(this, arguments) : undefined;
+    };
+    var _addGroup = window.addGroup;
+    window.addGroup = function () {
+      if (!SERVER) return _addGroup ? _addGroup.apply(this, arguments) : undefined;
+      api('/catalog/groups', { method: 'POST', body: { name: 'Новая группа', kind: 'goods' } })
+        .then(function () { return hydrateAll(); })
+        .then(function () { if (typeof renderSettings === 'function') renderSettings(); if (typeof toast === 'function') toast('Группа добавлена'); })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+    var _delG = window.delG;
+    window.delG = function (id) {
+      if (!SERVER) return _delG ? _delG.apply(this, arguments) : undefined;
+      if (GROUPS.length <= 1) { if (typeof toast === 'function') toast('Нельзя удалить последнюю группу', true); return; }
+      var cnt = TARIFFS.filter(function (t) { return t.group === id; }).length;
+      if (cnt && !confirm('В группе ' + cnt + ' позиц. Они будут перенесены в другую группу. Удалить группу?')) return;
+      api('/catalog/groups/' + id, { method: 'DELETE' })
+        .then(function () { return hydrateAll(); })
+        .then(function () { if (typeof renderSettings === 'function') renderSettings(); if (typeof toast === 'function') toast('Группа удалена'); })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+
     // --- Вкладка «Товары» ---
     function eH(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
     window.renderProducts = function () {
       var tb = document.getElementById('setProducts');
-      if (!SERVER) { if (tb) tb.innerHTML = '<tr><td colspan="4" class="muted">Доступно при работе с сервером</td></tr>'; return; }
+      var inv = document.getElementById('invTbl');
+      if (!SERVER) {
+        if (tb) tb.innerHTML = '<tr><td colspan="8" class="muted">Доступно при работе с сервером</td></tr>';
+        if (inv) inv.innerHTML = '<tr><td colspan="4" class="muted">Доступно при работе с сервером</td></tr>';
+        return;
+      }
       api('/catalog').then(function (c) {
         var groups = c.groups || [], products = c.products || [];
+        // «Товары» — всё, кроме групп раздела «Билеты» (те живут на вкладке «Тарифы»)
+        var goodsGroups = groups.filter(function (g) { return g.kind !== 'tickets'; });
+        var goodsIds = goodsGroups.map(function (g) { return g.id; });
+        var goods = products.filter(function (p) { return goodsIds.indexOf(p.group_id) !== -1; });
         var gname = {}; groups.forEach(function (g) { gname[g.id] = g.name; });
         var sel = document.getElementById('pdGroup');
-        if (sel) sel.innerHTML = groups.map(function (g) { return '<option value="' + g.id + '">' + eH(g.name) + '</option>'; }).join('');
+        if (sel) sel.innerHTML = goodsGroups.map(function (g) { return '<option value="' + g.id + '">' + eH(g.name) + '</option>'; }).join('');
         var locOpts = function (cur) {
           return '<option value="">Все ТЦ</option>' + LOCS.map(function (l) {
             return '<option value="' + l.id + '"' + (Number(cur) === l.id ? ' selected' : '') + '>' + eH(l.name) + '</option>';
@@ -497,23 +641,116 @@
         };
         var pdLoc = document.getElementById('pdLoc');
         if (pdLoc) pdLoc.innerHTML = locOpts(null);
-        if (!tb) return;
-        tb.innerHTML = products.map(function (p) {
-          return '<tr>' +
-            '<td>' + eH(p.name) + '</td>' +
-            '<td>' + eH(gname[p.group_id] || '—') + '</td>' +
-            '<td><input type="number" value="' + Number(p.price) + '" style="width:96px" onchange="editProductPrice(' + p.id + ',this.value)"></td>' +
-            '<td><select onchange="editProductLoc(' + p.id + ',this.value)" style="width:120px">' + locOpts(p.location_id) + '</select></td>' +
-            '<td><button class="btn btn-ghost btn-sm" onclick="delProduct(' + p.id + ')">Удалить</button></td>' +
-            '</tr>';
-        }).join('') || '<tr><td colspan="5" class="muted">Пока нет товаров</td></tr>';
+        if (tb) {
+          tb.innerHTML = goods.map(function (p) {
+            var st = Number(p.stock || 0);
+            return '<tr>' +
+              '<td>' + eH(p.name) + '</td>' +
+              '<td>' + eH(gname[p.group_id] || '—') + '</td>' +
+              '<td><input type="number" value="' + Number(p.price) + '" style="width:90px" onchange="editProductPrice(' + p.id + ',this.value)"></td>' +
+              '<td><select onchange="editProductLoc(' + p.id + ',this.value)" style="width:110px">' + locOpts(p.location_id) + '</select></td>' +
+              '<td style="text-align:center"><input type="checkbox" ' + (p.track_stock ? 'checked' : '') + ' title="Вести учёт остатков" onchange="toggleTrackStock(' + p.id + ',this.checked)"></td>' +
+              '<td>' + (p.track_stock ? '<b style="color:' + (st <= 0 ? 'var(--red)' : 'var(--green)') + '">' + st + '</b>' : '<span class="muted">—</span>') + '</td>' +
+              '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="stockReceipt(' + p.id + ')">+ Приход</button> ' +
+              '<button class="btn btn-ghost btn-sm" title="История движений" onclick="stockHistory(' + p.id + ')">🕓</button></td>' +
+              '<td><button class="btn btn-ghost btn-sm" onclick="delProduct(' + p.id + ')">Удалить</button></td>' +
+              '</tr>';
+          }).join('') || '<tr><td colspan="8" class="muted">Пока нет товаров</td></tr>';
+        }
+        // Инвентаризация — товары с включённым учётом
+        if (inv) {
+          var tracked = goods.filter(function (p) { return p.track_stock; });
+          inv.innerHTML = tracked.map(function (p) {
+            return '<tr data-inv="' + p.id + '">' +
+              '<td>' + eH(p.name) + '</td>' +
+              '<td class="inv-was">' + Number(p.stock || 0) + '</td>' +
+              '<td><input type="number" class="inv-actual" data-pid="' + p.id + '" data-was="' + Number(p.stock || 0) + '" placeholder="—" style="width:110px" oninput="invDiff(this)"></td>' +
+              '<td class="inv-diff muted">—</td>' +
+              '</tr>';
+          }).join('') || '<tr><td colspan="4" class="muted">Нет товаров с учётом остатков — включите «Учёт» в таблице выше</td></tr>';
+        }
       }).catch(function () {});
     };
     window.addProduct = function () {
       var g = document.getElementById('pdGroup'), n = document.getElementById('pdName'), p = document.getElementById('pdPrice'), lc = document.getElementById('pdLoc');
+      var st = document.getElementById('pdStock');
       if (!n || !n.value.trim()) { if (n) n.focus(); return; }
+      if (!g || !g.value) { if (typeof toast === 'function') toast('Нет товарных групп — создайте группу раздела «Товары» на вкладке «Группы продаж»', true); return; }
+      var stock = st && st.value !== '' ? Number(st.value) : null;
       api('/catalog/products', { method: 'POST', body: { group_id: +g.value || null, name: n.value.trim(), price: +p.value || 0, location_id: (lc && lc.value) ? +lc.value : null } })
-        .then(function () { n.value = ''; p.value = ''; window.renderProducts(); if (typeof toast === 'function') toast('Товар добавлен'); hydrateAll().catch(function () {}); })
+        .then(function (row) {
+          // Начальный остаток указан — сразу оприходуем и включаем учёт
+          if (stock != null && stock > 0 && row && row.id) {
+            return api('/catalog/products/' + row.id + '/stock', { method: 'POST', body: { delta: stock, reason: 'receipt', note: 'Начальный остаток' } });
+          }
+        })
+        .then(function () { n.value = ''; p.value = ''; if (st) st.value = ''; window.renderProducts(); if (typeof toast === 'function') toast('Товар добавлен'); hydrateAll().catch(function () {}); })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+    // Учёт остатков: вкл/выкл, приход, история движений, инвентаризация
+    window.toggleTrackStock = function (id, on) {
+      api('/catalog/products/' + id, { method: 'PUT', body: { track_stock: !!on } })
+        .then(function () { window.renderProducts(); hydrateAll().catch(function () {}); })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+    window.stockReceipt = function (id) {
+      var v = prompt('Сколько единиц поступило? (отрицательное число — списание)');
+      if (v == null) return;
+      var d = Number(String(v).replace(',', '.'));
+      if (!d) { if (typeof toast === 'function') toast('Укажите количество', true); return; }
+      var note = prompt('Комментарий (накладная, поставщик — необязательно):') || null;
+      api('/catalog/products/' + id + '/stock', { method: 'POST', body: { delta: d, reason: d > 0 ? 'receipt' : 'adjust', note: note } })
+        .then(function () { window.renderProducts(); hydrateAll().catch(function () {}); if (typeof toast === 'function') toast(d > 0 ? 'Приход оприходован: +' + d : 'Списано: ' + d); })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+    var MOVE_RU = { receipt: 'Приход', sale: 'Продажа', return: 'Возврат', inventory: 'Инвентаризация', adjust: 'Корректировка' };
+    window.stockHistory = function (id) {
+      api('/catalog/products/' + id + '/stock-moves').then(function (rows) {
+        var old = document.getElementById('stockHistOv'); if (old) old.remove();
+        var ov = document.createElement('div');
+        ov.id = 'stockHistOv';
+        ov.className = 'pay-overlay open';
+        ov.onclick = function (e) { if (e.target === ov) ov.remove(); };
+        var t = (TARIFFS || []).filter(function (x) { return x.id === id; })[0];
+        ov.innerHTML = '<div class="pay-modal" style="max-width:560px">' +
+          '<div class="cc-head"><div style="flex:1"><div style="font-size:17px;font-weight:800">🕓 Движения товара</div>' +
+          '<div class="muted" style="font-size:13px">' + eH(t ? t.name : '№' + id) + '</div></div>' +
+          '<button style="font-size:20px;color:var(--dim);padding:4px 10px" onclick="this.closest(\'.pay-overlay\').remove()">✕</button></div>' +
+          '<div class="tbl-wrap"><table><thead><tr><th>Дата</th><th>Операция</th><th>Кол-во</th><th>Кто</th><th>Комментарий</th></tr></thead><tbody>' +
+          ((rows || []).map(function (m) {
+            var d = new Date(m.created_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+            var delta = Number(m.delta);
+            return '<tr><td style="white-space:nowrap">' + d + '</td><td>' + (MOVE_RU[m.reason] || m.reason) + '</td>' +
+              '<td style="font-weight:700;color:' + (delta >= 0 ? 'var(--green)' : 'var(--red)') + '">' + (delta > 0 ? '+' : '') + delta + '</td>' +
+              '<td>' + eH(m.user_name || '—') + '</td><td class="muted" style="font-size:12px">' + eH(m.note || '') + '</td></tr>';
+          }).join('') || '<tr><td colspan="5" class="muted">Движений пока нет</td></tr>') +
+          '</tbody></table></div></div>';
+        document.body.appendChild(ov);
+      }).catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+    window.invDiff = function (input) {
+      var row = input.closest('tr'); if (!row) return;
+      var cell = row.querySelector('.inv-diff');
+      if (input.value === '') { cell.textContent = '—'; cell.className = 'inv-diff muted'; return; }
+      var diff = Number(input.value) - Number(input.getAttribute('data-was'));
+      cell.textContent = (diff > 0 ? '+' : '') + diff;
+      cell.className = 'inv-diff';
+      cell.style.fontWeight = '700';
+      cell.style.color = diff === 0 ? 'var(--dim)' : (diff > 0 ? 'var(--green)' : 'var(--red)');
+    };
+    window.applyInventory = function () {
+      var items = [];
+      document.querySelectorAll('#invTbl .inv-actual').forEach(function (i) {
+        if (i.value !== '') items.push({ product_id: +i.getAttribute('data-pid'), actual: Number(i.value) });
+      });
+      if (!items.length) { if (typeof toast === 'function') toast('Внесите фактические остатки хотя бы по одному товару', true); return; }
+      if (!confirm('Применить инвентаризацию по ' + items.length + ' товарам? Учётные остатки будут заменены фактическими.')) return;
+      api('/catalog/inventory', { method: 'POST', body: { items: items } })
+        .then(function (r) {
+          var changed = (r.results || []).filter(function (x) { return x.diff !== 0; }).length;
+          if (typeof toast === 'function') toast('Инвентаризация применена: расхождения по ' + changed + ' товарам');
+          window.renderProducts(); hydrateAll().catch(function () {});
+        })
         .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
     };
     window.editProductPrice = function (id, val) {
