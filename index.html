@@ -341,6 +341,33 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 .jr-block small{display:block;font-weight:500;font-size:10px;opacity:.85}
 .jr-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--dim);font-weight:600}
 .jr-legend i{display:inline-block;width:12px;height:12px;border-radius:4px;margin-right:5px;vertical-align:-1px}
+/* переключатель вида журнала */
+.jr-views{display:inline-flex;gap:6px}
+.jr-views button{padding:7px 15px;border-radius:18px;background:#fff;border:1px solid var(--line);font-weight:600;font-size:12.5px;color:var(--dim);min-height:34px}
+.jr-views button:hover{border-color:#fdba74;color:var(--orange)}
+.jr-views button.act{background:var(--orange);border-color:var(--orange);color:#fff}
+/* неделя: комнаты × дни */
+.jr-wk-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.jr-wk{display:grid;grid-template-columns:150px repeat(7,minmax(110px,1fr));gap:4px;min-width:940px}
+.jr-wk .wk-head{font-size:11.5px;font-weight:700;color:var(--dim);text-align:center;padding:5px 2px;cursor:pointer;border-radius:8px}
+.jr-wk .wk-head:hover{background:var(--bg);color:var(--orange)}
+.jr-wk .wk-head.today{color:var(--orange)}
+.jr-wk .wk-room{font-weight:600;font-size:12.5px;padding:6px 8px 0 0}
+.jr-wk .wk-room small{display:block;color:var(--dim);font-weight:500;font-size:10.5px}
+.jr-cell{background:#f8fafc;border:1px solid var(--line);border-radius:8px;min-height:46px;padding:4px;display:flex;flex-direction:column;gap:3px}
+.jr-cell.today{box-shadow:inset 0 0 0 2px #fdba74}
+.jr-chip{border-radius:6px;color:#fff;font-size:10.5px;font-weight:700;padding:2px 7px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jr-chip:hover{filter:brightness(1.1)}
+/* месяц: календарь */
+.jr-month{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.jr-month .mo-head{font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;text-align:center;padding:4px 0}
+.jr-mday{background:#f8fafc;border:1px solid var(--line);border-radius:9px;min-height:88px;padding:5px 6px;display:flex;flex-direction:column;gap:3px}
+.jr-mday.other{opacity:.4}
+.jr-mday.today{box-shadow:inset 0 0 0 2px #fdba74}
+.jr-mday .dn{font-weight:700;font-size:12px;cursor:pointer;color:var(--ink);align-self:flex-start;padding:1px 6px;border-radius:6px}
+.jr-mday .dn:hover{background:#fff7ed;color:var(--orange)}
+.jr-more{font-size:10.5px;color:var(--orange);font-weight:700;cursor:pointer;padding-left:2px}
+@media(max-width:700px){.jr-mday{min-height:60px}.jr-mday .jr-chip{display:none}.jr-mday .jr-dots{display:flex;gap:3px;flex-wrap:wrap}}
 
 /* ===== Сворачивание левого меню (десктоп) ===== */
 .side-toggle{display:none;font-size:15px;padding:5px 10px;border-radius:8px;color:var(--dim)}
@@ -523,6 +550,11 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
   <div class="page" id="p-journal">
     <div class="card">
       <h3 style="flex-wrap:wrap">🗓️ Занятость комнат
+        <span class="jr-views" id="jrViews" style="margin-left:14px">
+          <button data-v="day" onclick="setJrView('day')">День</button>
+          <button data-v="week" onclick="setJrView('week')">Неделя</button>
+          <button data-v="month" onclick="setJrView('month')">Месяц</button>
+        </span>
         <span style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-ghost btn-sm" onclick="jrShift(-1)">←</button>
           <input type="date" id="jrDate" onchange="renderJournal()">
@@ -531,7 +563,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
           <select id="jrLoc" onchange="renderJournal()" style="display:none"></select>
         </span>
       </h3>
-      <div class="muted" style="font-size:12.5px;margin-bottom:10px">Полоса — занятое время комнаты. Пустая строка — комната свободна весь день. Нажмите на полосу, чтобы открыть бронь.</div>
+      <div class="muted" id="jrHint" style="font-size:12.5px;margin-bottom:10px">Полоса — занятое время комнаты. Пустая строка — комната свободна весь день. Нажмите на полосу, чтобы открыть бронь.</div>
       <div id="jrGrid"></div>
       <div class="jr-legend">
         <span><i style="background:#64748b"></i> предбронь (без оплаты)</span>
@@ -1491,13 +1523,26 @@ function bkDelete(id){
 /* ================= ЖУРНАЛ: СЕТКА ЗАНЯТОСТИ КОМНАТ ================= */
 const JR_DAY_START=10, JR_DAY_END=22; // рабочее окно парка, часов
 const JR_COLORS={new:'#64748b',confirmed:'#d97706',prepaid:'#d97706',paid:'#059669',done:'#94a3b8'};
+// Вид журнала: день (сетка по часам) / неделя / месяц. Выбор запоминается.
+let jrView = 'day';
+try{ jrView = localStorage.getItem('jr_view') || 'day'; }catch(_){}
+if(!['day','week','month'].includes(jrView)) jrView='day';
+function setJrView(v){
+  jrView=v;
+  try{ localStorage.setItem('jr_view', v); }catch(_){}
+  renderJournal();
+}
 function jrShift(d){
   const inp=$('jrDate'); if(!inp.value) inp.value=today;
-  const dt=new Date(inp.value+'T12:00:00'); dt.setDate(dt.getDate()+d);
+  const dt=new Date(inp.value+'T12:00:00');
+  if(jrView==='month') dt.setMonth(dt.getMonth()+d);
+  else dt.setDate(dt.getDate() + d*(jrView==='week'?7:1));
   inp.value=dt.toISOString().slice(0,10);
   renderJournal();
 }
 function jrToday(){ $('jrDate').value=today; renderJournal(); }
+// Перейти к конкретному дню из недельного/месячного вида
+function jrGoDay(date){ $('jrDate').value=date; setJrView('day'); }
 function jrMin(t){ // "HH:MM" → минуты от начала окна (0..720), с ограничением
   if(!t) return null;
   const m=String(t).match(/^(\d{1,2}):(\d{2})/); if(!m) return null;
@@ -1518,15 +1563,37 @@ function jrCurLoc(){
   sel.style.display='none';
   return (typeof deviceLoc==='function') ? deviceLoc() : null;
 }
+function jrPayLabel(b){
+  return b.status==='new'?'без оплаты':(b.status==='paid'?'оплачено':(b.status==='done'?'реализовано':'предоплата '+fmt(b.prepaid)));
+}
+function jrChip(b, withDate){
+  const col=JR_COLORS[b.status]||'#64748b';
+  return `<div class="jr-chip" style="background:${col}" title="${b.client||''} · ${b.from||''}${b.to?'–'+b.to:''} · ${b.room||'—'} · ${jrPayLabel(b)}"
+    onclick="event.stopPropagation();openBookingCard(${b.id})">${b.from||''} ${b.client||'Бронь'}</div>`;
+}
 function renderJournal(){
   const grid=$('jrGrid'); if(!grid) return;
   if(!$('jrDate').value) $('jrDate').value=today;
   const date=$('jrDate').value;
   const loc=jrCurLoc();
-  const total=(JR_DAY_END-JR_DAY_START)*60;
   const rooms=ROOMS.filter(r=>!loc || !r.loc || +r.loc===+loc);
-  const day=bookings.filter(b=>b.date===date && b.status!=='cancelled' && (!loc || !b.loc || +b.loc===+loc));
-  // шапка с часами
+  const all=bookings.filter(b=>b.status!=='cancelled' && (!loc || !b.loc || +b.loc===+loc));
+  // подсветить активный вид + подсказка
+  document.querySelectorAll('#jrViews button').forEach(b=>b.classList.toggle('act', b.dataset.v===jrView));
+  const hint=$('jrHint');
+  if(hint) hint.textContent = jrView==='day'
+    ? 'Полоса — занятое время комнаты. Пустая строка — комната свободна весь день. Нажмите на полосу, чтобы открыть бронь.'
+    : (jrView==='week'
+      ? 'Неделя: комнаты по строкам, дни по столбцам. Нажмите на бронь, чтобы открыть карточку; на дату — чтобы перейти к дневной сетке.'
+      : 'Месяц: все брони по дням. Нажмите на число — откроется дневная сетка этого дня; на бронь — её карточка.');
+  if(jrView==='week') grid.innerHTML = jrRenderWeek(date, rooms, all);
+  else if(jrView==='month') grid.innerHTML = jrRenderMonth(date, all);
+  else grid.innerHTML = jrRenderDay(date, rooms, all.filter(b=>b.date===date));
+  renderRooms();
+}
+/* --- День: сетка по часам --- */
+function jrRenderDay(date, rooms, day){
+  const total=(JR_DAY_END-JR_DAY_START)*60;
   const hours=[]; for(let h=JR_DAY_START; h<=JR_DAY_END; h++) hours.push(h);
   const ticks=hours.slice(1,-1).map(h=>`<span class="tick" style="left:${(h-JR_DAY_START)*60/total*100}%"></span>`).join('');
   const head=`<div class="jr-head"><div class="jr-name"></div><div class="jr-hours">${hours.map(h=>`<span style="left:${(h-JR_DAY_START)*60/total*100}%">${h}:00</span>`).join('')}</div></div>`;
@@ -1538,7 +1605,7 @@ function renderJournal(){
       if(e==null||e<=s) e=Math.min(s+120,total);
       const left=s/total*100, width=Math.max(3,(e-s)/total*100);
       const col=JR_COLORS[b.status]||'#64748b';
-      const pay=b.status==='new'?'без оплаты':(b.status==='paid'?'оплачено':(b.status==='done'?'реализовано':'предоплата '+fmt(b.prepaid)));
+      const pay=jrPayLabel(b);
       return `<div class="jr-block" style="left:${left}%;width:${width}%;background:${col}"
         title="${b.client||''} · ${b.from||''}–${b.to||''} · ${pay}" onclick="openBookingCard(${b.id})">${b.client||'Бронь'}<small>${b.from||''}–${b.to||''} · ${pay}</small></div>`;
     }).join('');
@@ -1550,10 +1617,68 @@ function renderJournal(){
       <div class="jr-lane">${ticks}${laneFor(list)}</div></div>`;
   }).join('');
   const extra=noRoom.length?`<div class="jr-row"><div class="jr-name">Без комнаты<small>бронь без банкетной</small></div><div class="jr-lane">${ticks}${laneFor(noRoom)}</div></div>`:'';
-  grid.innerHTML = rooms.length||noRoom.length
+  return (rooms.length||noRoom.length)
     ? head+rows+extra
     : '<div class="muted" style="padding:10px 0">Добавьте банкетные комнаты внизу страницы</div>';
-  renderRooms();
+}
+/* --- Неделя: комнаты × дни --- */
+const JR_WD=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+function jrWeekDates(date){
+  const d=new Date(date+'T12:00:00'); const wd=(d.getDay()+6)%7; d.setDate(d.getDate()-wd);
+  const a=[]; for(let i=0;i<7;i++){ const x=new Date(d); x.setDate(d.getDate()+i); a.push(x.toISOString().slice(0,10)); }
+  return a;
+}
+function jrRenderWeek(date, rooms, all){
+  const dates=jrWeekDates(date);
+  const sortT=(a,b)=>String(a.from||'').localeCompare(String(b.from||''));
+  const head=`<div class="jr-wk-wrap"><div class="jr-wk"><div></div>${dates.map((d,i)=>
+    `<div class="wk-head ${d===today?'today':''}" onclick="jrGoDay('${d}')" title="Открыть день">${JR_WD[i]} ${d.slice(8,10)}.${d.slice(5,7)}</div>`).join('')}`;
+  const hasNoRoom=all.some(b=>!b.roomId && dates.includes(b.date));
+  const rowFor=(label, sub, match)=>`
+    <div class="wk-room">${label}<small>${sub||''}</small></div>`+
+    dates.map(d=>{
+      const list=all.filter(b=>b.date===d && match(b)).sort(sortT);
+      return `<div class="jr-cell ${d===today?'today':''}">${list.map(b=>jrChip(b)).join('')}</div>`;
+    }).join('');
+  const rows=rooms.map(r=>{
+    const locName=(window.ALL_LOCS||[]).filter(l=>l.id===+r.loc).map(l=>l.name)[0];
+    return rowFor(r.name, (r.cap?r.cap+' мест':'')+(locName?(r.cap?' · ':'')+locName:''), b=>+b.roomId===+r.id);
+  }).join('');
+  const extra=hasNoRoom?rowFor('Без комнаты','', b=>!b.roomId):'';
+  return rooms.length||hasNoRoom
+    ? head+rows+extra+'</div></div>'
+    : '<div class="muted" style="padding:10px 0">Добавьте банкетные комнаты внизу страницы</div>';
+}
+/* --- Месяц: календарь --- */
+function jrRenderMonth(date, all){
+  const d=new Date(date+'T12:00:00');
+  const y=d.getFullYear(), m=d.getMonth();
+  const first=new Date(y,m,1);
+  const start=new Date(first); start.setDate(1-((first.getDay()+6)%7)); // понедельник первой недели
+  const last=new Date(y,m+1,0);
+  const cells=[];
+  const MONTHS=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  for(let x=new Date(start); ; x.setDate(x.getDate()+1)){
+    cells.push(new Date(x));
+    if(x>=last && (x.getDay()+6)%7===6) break;
+    if(cells.length>42) break;
+  }
+  const sortT=(a,b)=>String(a.from||'').localeCompare(String(b.from||''));
+  const head=`<div style="font-weight:800;font-size:15px;margin-bottom:8px">${['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'][m]} ${y}</div>
+    <div class="jr-month">${JR_WD.map(w=>`<div class="mo-head">${w}</div>`).join('')}`;
+  const body=cells.map(x=>{
+    const ds=x.toISOString().slice(0,10);
+    const other=x.getMonth()!==m;
+    const list=all.filter(b=>b.date===ds).sort(sortT);
+    const shown=list.slice(0,3);
+    const more=list.length-shown.length;
+    return `<div class="jr-mday ${other?'other':''} ${ds===today?'today':''}">
+      <span class="dn" onclick="jrGoDay('${ds}')" title="Открыть день">${x.getDate()}</span>
+      ${shown.map(b=>jrChip(b)).join('')}
+      ${more>0?`<span class="jr-more" onclick="jrGoDay('${ds}')">+ ещё ${more}</span>`:''}
+    </div>`;
+  }).join('');
+  return head+body+'</div>';
 }
 /* ---- Банкетные комнаты (в app.js операции уходят на сервер) ---- */
 function renderRooms(){
