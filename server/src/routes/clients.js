@@ -37,7 +37,8 @@ clientsRouter.get(
       `SELECT c.*,
               COALESCE(sc.buys,0)::int AS buys,
               sc.last_buy,
-              bd.next_days AS kid_bday_in
+              bd.next_days AS kid_bday_in,
+              COALESCE(pa.n,0)::int AS active_passes
          FROM clients c
          LEFT JOIN (SELECT client_id, count(*) AS buys, max(created_at) AS last_buy
                       FROM sales WHERE is_return=false AND client_id IS NOT NULL GROUP BY client_id) sc
@@ -46,6 +47,9 @@ clientsRouter.get(
                            min(((date_part('doy',birth_date)::int - date_part('doy',current_date)::int + 366) % 366)) AS next_days
                       FROM client_kids WHERE birth_date IS NOT NULL GROUP BY client_id) bd
                 ON bd.client_id = c.id
+         LEFT JOIN (SELECT client_id, count(*) AS n FROM passes
+                     WHERE status='active' AND valid_to >= current_date GROUP BY client_id) pa
+                ON pa.client_id = c.id
         ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
         ORDER BY c.created_at DESC
         LIMIT 200`,

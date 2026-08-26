@@ -141,9 +141,9 @@
       window.SHTRIH_URL = settings.shtrih_url || 'http://localhost:5893';
       if (acq) { ACQUIRING.bank = acq.bank || '—'; ACQUIRING.mode = acq.mode; ACQUIRING.connected = !!acq.connected; ACQUIRING.tid = acq.terminal_id || ''; ACQUIRING.merchant = acq.merchant_id || ''; }
 
-      clients = cl.map(function (c) {
-        return { id: c.id, name: c.full_name, phone: c.phone || '', card: c.card_no || '', bonus: Number(c.bonus), buys: 0, app: !!c.app_installed, history: null, kids: null };
-      });
+      // тот же маппер, что и у фильтра, — иначе при первой загрузке терялись
+      // количество покупок, ближайший ДР ребёнка и метка абонементов
+      clients = cl.map(mapCli);
       leads = (ld || []).map(mapLead);
       sales = (sl || []).filter(function (s) { return !s.is_return; }).map(mapSale);
 
@@ -831,6 +831,7 @@
       id: c.id, name: c.full_name, phone: c.phone || '', card: c.card_no || '',
       bonus: Number(c.bonus), buys: Number(c.buys || 0), app: !!c.app_installed,
       history: null, kids: null, kidBdayIn: c.kid_bday_in,
+      passes: Number(c.active_passes || 0),
     };
   }
 

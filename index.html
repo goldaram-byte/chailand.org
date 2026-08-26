@@ -203,6 +203,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 .grp-chips button:hover{border-color:#fdba74;color:var(--orange)}
 .grp-chips button.act{background:var(--orange);border-color:var(--orange);color:#fff;box-shadow:0 3px 10px rgba(234,88,12,.22)}
 .app-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700;background:#eff6ff;color:var(--blue)}
+.pass-badge{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:700;background:#fff4e6;color:#b45309;border:1px solid #fcd9a8}
 
 /* ===== CRM / ВОРОНКА ===== */
 .crm-board{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;align-items:start}
@@ -1859,7 +1860,7 @@ function renderClients(){
   $('cliTbl').innerHTML = clients.map(c=>{
     const soon = (c.kids||[]).some(k=>daysToBirthday(k.birth)<=30);
     return `<tr style="cursor:pointer" onclick="openClientCard(${c.id})" title="Открыть карточку клиента">
-    <td>${c.name} ${soon?'<span title="Скоро день рождения ребёнка">🎂</span>':''}</td>
+    <td>${c.name} ${soon?'<span title="Скоро день рождения ребёнка">🎂</span>':''}${c.passes?`<span class="pass-badge" title="Действующих абонементов: ${c.passes}">🎟 ${c.passes}</span>`:''}</td>
     <td>${c.phone}</td><td><b style="color:var(--orange)">${c.card}</b></td><td>${c.bonus}</td><td>${c.buys}</td>
     <td>${c.app?'<span class="app-badge">✓ есть</span>':'<span class="muted">—</span>'}</td></tr>`;
   }).join('');
