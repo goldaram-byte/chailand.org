@@ -396,9 +396,24 @@ CREATE INDEX IF NOT EXISTS idx_stock_moves_product ON stock_moves(product_id, cr
 -- Варианты услуги праздника (через |): «Кошка Габри|Дракоша-Динго» и т.п.
 ALTER TABLE services ADD COLUMN IF NOT EXISTS options text;
 
+-- ---------------------------------------------------------------------------
+-- Праздники → журнал мероприятий.
+-- Статусы: new (предбронь, без оплаты) | prepaid (бронь, есть предоплата)
+--          | paid (оплачено полностью) | done (реализовано) | cancelled.
+-- Бронирование привязано к ТЦ (журнал виден всем в своём ТЦ) и к продавцу
+-- (кассиру, который продал праздник; владелец может переназначить).
+-- ---------------------------------------------------------------------------
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS seller_id bigint REFERENCES users(id);
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS time_to   text;                       -- окончание (время «до»)
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS services  jsonb NOT NULL DEFAULT '[]'; -- [{name, option, price}]
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payments  jsonb NOT NULL DEFAULT '[]'; -- [{amount, method, fiscal, sale_id, at, by, by_name}]
+
 -- Касса и продажи привязаны к точке (клиенты — НЕТ, они общие).
 ALTER TABLE cash_shifts ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES locations(id);
 ALTER TABLE sales       ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES locations(id);
+-- Журнал мероприятий разделён по ТЦ (бронирование привязано к точке).
+ALTER TABLE bookings    ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES locations(id);
+CREATE INDEX IF NOT EXISTS idx_bookings_location ON bookings(location_id);
 -- Каталог может отличаться по ТЦ: location_id IS NULL — товар во всех ТЦ,
 -- иначе — только в своей точке.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES locations(id);

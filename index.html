@@ -169,7 +169,7 @@ tr:hover td{background:#fafbfd}
 .tag{display:inline-block;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700}
 .tag.new{background:#eff6ff;color:var(--blue)}
 .tag.prepaid{background:#fffbeb;color:var(--gold)}
-.tag.confirmed,.tag.done2{background:#ecfdf5;color:var(--green)}
+.tag.confirmed,.tag.done2,.tag.paid{background:#ecfdf5;color:var(--green)}
 .tag.done{background:#f1f5f9;color:var(--dim)}
 .tag.cancelled,.tag.refunded{background:#fef2f2;color:var(--red)}
 .tag.m-cash{background:#f0fdf4;color:var(--green)} .tag.m-card{background:#eff6ff;color:var(--blue)} .tag.m-online{background:#faf5ff;color:#7c3aed}
@@ -483,12 +483,13 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
     <div class="card">
       <h3>➕ Новое бронирование</h3>
       <div class="frm">
+        <div><label>Имя клиента</label><input id="pbName" placeholder="Имя Фамилия"></div>
+        <div><label>Телефон клиента</label><input id="pbPhone" placeholder="+7 ___ ___-__-__"></div>
         <div><label>Дата</label><input type="date" id="pbDate"></div>
         <div><label>С</label><input type="time" id="pbFrom" value="12:00"></div>
         <div><label>До</label><input type="time" id="pbTo" value="14:00"></div>
         <div><label>Комната</label><select id="pbRoom"></select></div>
         <div><label>Детей</label><input type="number" id="pbKids" value="8" min="1"></div>
-        <div><label>Телефон клиента</label><input id="pbPhone" placeholder="+7 ___ ___-__-__"></div>
       </div>
       <div class="svc-list" id="pbServices"></div>
       <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
@@ -497,8 +498,9 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
       </div>
     </div>
     <div class="card">
-      <h3>📅 Бронирования</h3>
-      <div class="tbl-wrap"><table><thead><tr><th>Дата</th><th>Время</th><th>Комната</th><th>Контакт</th><th>Услуги</th><th>Итого</th><th>Предоплата</th><th>Статус</th><th></th></tr></thead>
+      <h3>📒 Журнал мероприятий</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Все бронирования этого ТЦ. Нажмите на строку, чтобы открыть карточку: изменить статус, добавить или убрать услуги, принять оплату. Каждое мероприятие закреплено за продавцом.</div>
+      <div class="tbl-wrap"><table><thead><tr><th>Дата</th><th>Время</th><th>Комната</th><th>Клиент</th><th>Услуги</th><th>Итого</th><th>Оплачено</th><th>Статус</th><th>Продавец</th></tr></thead>
       <tbody id="bookTbl"></tbody></table></div>
     </div>
   </div>
@@ -812,6 +814,11 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 <!-- ============ КАРТОЧКА ЗАЯВКИ (ВОРОНКА) ============ -->
 <div class="pay-overlay" id="leadOverlay" onclick="if(event.target===this)closeLeadCard()">
   <div class="pay-modal" id="leadCardBody" style="max-width:640px"></div>
+</div>
+
+<!-- ============ КАРТОЧКА МЕРОПРИЯТИЯ (ЖУРНАЛ) ============ -->
+<div class="pay-overlay" id="bookingOverlay" onclick="if(event.target===this)closeBookingCard()">
+  <div class="pay-modal" id="bookingCardBody" style="max-width:680px"></div>
 </div>
 
 <!-- ============ ВОЗВРАТ ============ -->
@@ -1294,38 +1301,136 @@ function renderPbTotal(){ $('pbTotal').textContent = fmt(pbTotal()); }
 document.addEventListener('change', e=>{ if(e.target.id==='pbRoom') renderPbTotal(); });
 
 function createBooking(){
-  const date=$('pbDate').value, from=$('pbFrom').value, to=$('pbTo').value, roomId=+$('pbRoom').value, phone=$('pbPhone').value.trim();
+  const name=($('pbName')?$('pbName').value.trim():''), date=$('pbDate').value, from=$('pbFrom').value, to=$('pbTo').value, roomId=+$('pbRoom').value, phone=$('pbPhone').value.trim();
+  if(!name) return toast('Укажите имя клиента', true);
   if(!date) return toast('Укажите дату праздника', true);
   if(!phone) return toast('Укажите телефон клиента', true);
   const clash = bookings.find(b=>b.roomId===roomId&&b.date===date&&b.status!=='cancelled'&&!(b.to<=from||b.from>=to));
   if(clash) return toast('Комната занята в это время ('+clash.from+'–'+clash.to+')', true);
-  bookings.push({id:Date.now(), date, from, to, roomId, room:ROOMS.find(r=>r.id===roomId).name, phone,
+  bookings.push({id:Date.now(), date, from, to, roomId, room:(ROOMS.find(r=>r.id===roomId)||{}).name||'—', client:name, phone,
     kids:+$('pbKids').value||0,
-    services:Object.entries(pbSel).map(([id,v])=>{const s=SERVICES.find(x=>x.id===+id);return{name:s.name,option:v.option,price:s.price};}),
-    total:pbTotal(), prepaid:0, status:'new'});
-  pbSel={}; renderPartyForm(); renderBookings(); toast('Праздник забронирован 🎉');
+    services:Object.entries(pbSel).map(([id,v])=>{const s=SERVICES.find(x=>x.id===+id);return{name:s.name,option:v.option,price:+s.price};}),
+    total:pbTotal(), prepaid:0, status:'new', seller:ROLES[role].name, payments:[], comment:''});
+  pbSel={}; if($('pbName'))$('pbName').value=''; $('pbPhone').value='';
+  renderPartyForm(); renderBookings(); toast('Праздник забронирован 🎉 Предбронь в журнале мероприятий');
 }
-function prepay(id){
-  const b=bookings.find(x=>x.id===id);
-  const amt=+prompt('Сумма предоплаты, ₽ (итого '+fmt(b.total)+'):', Math.min(3000,b.total));
-  if(!amt||amt<=0) return;
-  b.prepaid+=amt; if(b.status==='new'||b.status==='confirmed')b.status='prepaid';
-  renderBookings(); toast('Предоплата '+fmt(amt)+' принята');
-}
-function setStatus(id,st){ bookings.find(x=>x.id===id).status=st; renderBookings(); }
-const ST_RU={new:'новое',confirmed:'подтверждено',prepaid:'предоплачено',done:'проведено',cancelled:'отменено'};
+// Статусы журнала: предбронь (без оплаты) → бронь (предоплата) → оплачено → реализовано
+const ST_RU={new:'предбронь',confirmed:'бронь',prepaid:'бронь',paid:'оплачено',done:'реализовано',cancelled:'отменено'};
+const BK_STATUSES=[['new','Предбронь'],['prepaid','Бронь'],['paid','Оплачено'],['done','Реализовано'],['cancelled','Отменено']];
 function renderBookings(){
-  $('bookTbl').innerHTML = bookings.length ? bookings.sort((a,b)=>a.date.localeCompare(b.date)).map(b=>`
-    <tr><td>${b.date.split('-').reverse().join('.')}</td><td>${b.from}–${b.to}</td><td>${b.room}</td>
-    <td>${b.phone}<br><span class="muted">${b.kids} детей</span></td>
-    <td>${b.services.map(s=>s.name+(s.option?' <span class="muted">('+s.option+')</span>':'')).join('<br>')||'—'}</td>
+  $('bookTbl').innerHTML = bookings.length ? bookings.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(b=>`
+    <tr style="cursor:pointer" onclick="openBookingCard(${b.id})" title="Открыть карточку мероприятия">
+    <td>${b.date.split('-').reverse().join('.')}</td><td>${b.from||''}${b.to?'–'+b.to:''}</td><td>${b.room||'—'}</td>
+    <td><b>${b.client||'—'}</b><br><span class="muted">${b.phone||''} · ${b.kids} детей</span></td>
+    <td>${(b.services||[]).map(s=>s.name+(s.option?' <span class="muted">('+s.option+')</span>':'')).join('<br>')||'—'}</td>
     <td><b>${fmt(b.total)}</b></td><td>${fmt(b.prepaid)}</td>
-    <td><span class="tag ${b.status}">${ST_RU[b.status]}</span></td>
-    <td style="white-space:nowrap">${b.status!=='done'&&b.status!=='cancelled'?`
-      <button class="btn btn-ghost btn-sm" title="Предоплата" onclick="prepay(${b.id})">💰</button>
-      <button class="btn btn-ghost btn-sm" title="Проведено" onclick="setStatus(${b.id},'done')">✓</button>
-      <button class="btn btn-ghost btn-sm" title="Отменить" onclick="setStatus(${b.id},'cancelled')">✕</button>`:''}</td></tr>`).join('')
+    <td><span class="tag ${b.status}">${ST_RU[b.status]||b.status}</span></td>
+    <td>${b.seller||'—'}</td></tr>`).join('')
     : '<tr><td colspan="9" class="muted">Пока нет бронирований</td></tr>';
+}
+
+/* ===== Карточка мероприятия (журнал) ===== */
+let bookingCardId=null;
+function openBookingCard(id){ bookingCardId=id; renderBookingCard(); $('bookingOverlay').classList.add('open'); }
+function closeBookingCard(){ $('bookingOverlay').classList.remove('open'); bookingCardId=null; }
+function bkFind(id){ return bookings.find(x=>x.id===id); }
+function renderBookingCard(){
+  const b=bkFind(bookingCardId);
+  if(!b){ closeBookingCard(); return; }
+  const canSeller = role==='owner'; // менять продавца может только владелец
+  const sellerOpts = (window.BK_USERS&&window.BK_USERS.length)
+    ? window.BK_USERS.map(u=>`<option value="${u.id}" ${b.seller_id===u.id?'selected':''}>${u.name}</option>`).join('')
+    : Object.values(ROLES).map(r=>`<option ${b.seller===r.name?'selected':''}>${r.name}</option>`).join('');
+  const rest = Math.max(0, b.total - b.prepaid);
+  $('bookingCardBody').innerHTML = `
+    <div class="cc-head">
+      <div class="avatar" style="width:52px;height:52px;font-size:22px;background:var(--gold)">🎉</div>
+      <div style="flex:1">
+        <div style="font-size:18px;font-weight:800">${b.client||'Мероприятие'} <span class="muted" style="font-weight:500;font-size:13px">№${b.id}</span></div>
+        <div class="muted" style="font-size:13px">${b.phone||'—'} · ${b.date.split('-').reverse().join('.')} ${b.from||''}${b.to?'–'+b.to:''} · ${b.room||'—'} · ${b.kids} детей</div>
+      </div>
+      <button onclick="closeBookingCard()" style="font-size:20px;color:var(--dim);padding:4px 10px">✕</button>
+    </div>
+    <div style="font-size:11px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Статус</div>
+    <div class="stage-chips">${BK_STATUSES.map(([code,label])=>`<button class="${(b.status===code||(code==='prepaid'&&b.status==='confirmed'))?'act':''}" onclick="bkSetStatus(${b.id},'${code}')">${label}</button>`).join('')}</div>
+
+    <div class="cc-sec"><h4>🎈 Услуги мероприятия</h4>
+      ${(b.services||[]).map((s,i)=>`<div class="cl"><span class="nm">${s.name}${s.option?' <span class="muted">('+s.option+')</span>':''}</span>
+        <span style="font-weight:700">${fmt(+s.price||0)}</span>
+        <button title="Убрать услугу" onclick="bkRemoveService(${b.id},${i})">✕</button></div>`).join('')
+        || '<div class="muted" style="font-size:12.5px;padding:4px 0">Услуг пока нет</div>'}
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <select id="bkSvcSel" style="flex:1;min-width:180px">${SERVICES.map(s=>`<option value="${s.id}">${s.name} · ${fmt(+s.price)}</option>`).join('')}</select>
+        <button class="btn btn-ghost btn-sm" onclick="bkAddService(${b.id})">+ Добавить услугу</button>
+      </div>
+      <div class="totrow big" style="margin-top:10px"><span>Итого:</span>
+        <span><input type="number" min="0" value="${b.total}" style="width:110px;text-align:right;font-weight:800" onchange="bkSetTotal(${b.id},this.value)"> ₽</span></div>
+    </div>
+
+    <div class="cc-sec"><h4>💰 Оплата <span class="muted" style="font-weight:500;font-size:12px">оплачено ${fmt(b.prepaid)}${b.total?' из '+fmt(b.total):''}</span></h4>
+      ${(b.payments||[]).map(p=>`<div class="cl"><span class="nm">${(p.at||'').slice(0,10).split('-').reverse().join('.')} ${(p.at||'').slice(11,16)} · ${p.method==='card'?'картой':'наличными'} · ${p.fiscal?'<span style="color:var(--green);font-weight:600">чек пробит</span>':'<span class="muted">без фискализации</span>'}${p.by_name?' · '+p.by_name:''}</span><span style="font-weight:700;color:var(--green)">+${fmt(+p.amount)}</span></div>`).join('')
+        || '<div class="muted" style="font-size:12.5px;padding:4px 0">Оплат ещё не было</div>'}
+      ${b.status!=='cancelled'?`
+      <div style="display:flex;gap:8px;align-items:end;margin-top:10px;flex-wrap:wrap">
+        <div><label style="font-size:10.5px;color:var(--dim);font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Сумма, ₽</label>
+          <input type="number" id="bkPayAmount" min="0" value="${rest||''}" placeholder="0" style="width:110px"></div>
+        <div><label style="font-size:10.5px;color:var(--dim);font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Способ</label>
+          <select id="bkPayMethod"><option value="cash">Наличные</option><option value="card">Карта</option></select></div>
+        <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;padding-bottom:10px">
+          <input type="checkbox" id="bkPayFiscal" checked style="width:auto"> пробить чек (по кассе)</label>
+        <button class="btn btn-green" onclick="bkPay(${b.id})">Принять оплату</button>
+      </div>
+      <div class="muted" style="font-size:11.5px;margin-top:6px">С галочкой оплата проводится по кассе: фискальный чек и выручка смены. Без галочки — только отметка в журнале.</div>`:''}
+    </div>
+
+    <div class="cc-sec"><h4>👤 Продавец (кому засчитан праздник)</h4>
+      ${canSeller
+        ? `<select onchange="bkSetSeller(${b.id},this.value)" style="min-width:220px">${sellerOpts}</select>
+           <div class="muted" style="font-size:11.5px;margin-top:6px">Только владелец может менять, кому считать эту продажу.</div>`
+        : `<b>${b.seller||'—'}</b>`}
+    </div>
+
+    <div class="cc-sec"><h4>📝 Комментарий</h4>
+      <input value="${(b.comment||'').replace(/"/g,'&quot;')}" placeholder="комментарий к мероприятию" style="width:100%" onchange="bkSetComment(${b.id},this.value)">
+    </div>
+    <div style="display:flex;gap:9px;margin-top:18px">
+      <button class="btn btn-ghost" onclick="closeBookingCard()">Закрыть</button>
+      <button class="btn btn-red" style="margin-left:auto" onclick="bkDelete(${b.id})">🗑 Удалить бронирование</button>
+    </div>`;
+}
+// Демо-реализации (в app.js оборачиваются серверными вызовами)
+function bkSetStatus(id,st){ const b=bkFind(id); if(!b) return; b.status=st; renderBookings(); renderBookingCard(); }
+function bkSetTotal(id,v){ const b=bkFind(id); if(!b) return; b.total=+v||0; renderBookings(); renderBookingCard(); }
+function bkSetComment(id,v){ const b=bkFind(id); if(!b) return; b.comment=v; }
+function bkAddService(id){
+  const b=bkFind(id); if(!b) return;
+  const sel=$('bkSvcSel'); const s=SERVICES.find(x=>x.id===+sel.value); if(!s) return;
+  (b.services=b.services||[]).push({name:s.name, option:(s.options?String(s.options).split('|')[0]:''), price:+s.price});
+  b.total=+b.total + +s.price;
+  renderBookings(); renderBookingCard(); toast('Услуга добавлена: '+s.name);
+}
+function bkRemoveService(id,idx){
+  const b=bkFind(id); if(!b||!b.services[idx]) return;
+  b.total=Math.max(0, +b.total - (+b.services[idx].price||0));
+  b.services.splice(idx,1);
+  renderBookings(); renderBookingCard(); toast('Услуга убрана');
+}
+function bkSetSeller(id,v){ const b=bkFind(id); if(!b) return; b.seller=v; renderBookings(); renderBookingCard(); }
+function bkPay(id){
+  const b=bkFind(id); if(!b) return;
+  const amt=+$('bkPayAmount').value||0, method=$('bkPayMethod').value, fiscal=$('bkPayFiscal').checked;
+  if(amt<=0) return toast('Укажите сумму оплаты', true);
+  (b.payments=b.payments||[]).push({amount:amt, method, fiscal, at:new Date().toISOString(), by_name:ROLES[role].name});
+  b.prepaid+=amt;
+  if(b.status!=='done') b.status = (b.total>0 && b.prepaid>=b.total) ? 'paid' : 'prepaid';
+  renderBookings(); renderBookingCard();
+  toast('Оплата '+fmt(amt)+' принята'+(fiscal?' · чек (демо)':' · без фискализации'));
+}
+function bkDelete(id){
+  const b=bkFind(id); if(!b) return;
+  if(!confirm('Удалить бронирование «'+(b.client||'')+'» из журнала?')) return;
+  bookings=bookings.filter(x=>x.id!==id);
+  closeBookingCard(); renderBookings(); toast('Бронирование удалено');
 }
 
 /* ================= КЛИЕНТЫ ================= */
