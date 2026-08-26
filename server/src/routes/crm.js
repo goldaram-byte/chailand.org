@@ -134,7 +134,9 @@ crmRouter.post(
         'INSERT INTO clients (full_name, phone, card_no, note) VALUES ($1,$2,$3,$4) RETURNING *',
         [lead.name, lead.phone, card_no, lead.note]
       );
-      await cq1('UPDATE leads SET client_id=$2, status=$3, updated_at=now() WHERE id=$1', [lead.id, c.id, 'won']);
+      // Статус НЕ меняем: заявка остаётся на своём этапе воронки,
+      // просто получает связь с созданным клиентом (метка «уже клиент»).
+      await cq1('UPDATE leads SET client_id=$2, updated_at=now() WHERE id=$1', [lead.id, c.id]);
       return c;
     });
     await audit(req, 'lead.convert', { entity: 'lead', entityId: lead.id, meta: { client_id: client.id } });

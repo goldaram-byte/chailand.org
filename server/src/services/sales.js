@@ -116,6 +116,20 @@ export async function createSale(user, body) {
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
         [sale.id, it.product_id || null, it.group_id || null, it.name, it.qty || 1, it.price, Number(it.price) * Number(it.qty || 1)]
       );
+      // Складской учёт: списываем остаток у товаров с учётом (track_stock).
+      if (it.product_id) {
+        const qty = Number(it.qty || 1);
+        const tracked = await cq1(
+          `UPDATE products SET stock = stock - $2 WHERE id=$1 AND track_stock RETURNING id`,
+          [it.product_id, qty]
+        );
+        if (tracked) {
+          await cq(
+            `INSERT INTO stock_moves (product_id, delta, reason, note, created_by) VALUES ($1,$2,'sale',$3,$4)`,
+            [it.product_id, -qty, 'Продажа №' + sale.id, user.id]
+          );
+        }
+      }
     }
     if (client_id) {
       if (Number(bonus_used) > 0) {
@@ -198,6 +212,20 @@ export async function createReturn(user, body) {
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
         [ret.id, it.product_id, it.group_id, it.name, -Number(it.qty), it.price, -Number(it.sum)]
       );
+      // Возврат товара с учётом остатков — вернуть на склад.
+      if (it.product_id) {
+        const qty = Number(it.qty);
+        const tracked = await cq1(
+          `UPDATE products SET stock = stock + $2 WHERE id=$1 AND track_stock RETURNING id`,
+          [it.product_id, qty]
+        );
+        if (tracked) {
+          await cq(
+            `INSERT INTO stock_moves (product_id, delta, reason, note, created_by) VALUES ($1,$2,'return',$3,$4)`,
+            [it.product_id, qty, 'Возврат продажи №' + parent.id, user.id]
+          );
+        }
+      }
     }
     if (parent.client_id) {
       const delta = Number(parent.bonus_used) - Number(parent.bonus_earned);

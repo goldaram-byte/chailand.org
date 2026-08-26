@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Чайлэнд · Админ-панель (демо)</title>
+<title>Чайлэнд · Админ-панель</title>
+<link rel="icon" href="/logo.png">
 <style>
 :root{
   --bg:#f1f5f9; --card:#ffffff; --line:#e2e8f0;
@@ -303,6 +304,42 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 #clientCardBody .tbl-wrap table{min-width:0}
 #clientCardBody th,#clientCardBody td{padding:7px 8px;white-space:nowrap}
 #clientCardBody td:nth-child(2){white-space:normal}
+
+/* ===== Воронка: компактные карточки + перетаскивание ===== */
+.lead-mini{cursor:grab;transition:.12s}
+.lead-mini:hover{border-color:var(--orange);box-shadow:0 4px 14px rgba(234,88,12,.14)}
+.lead-mini.dragging{opacity:.45;transform:rotate(2deg)}
+.lead-mini .lnote-clip{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.lead-meta{display:flex;gap:8px;align-items:center;margin-top:7px}
+.lead-cli{display:inline-block;font-size:10.5px;font-weight:700;color:var(--green);background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:1px 7px;vertical-align:2px}
+.crm-col.dragover{outline:2px dashed var(--orange);outline-offset:-2px;background:#fff7ed}
+.stage-chips{display:flex;gap:6px;flex-wrap:wrap}
+.stage-chips button{padding:8px 13px;border-radius:20px;background:#fff;border:1px solid var(--line);font-weight:600;font-size:12.5px;color:var(--dim)}
+.stage-chips button:hover{border-color:#fdba74;color:var(--orange)}
+.stage-chips button.act{background:var(--orange);border-color:var(--orange);color:#fff}
+
+/* ===== Сворачиваемые карточки (дашборд, касса, воронка) ===== */
+.card>h3 .fold-btn{margin-left:8px;color:var(--dim);font-size:13px;padding:2px 9px;border-radius:7px;flex:0 0 auto}
+.card>h3 .fold-btn:hover{background:var(--bg);color:var(--ink)}
+.card.closed>*:not(h3){display:none!important}
+.card.closed{padding-bottom:12px}
+.card.closed>h3{margin-bottom:0}
+
+/* ===== Касса: подгонка под экран, без прокрутки страницы ===== */
+@media(min-width:1000px){
+  body.pos-mode{overflow:hidden}
+  body.pos-mode .main{height:100vh;overflow:hidden}
+  body.pos-mode .content{height:calc(100vh - 57px);overflow-y:auto;display:flex;flex-direction:column;padding:14px 22px 14px}
+  body.pos-mode #p-pos.act{display:flex;flex-direction:column;flex:1;min-height:0;gap:14px}
+  body.pos-mode #posWork{flex:1 1 auto;min-height:0;margin:0}
+  body.pos-mode #posWork .card{height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+  body.pos-mode #posWork .grp-chips{flex:0 0 auto}
+  body.pos-mode #tariffGrid{flex:1 1 auto;min-height:0;overflow-y:auto;align-content:start;padding-right:4px}
+  body.pos-mode #checkLines{flex:1 1 auto;min-height:0;overflow-y:auto}
+  body.pos-mode #salesCard{flex:0 0 auto;max-height:30vh;display:flex;flex-direction:column;overflow:hidden;margin:0!important}
+  body.pos-mode #salesCard.closed{max-height:none}
+  body.pos-mode #salesCard .tbl-wrap{min-height:0;overflow-y:auto}
+}
 </style>
 </head>
 <body>
@@ -592,10 +629,10 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 
   <div class="page" id="p-settings">
     <div class="set-tabs">
-      <button class="act" onclick="setTab('tariffs',this)">Тарифы билетов</button>
+      <button class="act" onclick="setTab('tariffs',this)">Тарифы</button>
+      <button onclick="setTab('services',this)">Праздники</button>
       <button onclick="setTab('products',this)">Товары</button>
       <button onclick="setTab('groups',this)">Группы продаж</button>
-      <button onclick="setTab('services',this)">Услуги праздника</button>
       <button onclick="setTab('acquiring',this)">Эквайринг</button>
       <button onclick="setTab('loyalty',this)">Бонусы и праздничные дни</button>
       <button onclick="setTab('referral',this)">Реферальная</button>
@@ -603,28 +640,37 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
       <button id="tabStaff" onclick="setTab('staff',this)" style="display:none">Сотрудники</button>
     </div>
     <div class="card set-pane" id="s-tariffs">
-      <h3>🎟️ Тарифы и позиции <button class="btn btn-green btn-sm" style="margin-left:auto" onclick="addTariff()">+ Добавить позицию</button></h3>
+      <h3>🎟️ Тарифы — билеты в парк <button class="btn btn-green btn-sm" style="margin-left:auto" onclick="addTariff()">+ Добавить билет</button></h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Здесь только входные билеты в парк (группы «Билеты»). Товары кафе и сувениры — на вкладке «Товары», услуги праздников — на вкладке «Праздники».</div>
       <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Группа</th><th>День</th><th>Цена, ₽</th><th>Документ</th><th></th></tr></thead><tbody id="setTariffs"></tbody></table></div>
     </div>
     <div class="card set-pane" id="s-products" hidden>
       <h3>🛍️ Товары</h3>
-      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Товары кафе, сувениры и прочие позиции для кассы. Выберите группу, введите название и цену.</div>
-      <div class="frm" style="grid-template-columns:1fr 1fr 120px 130px auto;margin-bottom:14px">
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Напитки, еда, сувениры и прочие товары для кассы. Включите «Учёт», чтобы вести остатки: приход, списание при продаже, инвентаризация.</div>
+      <div class="frm" style="grid-template-columns:1fr 1fr 110px 110px 130px auto;margin-bottom:14px">
         <div><label>Группа</label><select id="pdGroup"></select></div>
         <div><label>Название</label><input id="pdName" placeholder="напр. Попкорн"></div>
         <div><label>Цена, ₽</label><input type="number" id="pdPrice" min="0" placeholder="0"></div>
+        <div><label>Остаток, шт</label><input type="number" id="pdStock" min="0" placeholder="0"></div>
         <div><label>ТЦ</label><select id="pdLoc"></select></div>
         <div style="align-self:end"><button class="btn btn-green" onclick="addProduct()">+ Добавить</button></div>
       </div>
-      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Группа</th><th>Цена, ₽</th><th>ТЦ</th><th></th></tr></thead><tbody id="setProducts"></tbody></table></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Группа</th><th>Цена, ₽</th><th>ТЦ</th><th>Учёт</th><th>Остаток</th><th>Приход</th><th></th></tr></thead><tbody id="setProducts"></tbody></table></div>
+      <div style="margin-top:20px;border-top:1px solid var(--line);padding-top:16px">
+        <h3 style="margin-bottom:8px">📦 Инвентаризация</h3>
+        <div class="muted" style="font-size:12.5px;margin-bottom:12px">Пересчитайте товары и внесите фактические остатки. После применения учётный остаток станет равен фактическому, разница запишется в историю движений.</div>
+        <div class="tbl-wrap"><table><thead><tr><th>Товар</th><th>Учётный остаток</th><th>Фактический остаток</th><th>Разница</th></tr></thead><tbody id="invTbl"></tbody></table></div>
+        <button class="btn btn-green" style="margin-top:12px" onclick="applyInventory()">✓ Применить инвентаризацию</button>
+      </div>
     </div>
     <div class="card set-pane" id="s-groups" hidden>
       <h3>🗂️ Группы продаж <button class="btn btn-green btn-sm" style="margin-left:auto" onclick="addGroup()">+ Добавить группу</button></h3>
-      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Группы товаров (как в Эвотор): по ним раскладываются вкладки на кассе. Билеты фильтруются по дню недели, остальные группы показывают все позиции.</div>
-      <div class="tbl-wrap"><table><thead><tr><th>Название группы</th><th>Позиций</th><th></th></tr></thead><tbody id="setGroups"></tbody></table></div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Группы товаров (как в Эвотор): по ним раскладываются вкладки на кассе. Раздел «Билеты» показывается в настройках на вкладке «Тарифы», остальные — на вкладке «Товары». Билеты фильтруются по дню недели.</div>
+      <div class="tbl-wrap"><table><thead><tr><th>Название группы</th><th>Раздел</th><th>Позиций</th><th></th></tr></thead><tbody id="setGroups"></tbody></table></div>
     </div>
     <div class="card set-pane" id="s-services" hidden>
-      <h3>🎉 Услуги праздника <button class="btn btn-green btn-sm" style="margin-left:auto" onclick="addService()">+ Добавить услугу</button></h3>
+      <h3>🎉 Праздники <button class="btn btn-green btn-sm" style="margin-left:auto" onclick="addService()">+ Добавить позицию</button></h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Перечень для праздников и дней рождения: пакетные предложения, анимация, шоу-программы, продление комнат и другие услуги. Список ведёте сами — эти позиции доступны при бронировании в разделе «Праздники».</div>
       <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Цена, ₽</th><th>Варианты (через |)</th><th></th></tr></thead><tbody id="setServices"></tbody></table></div>
     </div>
     <div class="card set-pane" id="s-acquiring" hidden>
@@ -743,6 +789,11 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
   <div class="pay-modal" id="clientCardBody"></div>
 </div>
 
+<!-- ============ КАРТОЧКА ЗАЯВКИ (ВОРОНКА) ============ -->
+<div class="pay-overlay" id="leadOverlay" onclick="if(event.target===this)closeLeadCard()">
+  <div class="pay-modal" id="leadCardBody" style="max-width:640px"></div>
+</div>
+
 <!-- ============ ВОЗВРАТ ============ -->
 <div class="pay-overlay" id="refundOverlay">
   <div class="pay-modal">
@@ -792,10 +843,17 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 let CFG = { cashback: 5, holidays: [] };
 let ACQUIRING = { bank:'—', tid:'', merchant:'', key:'', mode:'test', connected:false };
 let GROUPS = [
-  {id:1, name:"Билеты"},
-  {id:2, name:"Кафе"},
-  {id:3, name:"Сувениры"},
+  {id:1, name:"Билеты", kind:"tickets"},
+  {id:2, name:"Кафе", kind:"cafe"},
+  {id:3, name:"Сувениры", kind:"goods"},
 ];
+// Группы «Билеты» (kind=tickets) показываются в настройках на вкладке «Тарифы»,
+// остальные (кафе, сувениры, еда...) — на вкладке «Товары».
+const ticketGroupIds = () => {
+  const t = GROUPS.filter(g=>g.kind==='tickets').map(g=>g.id);
+  return t.length ? t : (GROUPS[0] ? [GROUPS[0].id] : []);
+};
+const isTicketGroup = id => ticketGroupIds().includes(id);
 let TARIFFS = [
   {id:1, name:"Будний день (Пн–Чт)", day:"weekday", price:690, doc:false, group:1},
   {id:2, name:"Почти выходной (Пятница)", day:"friday", price:790, doc:false, group:1},
@@ -869,6 +927,8 @@ function go(p){
   document.getElementById('p-'+p).classList.add('act');
   document.getElementById('pageTitle').textContent = PAGES[p].t;
   document.getElementById('sidebar').classList.remove('open');
+  // Касса подгоняется под экран без прокрутки (широкие экраны)
+  document.body.classList.toggle('pos-mode', p==='pos');
   renderNav();
   // Владельцу не показываем экран «Открыть смену» — касса готова сразу
   if(p==='pos' && !shift && role==='owner'){
@@ -971,6 +1031,7 @@ function renderTariffs(){
       <div class="tn">${t.name}</div>
       <div class="tp">${(+t.price).toLocaleString('ru-RU')} ₽</div>
       ${t.doc?'<div class="doc">📄 нужен документ</div>':''}
+      ${t.track?`<div class="doc" style="color:${(+t.stock<=0)?'var(--red)':'var(--dim)'}">📦 остаток: ${+t.stock}</div>`:''}
     </button>`).join('')
     : '<div class="muted" style="padding:12px 0;grid-column:1/-1">В этой группе нет позиций</div>';
 }
@@ -1294,6 +1355,14 @@ function addKid(id){
   (c.kids=c.kids||[]).push({name, birth});
   renderClientCard(); renderClients(); toast('Ребёнок «'+name+'» добавлен');
 }
+// Удаление клиента из базы (в app.js оборачивается DELETE на сервер).
+// История продаж сохраняется — продажи просто отвязываются от клиента.
+function delClient(id){
+  const c=clients.find(x=>x.id===id); if(!c) return;
+  if(!confirm('Удалить клиента «'+c.name+'» из базы?\nКарта, бонусы и данные о детях будут удалены безвозвратно. История продаж останется без привязки к клиенту.')) return;
+  clients=clients.filter(x=>x.id!==id);
+  closeClientCard(); renderClients(); toast('Клиент удалён из базы');
+}
 function sendBirthdayOffer(id, kidIdx){
   const c=clients.find(x=>x.id===id); const k=c.kids[kidIdx];
   toast('Предложение о праздновании ДР для '+k.name+' отправлено (SMS/приложение)');
@@ -1325,6 +1394,7 @@ function renderClientCard(){
         <div style="font-size:18px;font-weight:800">${c.name}</div>
         <div class="muted" style="font-size:13px">${c.phone} · <b style="color:var(--orange)">${c.card}</b></div>
       </div>
+      ${role!=='cashier'?`<button class="btn btn-red btn-sm" title="Удалить клиента из базы" onclick="delClient(${c.id})">🗑 Удалить</button>`:''}
       <button onclick="closeClientCard()" style="font-size:20px;color:var(--dim);padding:4px 10px">✕</button>
     </div>
     <div class="cc-stats">
@@ -1386,18 +1456,26 @@ function setTab(t, btn){
 function renderSettings(){
   $('setCashback').value = CFG.cashback;
   $('setHolidays').value = CFG.holidays.join(', ');
-  $('setTariffs').innerHTML = TARIFFS.map(t=>`
+  // Вкладка «Тарифы» — только билеты в парк (группы раздела «Билеты»)
+  const tg = ticketGroupIds();
+  const ticketGroups = GROUPS.filter(g=>tg.includes(g.id));
+  const tariffRows = TARIFFS.filter(t=>tg.includes(t.group));
+  $('setTariffs').innerHTML = (tariffRows.map(t=>`
     <tr><td><input value="${t.name}" onchange="updT(${t.id},'name',this.value)" style="width:100%;min-width:200px"></td>
     <td><select onchange="updT(${t.id},'group',+this.value)">
-      ${GROUPS.map(g=>`<option value="${g.id}" ${t.group===g.id?'selected':''}>${g.name}</option>`).join('')}</select></td>
+      ${ticketGroups.map(g=>`<option value="${g.id}" ${t.group===g.id?'selected':''}>${g.name}</option>`).join('')}</select></td>
     <td><select onchange="updT(${t.id},'day',this.value)">
       ${Object.entries(DAY_RU).map(([k,v])=>`<option value="${k}" ${t.day===k?'selected':''}>${v}</option>`).join('')}</select></td>
     <td><input type="number" value="${t.price}" onchange="updT(${t.id},'price',+this.value)" style="width:90px"></td>
     <td><input type="checkbox" ${t.doc?'checked':''} onchange="updT(${t.id},'doc',this.checked)"></td>
-    <td><button class="btn btn-red btn-sm" onclick="delT(${t.id})">Удалить</button></td></tr>`).join('');
+    <td><button class="btn btn-red btn-sm" onclick="delT(${t.id})">Удалить</button></td></tr>`).join(''))
+    || '<tr><td colspan="6" class="muted">Пока нет билетов — добавьте позицию или создайте группу раздела «Билеты»</td></tr>';
+  const KIND_OPT = {tickets:'Билеты', cafe:'Товары (кафе)', goods:'Товары'};
   $('setGroups').innerHTML = GROUPS.map(g=>{
     const cnt = TARIFFS.filter(t=>t.group===g.id).length;
     return `<tr><td><input value="${g.name}" onchange="updG(${g.id},this.value)" style="min-width:200px"></td>
+    <td><select onchange="updGKind(${g.id},this.value)">
+      ${Object.entries(KIND_OPT).map(([k,v])=>`<option value="${k}" ${(g.kind||'goods')===k?'selected':''}>${v}</option>`).join('')}</select></td>
     <td>${cnt}</td>
     <td><button class="btn btn-red btn-sm" onclick="delG(${g.id})" ${GROUPS.length<=1?'disabled':''}>Удалить</button></td></tr>`;
   }).join('');
@@ -1445,7 +1523,8 @@ function saveAcquiring(){
 }
 function updT(id,f,v){ TARIFFS.find(t=>t.id===id)[f]=v; renderSettings(); renderTariffs(); toast('Позиция обновлена'); }
 function updG(id,v){ GROUPS.find(g=>g.id===id).name=v; renderSettings(); renderTariffs(); toast('Группа переименована'); }
-function addGroup(){ GROUPS.push({id:seq++, name:"Новая группа"}); renderSettings(); renderTariffs(); toast('Группа добавлена'); }
+function updGKind(id,v){ GROUPS.find(g=>g.id===id).kind=v; renderSettings(); renderTariffs(); toast('Раздел группы изменён'); }
+function addGroup(){ GROUPS.push({id:seq++, name:"Новая группа", kind:"goods"}); renderSettings(); renderTariffs(); toast('Группа добавлена'); }
 function delG(id){
   if(GROUPS.length<=1) return toast('Нельзя удалить последнюю группу', true);
   const has = TARIFFS.filter(t=>t.group===id);
@@ -1463,8 +1542,10 @@ function updR(id,f,v){ ROOMS.find(r=>r.id===id)[f]=v; renderPartyForm(); toast('
 function delT(id){ TARIFFS=TARIFFS.filter(t=>t.id!==id); renderSettings(); renderTariffs(); toast('Тариф удалён'); }
 function delS(id){ SERVICES=SERVICES.filter(s=>s.id!==id); renderSettings(); renderPartyForm(); toast('Услуга удалена'); }
 function delR(id){ ROOMS=ROOMS.filter(r=>r.id!==id); renderSettings(); renderPartyForm(); toast('Комната удалена'); }
-function addTariff(){ TARIFFS.push({id:seq++, name:"Новая позиция", day:"any", price:0, doc:false, group:(GROUPS[0]?GROUPS[0].id:1)}); renderSettings(); renderTariffs(); }
+function addTariff(){ const g=ticketGroupIds()[0]; TARIFFS.push({id:seq++, name:"Новый билет", day:"any", price:0, doc:false, group:(g||1)}); renderSettings(); renderTariffs(); }
 function addService(){ SERVICES.push({id:seq++, name:"Новая услуга", price:0, options:""}); renderSettings(); renderPartyForm(); }
+// Инвентаризация работает только с сервером (в app.js функция переопределяется)
+function applyInventory(){ toast('Инвентаризация доступна при работе с сервером', true); }
 function addRoom(){ ROOMS.push({id:seq++, name:"Новая комната", cap:10, price:0}); renderSettings(); renderPartyForm(); }
 
 /* ================= CRM / ВОРОНКА ================= */
@@ -1477,12 +1558,43 @@ function addLead(){
   renderCrm(); toast('Лид добавлен в воронку 🧲');
 }
 function moveLead(id,dir){
-  const l=leads.find(x=>x.id===id); if(!l||l.converted) return;
+  const l=leads.find(x=>x.id===id); if(!l) return;
   const i=CRM_STAGES.indexOf(l.stage)+dir;
   if(i<0||i>=CRM_STAGES.length) return;
-  l.stage=CRM_STAGES[i]; renderCrm();
+  setLeadStage(id, CRM_STAGES[i]);
 }
-function closeOrder(id){ const l=leads.find(x=>x.id===id); if(l){ l.stage='Купил'; renderCrm(); toast('Заказ закрыт — лид в стадии «Купил»'); } }
+// Смена этапа (кнопки в карточке и перетаскивание). В app.js оборачивается
+// отправкой на сервер.
+function setLeadStage(id,stage){
+  const l=leads.find(x=>x.id===id); if(!l||l.stage===stage) return;
+  l.stage=stage; renderCrm();
+}
+// --- Перетаскивание заявки между колонками воронки ---
+let dragLeadId=null;
+function leadDragStart(e,id){
+  dragLeadId=id;
+  e.dataTransfer.effectAllowed='move';
+  try{ e.dataTransfer.setData('text/plain', String(id)); }catch(_){}
+  e.currentTarget.classList.add('dragging');
+}
+function leadDragEnd(e){ e.currentTarget.classList.remove('dragging'); document.querySelectorAll('.crm-col.dragover').forEach(c=>c.classList.remove('dragover')); }
+function leadDragOver(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; e.currentTarget.classList.add('dragover'); }
+function leadDragLeave(e){ if(!e.currentTarget.contains(e.relatedTarget)) e.currentTarget.classList.remove('dragover'); }
+function leadDrop(e,stage){
+  e.preventDefault(); e.currentTarget.classList.remove('dragover');
+  let id=dragLeadId;
+  if(id==null){ try{ id=+e.dataTransfer.getData('text/plain'); }catch(_){ } }
+  dragLeadId=null;
+  if(id) setLeadStage(id, stage);
+}
+function closeOrder(id){ setLeadStage(id,'Купил'); toast('Заказ закрыт — заявка в стадии «Купил»'); }
+// Удаление заявки из воронки (в app.js оборачивается DELETE на сервер)
+function deleteLead(id){
+  const l=leads.find(x=>x.id===id); if(!l) return;
+  if(!confirm('Удалить заявку «'+l.name+'» из воронки? Действие необратимо.')) return;
+  leads=leads.filter(x=>x.id!==id);
+  closeLeadCard(); renderCrm(); toast('Заявка удалена');
+}
 function addLeadTask(id){
   const l=leads.find(x=>x.id===id); if(!l) return;
   const text=$('lt-'+id).value.trim(), due=$('ltd-'+id).value;
@@ -1493,11 +1605,12 @@ function toggleLeadTask(id,i){ const l=leads.find(x=>x.id===id); if(l){ l.tasks[
 function addLeadNote(id){ const l=leads.find(x=>x.id===id); if(!l) return; const t=$('ln-'+id).value.trim(); if(!t) return; (l.notes=l.notes||[]).push({text:t}); $('ln-'+id).value=''; renderCrm(); }
 function convertLead(id){
   const l=leads.find(x=>x.id===id); if(!l) return;
-  if(!confirm('Перенести лида «'+l.name+'» в базу клиентов и выдать карту?')) return;
+  if(!confirm('Добавить «'+l.name+'» в базу клиентов и выдать карту? Заявка останется в воронке.')) return;
   const card='GAB-'+String(cardSeq++).padStart(4,'0');
-  clients.push({id:Date.now(), name:l.name, phone:l.phone, card, bonus:0, buys:0, app:false, history:[], kids:[]});
-  l.converted=true;
-  renderCrm(); renderClients(); toast('Лид перенесён в клиенты · карта '+card+' ⭐');
+  const cid=Date.now();
+  clients.push({id:cid, name:l.name, phone:l.phone, card, bonus:0, buys:0, app:false, history:[], kids:[]});
+  l.client_id=cid; // заявка остаётся в воронке с меткой «уже клиент»
+  renderCrm(); renderClients(); toast('Клиент создан · карта '+card+' ⭐ Заявка осталась в воронке');
 }
 function leadTaskInfo(l){
   const open=l.tasks.filter(t=>!t.done);
@@ -1508,51 +1621,73 @@ function leadTaskInfo(l){
     (nearest?` · <span class="ltdue">ближайшая: ${nearest.due.split('-').reverse().join('.')}</span>`:'');
 }
 function renderCrm(){
-  const active=leads.filter(l=>!l.converted);
   $('crmBoard').innerHTML = CRM_STAGES.map(st=>{
-    const col=active.filter(l=>l.stage===st);
-    return `<div class="crm-col"><h4>${st}<span class="cnt">${col.length}</span></h4>
+    const col=leads.filter(l=>l.stage===st);
+    return `<div class="crm-col" ondragover="leadDragOver(event)" ondragleave="leadDragLeave(event)" ondrop="leadDrop(event,'${st}')">
+      <h4>${st}<span class="cnt">${col.length}</span></h4>
       ${col.map(l=>{
-        const i=CRM_STAGES.indexOf(l.stage);
-        return `<div class="lead">
-          <div class="ln">${l.name}</div>
-          <div class="lp">${l.phone}</div>
-          <div><span class="lsrc">${l.source}</span></div>
-          ${l.note?`<div class="lnote">${l.note}</div>`:''}
-          <div class="lmove">
-            <button onclick="moveLead(${l.id},-1)" ${i<=0?'disabled':''} title="Назад">◀</button>
-            <span class="lstage">${l.stage}</span>
-            <button onclick="moveLead(${l.id},1)" ${i>=CRM_STAGES.length-1?'disabled':''} title="Вперёд">▶</button>
-          </div>
-          <div class="ltasks">
-            <div style="font-size:11px;font-weight:700;color:var(--dim);margin-bottom:5px">Задачи · ${leadTaskInfo(l)}</div>
-            ${l.tasks.map((t,ti)=>`<label class="ltask ${t.done?'done':''}">
-              <input type="checkbox" ${t.done?'checked':''} onchange="toggleLeadTask(${l.id},${ti})">
-              <span>${t.text}</span>${t.due?`<span class="ltdue">${t.due.split('-').reverse().join('.')}</span>`:''}</label>`).join('')}
-            <div class="taskadd">
-              <input id="lt-${l.id}" placeholder="новая задача" onkeydown="if(event.key==='Enter')addLeadTask(${l.id})">
-              <input type="date" id="ltd-${l.id}">
-              <button class="btn btn-ghost btn-sm" onclick="addLeadTask(${l.id})">+</button>
-            </div>
-          </div>
-          <div class="ltasks">
-            <div style="font-size:11px;font-weight:700;color:var(--dim);margin-bottom:5px">Примечания к заказу</div>
-            ${(l.notes||[]).map(n=>`<div class="lnote">${(typeof n==='string'?n:n.text)}</div>`).join('')}
-            <div class="taskadd">
-              <input id="ln-${l.id}" placeholder="добавить примечание" onkeydown="if(event.key==='Enter')addLeadNote(${l.id})">
-              <button class="btn btn-ghost btn-sm" onclick="addLeadNote(${l.id})">+</button>
-            </div>
-          </div>
-          <div class="lact">
-            <button class="btn btn-ghost btn-sm" onclick="closeOrder(${l.id})">Закрыть заказ</button>
-            ${l.client_id
-              ? `<span class="btn btn-ghost btn-sm" style="opacity:.65;cursor:default" title="Заявка от клиента приложения">✓ Уже клиент</span>`
-              : `<button class="btn btn-green btn-sm" onclick="convertLead(${l.id})">В базу клиентов</button>`}
-          </div>
+        const openTasks=(l.tasks||[]).filter(t=>!t.done).length;
+        return `<div class="lead lead-mini" draggable="true"
+            ondragstart="leadDragStart(event,${l.id})" ondragend="leadDragEnd(event)"
+            onclick="openLeadCard(${l.id})" title="Открыть карточку заявки">
+          <div class="ln">${l.name} ${l.client_id?'<span class="lead-cli" title="Уже в базе клиентов">✓ клиент</span>':''}</div>
+          <div class="lp">${l.phone||''}</div>
+          ${l.source?`<div><span class="lsrc">${l.source}</span></div>`:''}
+          ${l.note?`<div class="lnote lnote-clip">${l.note}</div>`:''}
+          <div class="lead-meta">${openTasks?`<span class="ltdue">☑ задач: ${openTasks}</span>`:''}${(l.notes&&l.notes.length)?`<span class="muted" style="font-size:11px">✎ ${l.notes.length}</span>`:''}</div>
         </div>`;
-      }).join('') || '<div class="muted" style="font-size:12px;padding:6px 2px">пусто</div>'}
+      }).join('') || '<div class="muted crm-empty" style="font-size:12px;padding:6px 2px">перетащите заявку сюда</div>'}
     </div>`;
   }).join('');
+  // Если открыта карточка заявки — освежить и её
+  if(typeof leadCardId!=='undefined' && leadCardId!=null) renderLeadCard();
+}
+
+/* ===== Карточка заявки (модалка) ===== */
+let leadCardId=null;
+function openLeadCard(id){ leadCardId=id; renderLeadCard(); $('leadOverlay').classList.add('open'); }
+function closeLeadCard(){ $('leadOverlay').classList.remove('open'); leadCardId=null; }
+function renderLeadCard(){
+  const l=leads.find(x=>x.id===leadCardId);
+  if(!l){ closeLeadCard(); return; }
+  $('leadCardBody').innerHTML = `
+    <div class="cc-head">
+      <div class="avatar" style="width:52px;height:52px;font-size:19px;background:var(--blue)">${(l.name||'?').split(' ').map(w=>w[0]).slice(0,2).join('')}</div>
+      <div style="flex:1">
+        <div style="font-size:18px;font-weight:800">${l.name} ${l.client_id?'<span class="lead-cli">✓ в базе клиентов</span>':''}</div>
+        <div class="muted" style="font-size:13px">${l.phone||'—'}${l.source?' · '+l.source:''}${l.created?' · заявка от '+l.created.split('-').reverse().join('.'):''}</div>
+      </div>
+      <button onclick="closeLeadCard()" style="font-size:20px;color:var(--dim);padding:4px 10px">✕</button>
+    </div>
+    <div style="font-size:11px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Этап воронки</div>
+    <div class="stage-chips">${CRM_STAGES.map(st=>`<button class="${l.stage===st?'act':''}" onclick="setLeadStage(${l.id},'${st}')">${st}</button>`).join('')}</div>
+    ${l.note?`<div class="lnote" style="background:var(--bg);border-radius:10px;padding:10px 12px;margin-top:12px">${l.note}</div>`:''}
+    <div class="cc-sec"><h4>☑ Задачи</h4>
+      ${(l.tasks||[]).map((t,ti)=>`<label class="ltask ${t.done?'done':''}">
+        <input type="checkbox" ${t.done?'checked':''} onchange="toggleLeadTask(${l.id},${ti})">
+        <span>${t.text}</span>${t.due?`<span class="ltdue">${t.due.split('-').reverse().join('.')}</span>`:''}</label>`).join('')
+        || '<div class="muted" style="font-size:12.5px">Задач пока нет</div>'}
+      <div class="taskadd" style="margin-top:9px">
+        <input id="lt-${l.id}" placeholder="новая задача" onkeydown="if(event.key==='Enter')addLeadTask(${l.id})">
+        <input type="date" id="ltd-${l.id}">
+        <button class="btn btn-ghost btn-sm" onclick="addLeadTask(${l.id})">+</button>
+      </div>
+    </div>
+    <div class="cc-sec"><h4>✎ Примечания</h4>
+      ${(l.notes||[]).map(n=>`<div class="lnote" style="padding:4px 0">${(typeof n==='string'?n:n.text)}</div>`).join('')
+        || '<div class="muted" style="font-size:12.5px">Примечаний нет</div>'}
+      <div class="taskadd" style="margin-top:9px">
+        <input id="ln-${l.id}" placeholder="добавить примечание" onkeydown="if(event.key==='Enter')addLeadNote(${l.id})">
+        <button class="btn btn-ghost btn-sm" onclick="addLeadNote(${l.id})">+</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:20px;flex-wrap:wrap">
+      ${l.client_id
+        ? `<span class="btn btn-ghost" style="opacity:.65;cursor:default">✓ Уже в базе клиентов</span>`
+        : `<button class="btn btn-green" onclick="convertLead(${l.id})">＋ В базу клиентов</button>`}
+      <button class="btn btn-ghost" onclick="closeOrder(${l.id})">Закрыть заказ («Купил»)</button>
+      <button class="btn btn-red" style="margin-left:auto" onclick="deleteLead(${l.id})">🗑 Удалить заявку</button>
+    </div>`;
 }
 
 /* ================= ДАШБОРД ================= */
@@ -1640,12 +1775,36 @@ function renderDash(){
   $('dashRangeLbl').textContent = 'Период: '+dmy(from)+' — '+dmy(to)+' · записей о продажах: '+rows.length;
 }
 
+/* ===== Сворачиваемые карточки: клик по заголовку открывает/закрывает блок ===== */
+function initFold(){
+  document.querySelectorAll('#p-dash .card, #p-pos .card, #p-crm .card').forEach((card,i)=>{
+    const h = card.querySelector(':scope > h3');
+    if(!h || h.querySelector('.fold-btn')) return;
+    if(!card.id) card.id = 'fold-'+i;
+    const key = 'fold:'+card.id;
+    const btn = document.createElement('button');
+    btn.className='fold-btn'; btn.type='button'; btn.title='Свернуть / развернуть';
+    btn.textContent = localStorage.getItem(key)==='1' ? '▸' : '▾';
+    if(localStorage.getItem(key)==='1') card.classList.add('closed');
+    h.appendChild(btn);
+    h.style.cursor='pointer';
+    h.addEventListener('click', e=>{
+      // не сворачивать при клике по элементам управления внутри заголовка
+      if(e.target.closest('input,select,a,label') || (e.target.closest('button') && !e.target.closest('.fold-btn'))) return;
+      const closed = card.classList.toggle('closed');
+      btn.textContent = closed ? '▸' : '▾';
+      try{ localStorage.setItem(key, closed?'1':'0'); }catch(_){}
+    });
+  });
+}
+
 /* ================= СТАРТ ================= */
 const today = new Date().toISOString().slice(0,10);
 $('posDate').value = today; $('pbDate').value = today;
 genDashData();
 setRole('owner');
 renderTariffs(); renderPartyForm(); renderBookings(); renderClients(); renderClientSlot(); renderCheck(); renderSales();
+initFold();
 
 </script>
 <script src="app.js"></script>

@@ -374,6 +374,28 @@ CREATE TABLE IF NOT EXISTS locations (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- ---------------------------------------------------------------------------
+-- Учёт товаров (склад): остаток, приход, инвентаризация.
+-- Учёт ведётся только у позиций с track_stock=true (товары: напитки, еда,
+-- сувениры). Билеты и услуги остатков не имеют.
+-- ---------------------------------------------------------------------------
+ALTER TABLE products ADD COLUMN IF NOT EXISTS track_stock boolean NOT NULL DEFAULT false;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS stock numeric(12,3) NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS stock_moves (
+  id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  product_id bigint NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  delta      numeric(12,3) NOT NULL,             -- + приход / − расход
+  reason     text NOT NULL DEFAULT 'receipt',    -- receipt | sale | return | inventory | adjust
+  note       text,
+  created_by bigint REFERENCES users(id),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_stock_moves_product ON stock_moves(product_id, created_at DESC);
+
+-- Варианты услуги праздника (через |): «Кошка Габри|Дракоша-Динго» и т.п.
+ALTER TABLE services ADD COLUMN IF NOT EXISTS options text;
+
 -- Касса и продажи привязаны к точке (клиенты — НЕТ, они общие).
 ALTER TABLE cash_shifts ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES locations(id);
 ALTER TABLE sales       ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES locations(id);

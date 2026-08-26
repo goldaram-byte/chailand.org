@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { q, q1 } from '../db.js';
+import { q, q1, tx } from '../db.js';
 import { requireAuth, requirePerm } from '../auth.js';
 import { ah, audit } from '../util.js';
 
@@ -80,7 +80,15 @@ catalogRouter.delete(
   '/groups/:id',
   canEdit,
   ah(async (req, res) => {
-    await q('DELETE FROM product_groups WHERE id=$1', [req.params.id]);
+    const other = await q1('SELECT id FROM product_groups WHERE id<>$1 ORDER BY sort, id LIMIT 1', [req.params.id]);
+    if (!other) return res.status(409).json({ error: 'Нельзя удалить последнюю группу' });
+    await tx(async ({ q: cq }) => {
+      // Позиции группы не теряем — переносим в первую оставшуюся группу
+      await cq('UPDATE products SET group_id=$2 WHERE group_id=$1', [req.params.id, other.id]);
+      // В истории продаж группу обнуляем (сами строки продаж не трогаем)
+      await cq('UPDATE sale_items SET group_id=NULL WHERE group_id=$1', [req.params.id]);
+      await cq('DELETE FROM product_groups WHERE id=$1', [req.params.id]);
+    });
     await audit(req, 'catalog.group.delete', { entity: 'group', entityId: req.params.id });
     res.json({ ok: true });
   })
@@ -105,7 +113,7 @@ catalogRouter.put(
   '/products/:id',
   canEdit,
   ah(async (req, res) => {
-    const { group_id, name, day_kind, price, requires_document, is_active, location_id } = req.body || {};
+    const { group_id, name, day_kind, price, requires_document, is_active, location_id, track_stock } = req.body || {};
     const locProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'location_id');
     const row = await q1(
       `UPDATE products SET
@@ -115,9 +123,10 @@ catalogRouter.put(
          price = COALESCE($5, price),
          requires_document = COALESCE($6, requires_document),
          is_active = COALESCE($7, is_active),
-         location_id = CASE WHEN $8::bool THEN $9 ELSE location_id END
+         location_id = CASE WHEN $8::bool THEN $9 ELSE location_id END,
+         track_stock = COALESCE($10, track_stock)
        WHERE id=$1 RETURNING *`,
-      [req.params.id, group_id, name, day_kind, price, requires_document, is_active, locProvided, location_id || null]
+      [req.params.id, group_id, name, day_kind, price, requires_document, is_active, locProvided, location_id || null, track_stock]
     );
     await audit(req, 'catalog.product.update', { entity: 'product', entityId: req.params.id });
     res.json(row);
@@ -138,8 +147,28 @@ catalogRouter.post(
   '/services',
   canEdit,
   ah(async (req, res) => {
-    const { name, price = 0, unit = 'шт' } = req.body || {};
-    const row = await q1('INSERT INTO services (name, price, unit) VALUES ($1,$2,$3) RETURNING *', [name, price, unit]);
+    const { name, price = 0, unit = 'шт', options = null } = req.body || {};
+    const row = await q1('INSERT INTO services (name, price, unit, options) VALUES ($1,$2,$3,$4) RETURNING *', [name, price, unit, options]);
+    res.json(row);
+  })
+);
+
+catalogRouter.put(
+  '/services/:id',
+  canEdit,
+  ah(async (req, res) => {
+    const { name, price, unit, options, is_active } = req.body || {};
+    const optProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'options');
+    const row = await q1(
+      `UPDATE services SET
+         name = COALESCE($2, name),
+         price = COALESCE($3, price),
+         unit = COALESCE($4, unit),
+         options = CASE WHEN $5::bool THEN $6 ELSE options END,
+         is_active = COALESCE($7, is_active)
+       WHERE id=$1 RETURNING *`,
+      [req.params.id, name, price, unit, optProvided, options || null, is_active]
+    );
     res.json(row);
   })
 );
@@ -150,6 +179,80 @@ catalogRouter.delete(
   ah(async (req, res) => {
     await q('DELETE FROM services WHERE id=$1', [req.params.id]);
     res.json({ ok: true });
+  })
+);
+
+// ---- Учёт товаров: приход, история движений, инвентаризация ----
+
+// POST /api/catalog/products/:id/stock  {delta, reason?, note?} — приход/корректировка
+catalogRouter.post(
+  '/products/:id/stock',
+  canEdit,
+  ah(async (req, res) => {
+    const { delta, reason = 'receipt', note = null } = req.body || {};
+    const d = Number(delta);
+    if (!d) return res.status(400).json({ error: 'Укажите количество (не ноль)' });
+    const row = await tx(async ({ q1: cq1 }) => {
+      const p = await cq1(
+        `UPDATE products SET track_stock=true, stock = stock + $2 WHERE id=$1 RETURNING *`,
+        [req.params.id, d]
+      );
+      if (!p) throw Object.assign(new Error('Товар не найден'), { status: 404 });
+      await cq1(
+        `INSERT INTO stock_moves (product_id, delta, reason, note, created_by) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+        [req.params.id, d, reason, note, req.user.id]
+      );
+      return p;
+    });
+    await audit(req, 'stock.move', { entity: 'product', entityId: req.params.id, meta: { delta: d, reason } });
+    res.json(row);
+  })
+);
+
+// GET /api/catalog/products/:id/stock-moves — история движений товара
+catalogRouter.get(
+  '/products/:id/stock-moves',
+  canEdit,
+  ah(async (req, res) => {
+    const rows = await q(
+      `SELECT m.*, u.full_name AS user_name
+         FROM stock_moves m LEFT JOIN users u ON u.id = m.created_by
+        WHERE m.product_id=$1 ORDER BY m.created_at DESC LIMIT 100`,
+      [req.params.id]
+    );
+    res.json(rows);
+  })
+);
+
+// POST /api/catalog/inventory  {items:[{product_id, actual}]} — инвентаризация:
+// фактический остаток заменяет учётный, разница пишется в историю движений.
+catalogRouter.post(
+  '/inventory',
+  canEdit,
+  ah(async (req, res) => {
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    if (!items.length) return res.status(400).json({ error: 'Пустой список инвентаризации' });
+    const results = await tx(async ({ q1: cq1 }) => {
+      const out = [];
+      for (const it of items) {
+        const actual = Number(it.actual);
+        if (!it.product_id || Number.isNaN(actual)) continue;
+        const p = await cq1('SELECT id, name, stock FROM products WHERE id=$1', [it.product_id]);
+        if (!p) continue;
+        const diff = actual - Number(p.stock);
+        if (diff !== 0) {
+          await cq1(
+            `INSERT INTO stock_moves (product_id, delta, reason, note, created_by) VALUES ($1,$2,'inventory',$3,$4)`,
+            [p.id, diff, 'Инвентаризация: было ' + p.stock + ', стало ' + actual, req.user.id]
+          );
+          await cq1('UPDATE products SET track_stock=true, stock=$2 WHERE id=$1', [p.id, actual]);
+        }
+        out.push({ product_id: p.id, name: p.name, was: Number(p.stock), now: actual, diff });
+      }
+      return out;
+    });
+    await audit(req, 'stock.inventory', { meta: { items: results.length } });
+    res.json({ ok: true, results });
   })
 );
 

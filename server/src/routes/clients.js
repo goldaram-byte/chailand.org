@@ -117,6 +117,28 @@ clientsRouter.put(
   })
 );
 
+// DELETE /api/clients/:id — удалить клиента из базы (только владелец/администратор).
+// История продаж сохраняется (продажи отвязываются от клиента), дети и бонусные
+// операции удаляются вместе с клиентом.
+clientsRouter.delete(
+  '/:id',
+  ah(async (req, res) => {
+    if (!['owner', 'admin'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Удалять клиентов может только владелец или администратор' });
+    }
+    const client = await q1('SELECT id, full_name FROM clients WHERE id=$1', [req.params.id]);
+    if (!client) return res.status(404).json({ error: 'Клиент не найден' });
+    await tx(async ({ q: cq }) => {
+      await cq('UPDATE sales SET client_id=NULL WHERE client_id=$1', [client.id]);
+      await cq('UPDATE leads SET client_id=NULL WHERE client_id=$1', [client.id]);
+      await cq('UPDATE clients SET referred_by=NULL WHERE referred_by=$1', [client.id]);
+      await cq('DELETE FROM clients WHERE id=$1', [client.id]); // дети и лояльность — каскадом
+    });
+    await audit(req, 'client.delete', { entity: 'client', entityId: client.id, meta: { name: client.full_name } });
+    res.json({ ok: true });
+  })
+);
+
 // POST /api/clients/:id/kids
 clientsRouter.post(
   '/:id/kids',
