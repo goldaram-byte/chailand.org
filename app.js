@@ -1820,8 +1820,12 @@
         list.forEach(function (p) { PASS_CACHE[p.id] = p; });
         var show = inCard ? list : list.filter(function (p) { return p.status === 'active'; });
         var rows = show.map(function (p) { return passRow(p, clientId, containerId, inCard); }).join('');
-        var sell = '<button class="btn btn-ghost btn-sm" onclick="openPassSell(' + clientId + ',\'' + containerId + '\',' + !!inCard + ')">🎫 Продать абонемент</button>';
-        el.innerHTML = rows + '<div style="margin:2px 0 8px">' + sell + '</div>';
+        // В кассе абонемент продаётся как позиция чека (группа «Абонементы»),
+        // отдельная кнопка нужна только в карточке клиента.
+        var sell = inCard
+          ? '<button class="btn btn-ghost btn-sm" onclick="openPassSell(' + clientId + ',\'' + containerId + '\',true)">🎫 Продать абонемент</button>'
+          : '';
+        el.innerHTML = rows + (sell ? '<div style="margin:2px 0 8px">' + sell + '</div>' : '');
       }).catch(function () {});
     };
     window.passCheckin = function (passId, clientId, containerId, inCard) {
@@ -1923,6 +1927,8 @@
       if (PAY.method === 'cash' && (+(document.getElementById('cashGiven').value) || 0) < toPay) return;
       var id = uuid();
       var items = check.map(function (l) {
+        // абонемент — позиция чека без товара на складе: сервер выдаст карту сам
+        if (l.t.passType) return { pass_type_id: l.t.passType, name: l.t.name, qty: l.qty, price: l.t.price };
         return { product_id: l.t.pid || l.t.id, group_id: l.t.group, name: l.t.name, qty: l.qty, price: l.t.price };
       });
       var cash = PAY.method === 'cash' ? toPay : 0;
