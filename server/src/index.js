@@ -23,6 +23,7 @@ import { skudRouter } from './routes/skud.js';
 import { clientAppRouter } from './routes/client.js';
 import { newsRouter } from './routes/news.js';
 import { locationsRouter } from './routes/locations.js';
+import { passesRouter } from './routes/passes.js';
 import { startFiscalWorker } from './services/fiscal.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -81,6 +82,7 @@ app.use('/api/crm', crmRouter);
 app.use('/api/skud', skudRouter);
 app.use('/api/news', newsRouter);
 app.use('/api/locations', locationsRouter);
+app.use('/api/passes', passesRouter);
 app.use('/api/bookings', bookingsRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/settings', settingsRouter);
