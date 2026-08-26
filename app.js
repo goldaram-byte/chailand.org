@@ -142,6 +142,8 @@
       safe(renderSales); safe(function () { if (typeof renderCrm === 'function') renderCrm(); });
       safe(function () { if (curPage === 'report') renderReport(); if (curPage === 'dash') renderDash(); });
       safe(function () { if (typeof renderPartyForm === 'function') renderPartyForm(); if (typeof renderBookings === 'function') renderBookings(); });
+      safe(function () { if (window.loadBookings) window.loadBookings(); });
+      window.BK_USERS = DASH_USERS.slice(); // для выбора продавца в карточке мероприятия
       safe(function () { if (typeof pollNewLeads === 'function') pollNewLeads(); });
       safe(function () { if (typeof loadLocations === 'function') loadLocations(); });
     });
@@ -1425,12 +1427,120 @@
     loadLocations();
   }
 
+  /* ---------------- Праздники: журнал мероприятий (сервер) ---------------- */
+  function installBookings() {
+    function mapBk(b) {
+      return {
+        id: b.id, date: (b.date || '').slice(0, 10), from: b.time || '', to: b.time_to || '',
+        roomId: b.room_id, room: b.room_name || '—', client: b.client_name, phone: b.phone || '',
+        kids: Number(b.kids_count || 0),
+        services: Array.isArray(b.services) ? b.services : [],
+        total: Number(b.total), prepaid: Number(b.prepay), status: b.status,
+        seller_id: b.seller_id || null, seller: b.seller_name || '—',
+        payments: Array.isArray(b.payments) ? b.payments : [],
+        comment: b.comment || '', loc: b.location_id || null,
+      };
+    }
+    window.loadBookings = function () {
+      if (!SERVER || !localStorage.getItem(TOKEN_KEY)) return Promise.resolve();
+      var d = (typeof deviceLoc === 'function') ? deviceLoc() : null;
+      return api('/bookings' + (d ? '?location_id=' + d : '')).then(function (rows) {
+        bookings = (rows || []).map(mapBk);
+        if (typeof renderBookings === 'function') renderBookings();
+        if (typeof bookingCardId !== 'undefined' && bookingCardId != null && typeof renderBookingCard === 'function') renderBookingCard();
+      }).catch(function () {});
+    };
+    // Список сотрудников для выбора продавца (владелец) — из отчёта по кассирам
+    window.BK_USERS = [];
+
+    var bkErr = function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); };
+    function bkPatch(id, body, msg) {
+      return api('/bookings/' + id, { method: 'PUT', body: body })
+        .then(function () { if (msg && typeof toast === 'function') toast(msg); return window.loadBookings(); })
+        .catch(bkErr);
+    }
+
+    // Создание бронирования — на сервер (журнал общий для всех касс ТЦ)
+    var _createBooking = window.createBooking;
+    window.createBooking = function () {
+      if (!SERVER) return _createBooking ? _createBooking.apply(this, arguments) : undefined;
+      var name = (document.getElementById('pbName') || {}).value || '';
+      var phone = (document.getElementById('pbPhone') || {}).value || '';
+      var date = (document.getElementById('pbDate') || {}).value || '';
+      var from = (document.getElementById('pbFrom') || {}).value || '';
+      var to = (document.getElementById('pbTo') || {}).value || '';
+      var roomId = +((document.getElementById('pbRoom') || {}).value || 0) || null;
+      var kids = +((document.getElementById('pbKids') || {}).value || 0);
+      if (!name.trim()) return toast('Укажите имя клиента', true);
+      if (!date) return toast('Укажите дату праздника', true);
+      if (!phone.trim()) return toast('Укажите телефон клиента', true);
+      var clash = bookings.find(function (b) { return b.roomId === roomId && b.date === date && b.status !== 'cancelled' && !(b.to <= from || b.from >= to); });
+      if (clash) return toast('Комната занята в это время (' + clash.from + '–' + clash.to + ')', true);
+      var services = Object.entries(pbSel).map(function (kv) {
+        var s = SERVICES.find(function (x) { return x.id === +kv[0]; });
+        return { name: s.name, option: kv[1].option || '', price: +s.price };
+      });
+      api('/bookings', { method: 'POST', body: {
+        client_name: name.trim(), phone: phone.trim(), date: date, time: from, time_to: to,
+        room_id: roomId, kids_count: kids, services: services, total: pbTotal(),
+        location_id: (typeof deviceLoc === 'function') ? deviceLoc() : null,
+      } }).then(function () {
+        pbSel = {};
+        var pn = document.getElementById('pbName'); if (pn) pn.value = '';
+        var pp = document.getElementById('pbPhone'); if (pp) pp.value = '';
+        if (typeof renderPartyForm === 'function') renderPartyForm();
+        if (typeof toast === 'function') toast('Праздник забронирован 🎉 Предбронь в журнале мероприятий');
+        return window.loadBookings();
+      }).catch(bkErr);
+    };
+
+    // Операции карточки мероприятия
+    window.bkSetStatus = function (id, st) { if (!SERVER) return; bkPatch(id, { status: st }); };
+    window.bkSetTotal = function (id, v) { if (!SERVER) return; bkPatch(id, { total: +v || 0 }); };
+    window.bkSetComment = function (id, v) { if (!SERVER) return; bkPatch(id, { comment: v }); };
+    window.bkAddService = function (id) {
+      var b = bookings.find(function (x) { return x.id === id; }); if (!b) return;
+      var sel = document.getElementById('bkSvcSel');
+      var s = SERVICES.find(function (x) { return x.id === +sel.value; }); if (!s) return;
+      var services = (b.services || []).concat([{ name: s.name, option: (s.options ? String(s.options).split('|')[0] : ''), price: +s.price }]);
+      bkPatch(id, { services: services, total: +b.total + +s.price }, 'Услуга добавлена: ' + s.name);
+    };
+    window.bkRemoveService = function (id, idx) {
+      var b = bookings.find(function (x) { return x.id === id; }); if (!b || !b.services[idx]) return;
+      var price = +b.services[idx].price || 0;
+      var services = b.services.slice(); services.splice(idx, 1);
+      bkPatch(id, { services: services, total: Math.max(0, +b.total - price) }, 'Услуга убрана');
+    };
+    window.bkSetSeller = function (id, v) { if (!SERVER) return; bkPatch(id, { seller_id: +v }, 'Продавец изменён'); };
+    window.bkPay = function (id) {
+      var amt = +((document.getElementById('bkPayAmount') || {}).value || 0);
+      var method = (document.getElementById('bkPayMethod') || {}).value || 'cash';
+      var fiscal = !!((document.getElementById('bkPayFiscal') || {}).checked);
+      if (amt <= 0) return toast('Укажите сумму оплаты', true);
+      api('/bookings/' + id + '/pay', { method: 'POST', body: { amount: amt, method: method, fiscal: fiscal } })
+        .then(function () {
+          if (typeof toast === 'function') toast('Оплата ' + fmtNum(amt) + ' принята' + (fiscal ? ' · чек пробит по кассе' : ' · без фискализации'));
+          return window.loadBookings();
+        })
+        .then(function () { hydrateAll().catch(function () {}); }) // обновить продажи/выручку
+        .catch(bkErr);
+    };
+    window.bkDelete = function (id) {
+      var b = bookings.find(function (x) { return x.id === id; }); if (!b) return;
+      if (!confirm('Удалить бронирование «' + (b.client || '') + '» из журнала?')) return;
+      api('/bookings/' + id, { method: 'DELETE' })
+        .then(function () { if (typeof closeBookingCard === 'function') closeBookingCard(); return window.loadBookings(); })
+        .catch(bkErr);
+    };
+  }
+
   function installHooks() {
     installStaff();
     installExtras();
     installTasks();
     installLeadAlerts();
     installLocations();
+    installBookings();
     installSkud();
     installNews();
     // Продажа: enqueue до того, как оригинал очистит чек
