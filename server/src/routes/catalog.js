@@ -260,8 +260,28 @@ catalogRouter.post(
   '/rooms',
   canEdit,
   ah(async (req, res) => {
-    const { name, capacity = 0 } = req.body || {};
-    const row = await q1('INSERT INTO rooms (name, capacity) VALUES ($1,$2) RETURNING *', [name, capacity]);
+    const { name, capacity = 0, location_id = null } = req.body || {};
+    if (!name || !String(name).trim()) return res.status(400).json({ error: 'Укажите название комнаты' });
+    const row = await q1('INSERT INTO rooms (name, capacity, location_id) VALUES ($1,$2,$3) RETURNING *', [String(name).trim(), capacity, location_id || null]);
+    res.json(row);
+  })
+);
+
+catalogRouter.put(
+  '/rooms/:id',
+  canEdit,
+  ah(async (req, res) => {
+    const { name, capacity, location_id, is_active } = req.body || {};
+    const locProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'location_id');
+    const row = await q1(
+      `UPDATE rooms SET
+         name = COALESCE($2, name),
+         capacity = COALESCE($3, capacity),
+         location_id = CASE WHEN $4::bool THEN $5 ELSE location_id END,
+         is_active = COALESCE($6, is_active)
+       WHERE id=$1 RETURNING *`,
+      [req.params.id, name, capacity, locProvided, location_id || null, is_active]
+    );
     res.json(row);
   })
 );
@@ -270,7 +290,11 @@ catalogRouter.delete(
   '/rooms/:id',
   canEdit,
   ah(async (req, res) => {
-    await q('DELETE FROM rooms WHERE id=$1', [req.params.id]);
+    await tx(async ({ q: cq }) => {
+      // Брони не удаляем — отвязываем от комнаты, они остаются в журнале
+      await cq('UPDATE bookings SET room_id=NULL WHERE room_id=$1', [req.params.id]);
+      await cq('DELETE FROM rooms WHERE id=$1', [req.params.id]);
+    });
     res.json({ ok: true });
   })
 );

@@ -418,6 +418,8 @@ CREATE INDEX IF NOT EXISTS idx_bookings_location ON bookings(location_id);
 -- иначе — только в своей точке.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES locations(id);
 ALTER TABLE services ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES locations(id);
+-- Банкетные комнаты принадлежат конкретному ТЦ (NULL — во всех точках).
+ALTER TABLE rooms    ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES locations(id);
 CREATE INDEX IF NOT EXISTS idx_sales_location ON sales(location_id);
 CREATE INDEX IF NOT EXISTS idx_shifts_location ON cash_shifts(location_id);
 CREATE INDEX IF NOT EXISTS idx_products_location ON products(location_id);

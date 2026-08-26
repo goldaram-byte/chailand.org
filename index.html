@@ -325,6 +325,23 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 .card.closed{padding-bottom:12px}
 .card.closed>h3{margin-bottom:0}
 
+/* ===== Журнал: сетка занятости комнат ===== */
+.jr-head{display:flex;margin-bottom:4px}
+.jr-head .jr-name{flex:0 0 150px}
+.jr-hours{flex:1;position:relative;height:18px}
+.jr-hours span{position:absolute;top:0;font-size:10.5px;color:var(--dim);font-weight:600;transform:translateX(-50%)}
+.jr-row{display:flex;align-items:center;margin-bottom:8px}
+.jr-name{flex:0 0 150px;font-weight:600;font-size:13px;padding-right:10px}
+.jr-name small{display:block;color:var(--dim);font-weight:500;font-size:11px}
+.jr-lane{flex:1;position:relative;height:40px;background:#f8fafc;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.jr-lane .tick{position:absolute;top:0;bottom:0;width:1px;background:var(--line);opacity:.6}
+.jr-block{position:absolute;top:4px;bottom:4px;border-radius:7px;color:#fff;font-size:11px;font-weight:700;
+  padding:3px 7px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer;box-shadow:0 1px 3px rgba(15,23,42,.25)}
+.jr-block:hover{filter:brightness(1.08)}
+.jr-block small{display:block;font-weight:500;font-size:10px;opacity:.85}
+.jr-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--dim);font-weight:600}
+.jr-legend i{display:inline-block;width:12px;height:12px;border-radius:4px;margin-right:5px;vertical-align:-1px}
+
 /* ===== Сворачивание левого меню (десктоп) ===== */
 .side-toggle{display:none;font-size:15px;padding:5px 10px;border-radius:8px;color:var(--dim)}
 .side-toggle:hover{background:var(--bg);color:var(--ink)}
@@ -498,10 +515,47 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
       </div>
     </div>
     <div class="card">
-      <h3>📒 Журнал мероприятий</h3>
-      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Все бронирования этого ТЦ. Нажмите на строку, чтобы открыть карточку: изменить статус, добавить или убрать услуги, принять оплату. Каждое мероприятие закреплено за продавцом.</div>
+      <div class="muted" style="font-size:13px">📒 Все бронирования, занятость банкетных комнат и приём оплат — в разделе <b style="cursor:pointer;color:var(--orange)" onclick="go('journal')">«Журнал»</b>.</div>
+    </div>
+  </div>
+
+  <!-- ============ ЖУРНАЛ МЕРОПРИЯТИЙ ============ -->
+  <div class="page" id="p-journal">
+    <div class="card">
+      <h3 style="flex-wrap:wrap">🗓️ Занятость комнат
+        <span style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="jrShift(-1)">←</button>
+          <input type="date" id="jrDate" onchange="renderJournal()">
+          <button class="btn btn-ghost btn-sm" onclick="jrShift(1)">→</button>
+          <button class="btn btn-ghost btn-sm" onclick="jrToday()">Сегодня</button>
+          <select id="jrLoc" onchange="renderJournal()" style="display:none"></select>
+        </span>
+      </h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:10px">Полоса — занятое время комнаты. Пустая строка — комната свободна весь день. Нажмите на полосу, чтобы открыть бронь.</div>
+      <div id="jrGrid"></div>
+      <div class="jr-legend">
+        <span><i style="background:#64748b"></i> предбронь (без оплаты)</span>
+        <span><i style="background:var(--gold)"></i> бронь (предоплата)</span>
+        <span><i style="background:var(--green)"></i> оплачено</span>
+        <span><i style="background:#94a3b8"></i> реализовано</span>
+      </div>
+    </div>
+    <div class="card">
+      <h3>📒 Все бронирования</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Бронирования этого ТЦ. Нажмите на строку, чтобы открыть карточку: изменить статус, добавить или убрать услуги, принять оплату. Каждое мероприятие закреплено за продавцом.</div>
       <div class="tbl-wrap"><table><thead><tr><th>Дата</th><th>Время</th><th>Комната</th><th>Клиент</th><th>Услуги</th><th>Итого</th><th>Оплачено</th><th>Статус</th><th>Продавец</th></tr></thead>
       <tbody id="bookTbl"></tbody></table></div>
+    </div>
+    <div class="card">
+      <h3>🚪 Банкетные комнаты</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Комнаты, которые бронируются под праздники. У каждой можно указать свой ТЦ — тогда она видна в журнале только этой точки.</div>
+      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Вместимость</th><th>ТЦ</th><th></th></tr></thead><tbody id="roomTbl"></tbody></table></div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <input id="rmName" placeholder="Название комнаты" style="flex:1.4;min-width:160px">
+        <input id="rmCap" type="number" min="0" placeholder="мест" style="width:90px">
+        <select id="rmLoc" style="min-width:130px"><option value="">Все ТЦ</option></select>
+        <button class="btn btn-green" onclick="roomAdd()">＋ Добавить комнату</button>
+      </div>
     </div>
   </div>
 
@@ -916,13 +970,13 @@ let seq = 100, fdSeq = 1;
 
 /* ================= РОЛИ И НАВИГАЦИЯ ================= */
 const ROLES = {
-  owner:   {name:"Арам Халатян", role:"Владелец", ava:"АХ", main:["dash","pos","parties","clients","crm"], bottom:["report","skud","news","settings"]},
-  admin:   {name:"Елена",        role:"Администратор", ava:"Е",  main:["dash","pos","parties","clients","crm"], bottom:["report","skud","news"]},
-  cashier: {name:"Ольга",        role:"Кассир", ava:"О",  main:["pos","parties","crm","clients"], bottom:["report"]},
+  owner:   {name:"Арам Халатян", role:"Владелец", ava:"АХ", main:["dash","pos","parties","journal","clients","crm"], bottom:["report","skud","news","settings"]},
+  admin:   {name:"Елена",        role:"Администратор", ava:"Е",  main:["dash","pos","parties","journal","clients","crm"], bottom:["report","skud","news"]},
+  cashier: {name:"Ольга",        role:"Кассир", ava:"О",  main:["pos","parties","journal","crm","clients"], bottom:["report"]},
 };
 const PAGES = {
   dash:{t:"Дашборд", ic:"📊"},
-  pos:{t:"Касса", ic:"💳"}, parties:{t:"Праздники", ic:"🎉"}, clients:{t:"Клиенты", ic:"👥"},
+  pos:{t:"Касса", ic:"💳"}, parties:{t:"Праздники", ic:"🎉"}, journal:{t:"Журнал", ic:"📒"}, clients:{t:"Клиенты", ic:"👥"},
   crm:{t:"Воронка", ic:"🧲"},
   report:{t:"Отчёты", ic:"📈"}, skud:{t:"Табель", ic:"🕐"}, news:{t:"Новости", ic:"📰"}, settings:{t:"Настройки", ic:"⚙️"},
 };
@@ -972,6 +1026,7 @@ function go(p){
     renderSales();
   }
   if(p==='report') renderReport();
+  if(p==='journal') renderJournal();
   if(p==='clients') renderClients();
   if(p==='settings') renderSettings();
   if(p==='crm') renderCrm();
@@ -1431,6 +1486,102 @@ function bkDelete(id){
   if(!confirm('Удалить бронирование «'+(b.client||'')+'» из журнала?')) return;
   bookings=bookings.filter(x=>x.id!==id);
   closeBookingCard(); renderBookings(); toast('Бронирование удалено');
+}
+
+/* ================= ЖУРНАЛ: СЕТКА ЗАНЯТОСТИ КОМНАТ ================= */
+const JR_DAY_START=10, JR_DAY_END=22; // рабочее окно парка, часов
+const JR_COLORS={new:'#64748b',confirmed:'#d97706',prepaid:'#d97706',paid:'#059669',done:'#94a3b8'};
+function jrShift(d){
+  const inp=$('jrDate'); if(!inp.value) inp.value=today;
+  const dt=new Date(inp.value+'T12:00:00'); dt.setDate(dt.getDate()+d);
+  inp.value=dt.toISOString().slice(0,10);
+  renderJournal();
+}
+function jrToday(){ $('jrDate').value=today; renderJournal(); }
+function jrMin(t){ // "HH:MM" → минуты от начала окна (0..720), с ограничением
+  if(!t) return null;
+  const m=String(t).match(/^(\d{1,2}):(\d{2})/); if(!m) return null;
+  const v=(+m[1])*60+(+m[2]);
+  return Math.max(0, Math.min((JR_DAY_END-JR_DAY_START)*60, v-JR_DAY_START*60));
+}
+function jrCurLoc(){
+  // Владелец выбирает ТЦ в журнале; остальные видят свой ТЦ кассы
+  const sel=$('jrLoc');
+  const locs=window.ALL_LOCS||[];
+  if(locs.length && role==='owner'){
+    sel.style.display='';
+    const cur=sel.value;
+    sel.innerHTML='<option value="all">Все ТЦ</option>'+locs.map(l=>`<option value="${l.id}">${l.name}</option>`).join('');
+    sel.value=cur||'all'; if(!sel.value) sel.value='all';
+    return sel.value==='all' ? null : +sel.value;
+  }
+  sel.style.display='none';
+  return (typeof deviceLoc==='function') ? deviceLoc() : null;
+}
+function renderJournal(){
+  const grid=$('jrGrid'); if(!grid) return;
+  if(!$('jrDate').value) $('jrDate').value=today;
+  const date=$('jrDate').value;
+  const loc=jrCurLoc();
+  const total=(JR_DAY_END-JR_DAY_START)*60;
+  const rooms=ROOMS.filter(r=>!loc || !r.loc || +r.loc===+loc);
+  const day=bookings.filter(b=>b.date===date && b.status!=='cancelled' && (!loc || !b.loc || +b.loc===+loc));
+  // шапка с часами
+  const hours=[]; for(let h=JR_DAY_START; h<=JR_DAY_END; h++) hours.push(h);
+  const ticks=hours.slice(1,-1).map(h=>`<span class="tick" style="left:${(h-JR_DAY_START)*60/total*100}%"></span>`).join('');
+  const head=`<div class="jr-head"><div class="jr-name"></div><div class="jr-hours">${hours.map(h=>`<span style="left:${(h-JR_DAY_START)*60/total*100}%">${h}:00</span>`).join('')}</div></div>`;
+  const noRoom=day.filter(b=>!b.roomId);
+  const laneFor=(list)=>{
+    return list.map(b=>{
+      let s=jrMin(b.from), e=jrMin(b.to);
+      if(s==null) s=0;
+      if(e==null||e<=s) e=Math.min(s+120,total);
+      const left=s/total*100, width=Math.max(3,(e-s)/total*100);
+      const col=JR_COLORS[b.status]||'#64748b';
+      const pay=b.status==='new'?'без оплаты':(b.status==='paid'?'оплачено':(b.status==='done'?'реализовано':'предоплата '+fmt(b.prepaid)));
+      return `<div class="jr-block" style="left:${left}%;width:${width}%;background:${col}"
+        title="${b.client||''} · ${b.from||''}–${b.to||''} · ${pay}" onclick="openBookingCard(${b.id})">${b.client||'Бронь'}<small>${b.from||''}–${b.to||''} · ${pay}</small></div>`;
+    }).join('');
+  };
+  const rows=rooms.map(r=>{
+    const list=day.filter(b=>+b.roomId===+r.id);
+    const locName=(window.ALL_LOCS||[]).filter(l=>l.id===+r.loc).map(l=>l.name)[0];
+    return `<div class="jr-row"><div class="jr-name">${r.name}<small>${r.cap?r.cap+' мест':''}${locName?(r.cap?' · ':'')+locName:''}${list.length?'':'<span style="color:var(--green)"> · свободна</span>'}</small></div>
+      <div class="jr-lane">${ticks}${laneFor(list)}</div></div>`;
+  }).join('');
+  const extra=noRoom.length?`<div class="jr-row"><div class="jr-name">Без комнаты<small>бронь без банкетной</small></div><div class="jr-lane">${ticks}${laneFor(noRoom)}</div></div>`:'';
+  grid.innerHTML = rooms.length||noRoom.length
+    ? head+rows+extra
+    : '<div class="muted" style="padding:10px 0">Добавьте банкетные комнаты внизу страницы</div>';
+  renderRooms();
+}
+/* ---- Банкетные комнаты (в app.js операции уходят на сервер) ---- */
+function renderRooms(){
+  const tb=$('roomTbl'); if(!tb) return;
+  const locOpts=(cur)=>'<option value="">Все ТЦ</option>'+(window.ALL_LOCS||[]).map(l=>`<option value="${l.id}" ${+cur===l.id?'selected':''}>${l.name}</option>`).join('');
+  tb.innerHTML = ROOMS.map(r=>`<tr>
+    <td><input value="${String(r.name).replace(/"/g,'&quot;')}" style="min-width:160px" onchange="roomRename(${r.id},this.value)"></td>
+    <td><input type="number" min="0" value="${r.cap||0}" style="width:80px" onchange="roomSetCap(${r.id},this.value)"></td>
+    <td><select onchange="roomSetLoc(${r.id},this.value)" style="width:130px">${locOpts(r.loc)}</select></td>
+    <td><button class="btn btn-ghost btn-sm" onclick="roomDel(${r.id})">Удалить</button></td></tr>`).join('')
+    || '<tr><td colspan="4" class="muted">Комнат пока нет</td></tr>';
+  const rl=$('rmLoc');
+  if(rl && !rl.dataset.filled){ rl.innerHTML=locOpts(null); rl.dataset.filled='1'; }
+}
+function roomAdd(){
+  const n=$('rmName'), c=$('rmCap'), l=$('rmLoc');
+  if(!n.value.trim()) return toast('Укажите название комнаты', true);
+  ROOMS.push({id:seq++, name:n.value.trim(), cap:+c.value||0, price:0, loc:l.value?+l.value:null});
+  n.value=''; c.value='';
+  renderJournal(); renderPartyForm(); toast('Комната добавлена');
+}
+function roomRename(id,v){ const r=ROOMS.find(x=>x.id===id); if(r){ r.name=v; renderJournal(); renderPartyForm(); } }
+function roomSetCap(id,v){ const r=ROOMS.find(x=>x.id===id); if(r){ r.cap=+v||0; renderJournal(); } }
+function roomSetLoc(id,v){ const r=ROOMS.find(x=>x.id===id); if(r){ r.loc=v?+v:null; renderJournal(); } }
+function roomDel(id){
+  if(!confirm('Удалить комнату? Существующие брони останутся в журнале.')) return;
+  ROOMS=ROOMS.filter(x=>x.id!==id);
+  renderJournal(); renderPartyForm(); toast('Комната удалена');
 }
 
 /* ================= КЛИЕНТЫ ================= */
