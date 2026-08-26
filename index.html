@@ -95,12 +95,14 @@ aside nav{flex:1;padding:12px 10px;overflow-y:auto;display:flex;flex-direction:c
 .btn:disabled{opacity:.45;cursor:not-allowed}
 
 /* тарифы */
-.tariffs{display:grid;grid-template-columns:repeat(auto-fill,minmax(clamp(160px,14vw,240px),1fr));gap:clamp(9px,.9vw,16px)}
-.tariff{background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:clamp(13px,1.1vw,20px);cursor:pointer;text-align:left;transition:.15s;min-height:44px}
+.tariffs{display:grid;grid-template-columns:repeat(auto-fill,minmax(clamp(160px,14vw,240px),1fr));gap:clamp(9px,.9vw,16px);grid-auto-rows:minmax(112px,auto)}
+.tariff{background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:clamp(11px,1vw,18px);cursor:pointer;text-align:left;transition:.15s;
+  display:flex;flex-direction:column;min-height:112px;overflow:hidden}
 .tariff:hover{border-color:var(--orange);box-shadow:0 4px 14px rgba(234,88,12,.12);transform:translateY(-2px)}
-.tariff .tn{font-weight:600;font-size:clamp(13px,1vw,16px);min-height:36px;color:var(--ink)}
-.tariff .tp{font-weight:800;font-size:clamp(21px,1.7vw,30px);color:var(--orange);margin-top:6px}
-.tariff .doc{font-size:11px;color:var(--gold);font-weight:600;margin-top:3px}
+.tariff .tn{font-weight:600;font-size:clamp(13px,1vw,16px);color:var(--ink);line-height:1.3;flex:0 1 auto;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.tariff .tp{font-weight:800;font-size:clamp(21px,1.7vw,30px);color:var(--orange);margin-top:auto;padding-top:6px;line-height:1.1;flex:0 0 auto}
+.tariff .doc{font-size:11px;color:var(--gold);font-weight:600;margin-top:3px;flex:0 0 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .daykind{padding:5px 13px;border-radius:16px;font-weight:700;font-size:12px;background:#fff7ed;color:var(--orange);border:1px solid #fed7aa}
 
 /* чек */
@@ -1181,7 +1183,7 @@ function renderTariffs(){
   // Билеты (позиции с привязкой ко дню) фильтруются по дню недели, позиции any показываются всегда
   const list = TARIFFS.filter(t=>t.group===posGroup && (t.day==='any'||t.day===kind) && (typeof prodInLoc!=='function'||prodInLoc(t)));
   $('tariffGrid').innerHTML = list.length ? list.map(t=>`
-    <button class="tariff" onclick="addToCheck(${t.id})">
+    <button class="tariff" title="${String(t.name).replace(/"/g,'&quot;')}" onclick="addToCheck(${t.id})">
       <div class="tn">${t.name}</div>
       <div class="tp">${(+t.price).toLocaleString('ru-RU')} ₽</div>
       ${t.doc?'<div class="doc">📄 нужен документ</div>':''}
