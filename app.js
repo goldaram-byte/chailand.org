@@ -109,7 +109,8 @@
       api('/clients'),
       api('/crm/leads').catch(function () { return []; }),
       api('/pos/sales?limit=200').catch(function () { return []; }),
-      api('/settings/acquiring').catch(function () { return null; }),
+      // Эквайринг доступен не всем ролям — кассиру не запрашиваем (иначе 403 в консоли)
+      (ME && ME.role === 'cashier') ? Promise.resolve(null) : api('/settings/acquiring').catch(function () { return null; }),
       api('/reports/cashiers').catch(function () { return []; }),
     ]).then(function (res) {
       var cat = res[0], settings = res[1], cl = res[2], ld = res[3], sl = res[4], acq = res[5];
@@ -674,6 +675,7 @@
       var g = document.getElementById('pdGroup'), n = document.getElementById('pdName'), p = document.getElementById('pdPrice'), lc = document.getElementById('pdLoc');
       var st = document.getElementById('pdStock');
       if (!n || !n.value.trim()) { if (n) n.focus(); return; }
+      if (!g || !g.value) { if (typeof toast === 'function') toast('Нет товарных групп — создайте группу раздела «Товары» на вкладке «Группы продаж»', true); return; }
       var stock = st && st.value !== '' ? Number(st.value) : null;
       api('/catalog/products', { method: 'POST', body: { group_id: +g.value || null, name: n.value.trim(), price: +p.value || 0, location_id: (lc && lc.value) ? +lc.value : null } })
         .then(function (row) {

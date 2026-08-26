@@ -192,7 +192,10 @@ export async function createReturn(user, body) {
     : await q1('SELECT * FROM sales WHERE client_uuid=$1', [parent_client_uuid]);
   if (!parent) throw new ApiError(404, 'Исходная продажа не найдена');
   if (parent.status === 'returned') throw new ApiError(409, 'Продажа уже возвращена');
-  const parentItems = await q('SELECT * FROM sale_items WHERE sale_id=$1', [parent_sale_id]);
+  // ВАЖНО: позиции ищем по id найденной продажи (parent.id), а не по параметру
+  // запроса — при возврате по parent_client_uuid параметр parent_sale_id пуст,
+  // и раньше возвратный чек создавался без состава (и без возврата на склад).
+  const parentItems = await q('SELECT * FROM sale_items WHERE sale_id=$1', [parent.id]);
 
   let acq = null;
   if (Number(parent.card_amount) > 0) {
