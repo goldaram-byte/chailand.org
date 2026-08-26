@@ -115,13 +115,10 @@
   .brand{text-align:center;margin-bottom:6px}
   .brand .logos{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
   .brand .lg-sep{width:1px;height:52px;background:linear-gradient(180deg,transparent,rgba(255,154,31,.6),transparent)}
-  .brand .lg-drift-wrap{display:flex;flex-direction:column;align-items:center;gap:2px}
-  .brand .lg-drift{height:62px;filter:drop-shadow(0 8px 22px rgba(232,41,31,.55))}
-  .brand .lg-drift-name{font-weight:900;font-size:15px;letter-spacing:1.5px;color:#E8291F;
-    text-shadow:0 2px 10px rgba(232,41,31,.5)}
+  .brand .lg-drift{height:118px;margin:-14px 0;filter:drop-shadow(0 8px 22px rgba(232,41,31,.5))}
   .brand .t .amp{color:#FF9A1F}
-  .topbar .lg-drift{height:34px;filter:drop-shadow(0 4px 12px rgba(232,41,31,.5))}
-  @media(max-width:380px){ .brand .lg-sep{display:none} .brand .lg-drift{height:52px} .topbar .lg-drift{display:none} }
+  .topbar .lg-drift{height:52px;margin:-8px 0;filter:drop-shadow(0 4px 12px rgba(232,41,31,.5))}
+  @media(max-width:380px){ .brand .lg-sep{display:none} .brand .lg-drift{height:96px} .topbar .lg-drift{display:none} }
   .brand img{height:76px;filter:drop-shadow(0 8px 26px rgba(255,154,31,.6))}
   .brand .t{font-weight:800;font-size:24px;margin-top:8px}
   .brand .s{color:var(--muted);font-size:13.5px;margin-top:4px}
@@ -164,10 +161,7 @@
       <div class="logos">
         <img class="lg-park" src="/logo.png" alt="Чайлэнд" />
         <span class="lg-sep"></span>
-        <span class="lg-drift-wrap">
-          <img class="lg-drift" src="/lk/driftland.svg" alt="ДрифтЛэнд" />
-          <span class="lg-drift-name">ДРИФТЛЭНД</span>
-        </span>
+        <img class="lg-drift" src="/lk/driftland.svg" alt="ДрифтЛэнд" />
       </div>
       <div class="t">Чайлэнд <span class="amp">·</span> ДрифтЛэнд</div>
       <div class="s">Бонусы, карта и приглашения друзей</div>
@@ -211,7 +205,7 @@
     <div class="safe-top"></div>
     <div class="topbar">
       <img class="lg-park" src="/logo.png" alt="Чайлэнд" />
-      <img class="lg-drift" src="/lk/driftland.svg" alt="ДрифтЛэнд" />
+      <img class="lg-drift" src="/lk/driftland-mark.svg" alt="ДрифтЛэнд" />
       <div>
         <div class="ttl">Чайлэнд</div>
         <div class="sub" id="hiName">Личный кабинет</div>
