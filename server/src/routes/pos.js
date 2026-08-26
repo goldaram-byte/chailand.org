@@ -68,6 +68,8 @@ posRouter.get(
   '/sales',
   ah(async (req, res) => {
     const limit = Math.min(Number(req.query.limit) || 50, 200);
+    // Фильтр по точке (ТЦ): выбран конкретный — показываем продажи только этой точки
+    const loc = req.query.location_id && req.query.location_id !== 'all' ? Number(req.query.location_id) : null;
     const rows = await q(
       `SELECT s.*, u.full_name AS cashier_name, c.full_name AS client_name,
               COALESCE(json_agg(json_build_object('name',i.name,'qty',i.qty,'price',i.price,'sum',i.sum))
@@ -76,9 +78,10 @@ posRouter.get(
          LEFT JOIN users u ON u.id = s.cashier_id
          LEFT JOIN clients c ON c.id = s.client_id
          LEFT JOIN sale_items i ON i.sale_id = s.id
+        WHERE ($2::bigint IS NULL OR s.location_id = $2)
         GROUP BY s.id, u.full_name, c.full_name
         ORDER BY s.created_at DESC LIMIT $1`,
-      [limit]
+      [limit, loc]
     );
     res.json(rows);
   })

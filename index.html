@@ -761,8 +761,8 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
     </div>
     <div class="card set-pane" id="s-tariffs">
       <h3>🎟️ Тарифы — билеты в парк <button class="btn btn-green btn-sm" style="margin-left:auto" onclick="addTariff()">+ Добавить билет</button></h3>
-      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Здесь только входные билеты в парк (группы «Билеты»). Товары кафе и сувениры — на вкладке «Товары», услуги праздников — на вкладке «Праздники».</div>
-      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Группа</th><th>День</th><th>Цена, ₽</th><th>Документ</th><th></th></tr></thead><tbody id="setTariffs"></tbody></table></div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Здесь только входные билеты в парк (группы «Билеты»). Столбец «ТЦ» задаёт, в какой точке продаётся билет: «Все ТЦ» — во всех, иначе — только на кассах выбранного ТЦ. Товары кафе и сувениры — на вкладке «Товары», услуги праздников — на вкладке «Праздники».</div>
+      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Группа</th><th>День</th><th>Цена, ₽</th><th>Документ</th><th>ТЦ</th><th></th></tr></thead><tbody id="setTariffs"></tbody></table></div>
     </div>
     <div class="card set-pane" id="s-products" hidden>
       <h3>🛍️ Товары</h3>
@@ -997,6 +997,9 @@ const ticketGroupIds = () => {
   return t.length ? t : (GROUPS[0] ? [GROUPS[0].id] : []);
 };
 const isTicketGroup = id => ticketGroupIds().includes(id);
+// Список ТЦ («проектов») для выбора у билета: пусто = продаётся во всех точках
+const tariffLocOpts = cur => '<option value="">Все ТЦ</option>' +
+  (window.ALL_LOCS||[]).map(l=>`<option value="${l.id}" ${Number(cur)===l.id?'selected':''}>${l.name}</option>`).join('');
 let TARIFFS = [
   {id:1, name:"Будний день (Пн–Чт)", day:"weekday", price:690, doc:false, group:1},
   {id:2, name:"Почти выходной (Пятница)", day:"friday", price:790, doc:false, group:1},
@@ -1582,9 +1585,12 @@ function jrMin(t){ // "HH:MM" → минуты от начала окна (0..72
   return Math.max(0, Math.min((JR_DAY_END-JR_DAY_START)*60, v-JR_DAY_START*60));
 }
 function jrCurLoc(){
-  // Владелец выбирает ТЦ в журнале; остальные видят свой ТЦ кассы
+  // Точка выбрана глобально (значок в шапке) — журнал ведётся только по ней.
+  // Если выбрано «Все ТЦ», владелец может отфильтровать журнал отдельным списком.
   const sel=$('jrLoc');
   const locs=window.ALL_LOCS||[];
+  const global=(typeof deviceLoc==='function') ? deviceLoc() : null;
+  if(global){ sel.style.display='none'; return global; }
   if(locs.length && role==='owner'){
     sel.style.display='';
     const cur=sel.value;
@@ -1593,7 +1599,7 @@ function jrCurLoc(){
     return sel.value==='all' ? null : +sel.value;
   }
   sel.style.display='none';
-  return (typeof deviceLoc==='function') ? deviceLoc() : null;
+  return null;
 }
 function jrPayLabel(b){
   return b.status==='new'?'без оплаты':(b.status==='paid'?'оплачено':(b.status==='done'?'реализовано':'предоплата '+fmt(b.prepaid)));
@@ -1908,8 +1914,9 @@ function renderSettings(){
       ${Object.entries(DAY_RU).map(([k,v])=>`<option value="${k}" ${t.day===k?'selected':''}>${v}</option>`).join('')}</select></td>
     <td><input type="number" value="${t.price}" onchange="updT(${t.id},'price',+this.value)" style="width:90px"></td>
     <td><input type="checkbox" ${t.doc?'checked':''} onchange="updT(${t.id},'doc',this.checked)"></td>
+    <td><select onchange="updT(${t.id},'loc',this.value)" style="width:130px">${tariffLocOpts(t.loc)}</select></td>
     <td><button class="btn btn-red btn-sm" onclick="delT(${t.id})">Удалить</button></td></tr>`).join(''))
-    || '<tr><td colspan="6" class="muted">Пока нет билетов — добавьте позицию или создайте группу раздела «Билеты»</td></tr>';
+    || '<tr><td colspan="7" class="muted">Пока нет билетов — добавьте позицию или создайте группу раздела «Билеты»</td></tr>';
   const KIND_OPT = {tickets:'Билеты', cafe:'Товары (кафе)', goods:'Товары'};
   $('setGroups').innerHTML = GROUPS.map(g=>{
     const cnt = TARIFFS.filter(t=>t.group===g.id).length;
@@ -1961,7 +1968,10 @@ function saveAcquiring(){
   if(ACQUIRING.bank==='—') ACQUIRING.connected=false;
   renderAcquiring(); toast('Настройки эквайринга сохранены');
 }
-function updT(id,f,v){ TARIFFS.find(t=>t.id===id)[f]=v; renderSettings(); renderTariffs(); toast('Позиция обновлена'); }
+function updT(id,f,v){
+  if(f==='loc') v = v ? +v : null; // «Все ТЦ» — без привязки к точке
+  TARIFFS.find(t=>t.id===id)[f]=v; renderSettings(); renderTariffs(); toast('Позиция обновлена');
+}
 function updG(id,v){ GROUPS.find(g=>g.id===id).name=v; renderSettings(); renderTariffs(); toast('Группа переименована'); }
 function updGKind(id,v){ GROUPS.find(g=>g.id===id).kind=v; renderSettings(); renderTariffs(); toast('Раздел группы изменён'); }
 function addGroup(){ GROUPS.push({id:seq++, name:"Новая группа", kind:"goods"}); renderSettings(); renderTariffs(); toast('Группа добавлена'); }

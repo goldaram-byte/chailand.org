@@ -26,6 +26,11 @@ reportsRouter.get(
       };
       cond = map[req.query.period] || map.month;
     }
+    // Фильтр по точке (ТЦ)
+    if (req.query.location_id && req.query.location_id !== 'all') {
+      params.push(Number(req.query.location_id));
+      cond += ` AND s.location_id = $${params.length}`;
+    }
     const rows = await q(
       `SELECT u.id, u.full_name, u.role_code,
               COALESCE(SUM(s.total) FILTER (WHERE NOT s.is_return),0) AS revenue,

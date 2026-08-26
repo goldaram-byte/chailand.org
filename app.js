@@ -56,6 +56,10 @@
     });
   }
 
+  // Глобальный фильтр по точке (ТЦ/«проекту»): выбран конкретный — вся работа
+  // ведётся только в нём; «Все ТЦ» (null) — данные по всем точкам.
+  function curLoc() { try { var v = localStorage.getItem('chailand_location_id'); return v ? Number(v) : null; } catch (e) { return null; } }
+  window.curLoc = curLoc;
   function val(id) { var e = document.getElementById(id); return e ? e.value : 'all'; }
   function setText(id, html) { var e = document.getElementById(id); if (e) e.innerHTML = html; }
   function stat(v, l, cls) { return '<div class="stat"><div class="sv ' + (cls || '') + '">' + v + '</div><div class="sl">' + l + '</div></div>'; }
@@ -82,7 +86,10 @@
     if (pos && pos !== 'all') params.push('item=' + encodeURIComponent(pos));
     if (m && m !== 'all') params.push('method=' + m);
     if (c && c !== 'all') params.push('cashier_id=' + c);
-    if (loc && loc !== 'all') params.push('location_id=' + loc);
+    // Глобально выбранная точка имеет приоритет над селектом дашборда
+    var globalLoc = curLoc();
+    if (globalLoc) { params.push('location_id=' + globalLoc); label += ' · ' + (locName(globalLoc) || 'ТЦ'); }
+    else if (loc && loc !== 'all') params.push('location_id=' + loc);
     return { query: '?' + params.join('&'), label: label };
   }
 
@@ -108,7 +115,7 @@
       api('/settings'),
       api('/clients'),
       api('/crm/leads').catch(function () { return []; }),
-      api('/pos/sales?limit=200').catch(function () { return []; }),
+      api('/pos/sales?limit=200' + (curLoc() ? '&location_id=' + curLoc() : '')).catch(function () { return []; }),
       // Эквайринг доступен не всем ролям — кассиру не запрашиваем (иначе 403 в консоли)
       (ME && ME.role === 'cashier') ? Promise.resolve(null) : api('/settings/acquiring').catch(function () { return null; }),
       api('/reports/cashiers').catch(function () { return []; }),
@@ -509,7 +516,7 @@
     };
     window.loadKpi = function (period) {
       if (!SERVER) return;
-      api('/reports/kpi?period=' + (period || 'month')).then(function (r) {
+      api('/reports/kpi?period=' + (period || 'month') + (curLoc() ? '&location_id=' + curLoc() : '')).then(function (r) {
         var t = r.targets || {};
         var rv = document.getElementById('kpiRevenue'); if (rv && !rv.value) rv.value = t.revenue || 0;
         var ck = document.getElementById('kpiChecks'); if (ck && !ck.value) ck.value = t.checks || 0;
@@ -524,11 +531,13 @@
     };
 
     // --- Настройки → «Тарифы» (билеты): изменения сразу на сервер ---
-    var T_FIELD = { name: 'name', group: 'group_id', day: 'day_kind', price: 'price', doc: 'requires_document' };
+    var T_FIELD = { name: 'name', group: 'group_id', day: 'day_kind', price: 'price', doc: 'requires_document', loc: 'location_id' };
     var _updT = window.updT;
     window.updT = function (id, f, v) {
       if (SERVER && T_FIELD[f]) {
-        var body = {}; body[T_FIELD[f]] = v;
+        var body = {};
+        // ТЦ («проект») билета: пустое значение — продаётся во всех точках
+        body[T_FIELD[f]] = (f === 'loc') ? (v ? +v : null) : v;
         api('/catalog/products/' + id, { method: 'PUT', body: body })
           .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
       }
@@ -1245,6 +1254,17 @@
   function setDeviceLoc(id) {
     if (id) localStorage.setItem(LOC_KEY, String(id)); else localStorage.removeItem(LOC_KEY);
     renderLocBadge();
+    // Точка сменилась — перечитать данные, чтобы вся работа шла в выбранном ТЦ
+    if (SERVER && localStorage.getItem(TOKEN_KEY)) {
+      hydrateAll().catch(function () {});
+      if (window.loadBookings) window.loadBookings();
+      safe(function () {
+        if (typeof curPage === 'undefined') return;
+        if (curPage === 'dash' && typeof renderDash === 'function') renderDash();
+        if (curPage === 'journal' && typeof renderJournal === 'function') renderJournal();
+        if (curPage === 'report' && typeof renderReport === 'function') renderReport();
+      });
+    }
   }
   function locName(id) { var l = LOCS.filter(function (x) { return x.id === Number(id); })[0]; return l ? l.name : null; }
   function locEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -1253,8 +1273,12 @@
     if (!SERVER || !localStorage.getItem(TOKEN_KEY)) return Promise.resolve();
     return api('/locations').then(function (list) {
       LOCS = list || [];
-      window.ALL_LOCS = LOCS; // для журнала мероприятий и списка комнат
+      window.ALL_LOCS = LOCS; // для журнала мероприятий, комнат и выбора ТЦ у билетов
       renderLocBadge();
+      // Если открыты настройки — перерисовать, чтобы подтянулись списки ТЦ
+      if (typeof curPage !== 'undefined' && curPage === 'settings' && typeof renderSettings === 'function') {
+        try { renderSettings(); } catch (e) {}
+      }
       renderLocSettings();
       fillDashLocation();
       // Первый запуск на кассе: если ТЦ не выбран, а точки есть — просим выбрать.
@@ -1380,6 +1404,12 @@
     var cur = sel.value;
     sel.innerHTML = '<option value="all">Все ТЦ</option>' + LOCS.map(function (l) { return '<option value="' + l.id + '">' + locEsc(l.name) + '</option>'; }).join('');
     if (cur) sel.value = cur;
+    // Когда точка выбрана глобально (значок в шапке) — отдельный фильтр не нужен
+    var gl = curLoc();
+    var wrap = sel.parentNode;
+    if (gl) { sel.value = String(gl); sel.style.display = 'none'; }
+    else { sel.style.display = ''; }
+    if (wrap && wrap.classList && wrap.classList.contains('dash-sel')) { /* подпись остаётся у соседних фильтров */ }
   }
 
   // ---------------- Штрих-М: печать чека на локальном ККТ ----------------
