@@ -13,7 +13,7 @@ locationsRouter.use(requireAuth);
 locationsRouter.get(
   '/',
   ah(async (req, res) => {
-    res.json(await q('SELECT id, name, address, active, sort FROM locations ORDER BY sort, id'));
+    res.json(await q('SELECT id, name, address, active, sort, bonus_spend_percent FROM locations ORDER BY sort, id'));
   })
 );
 
@@ -38,15 +38,18 @@ locationsRouter.put(
   '/:id',
   manage,
   ah(async (req, res) => {
-    const { name, address, active, sort } = req.body || {};
+    const { name, address, active, sort, bonus_spend_percent } = req.body || {};
+    // Процент списания бонусов: 0…100
+    const pct = bonus_spend_percent == null ? null : Math.max(0, Math.min(100, Number(bonus_spend_percent)));
     const row = await q1(
       `UPDATE locations SET
          name    = COALESCE(NULLIF(trim($2),''), name),
          address = COALESCE($3, address),
          active  = COALESCE($4, active),
-         sort    = COALESCE($5, sort)
+         sort    = COALESCE($5, sort),
+         bonus_spend_percent = COALESCE($6, bonus_spend_percent)
        WHERE id=$1 RETURNING *`,
-      [req.params.id, name == null ? null : String(name), address == null ? null : String(address), active, sort]
+      [req.params.id, name == null ? null : String(name), address == null ? null : String(address), active, sort, pct]
     );
     if (!row) return res.status(404).json({ error: 'Точка не найдена' });
     res.json(row);

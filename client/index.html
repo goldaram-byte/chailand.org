@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
-<meta name="theme-color" content="#0b1026" />
+<meta name="theme-color" content="#1a0a06" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="Чайлэнд" />
@@ -12,10 +12,11 @@
 <title>Чайлэнд — личный кабинет</title>
 <style>
   :root{
-    --bg:#0b1026; --bg2:#141a3a; --panel:#171d42; --panel2:#1f2657;
-    --gold:#ffcf5c; --gold2:#ffb638; --txt:#eaeeff; --muted:#9aa3d0;
-    --accent:#7b6cff; --accent2:#4f7bff; --ok:#39d98a; --bad:#ff6b6b;
-    --line:rgba(255,255,255,.09);
+    /* Огненная палитра парка: красный и оранжевый как на сайте Чайлэнд */
+    --bg:#1a0a06; --bg2:#2a1008; --panel:#2b120b; --panel2:#3a1810;
+    --gold:#FFC531; --gold2:#FF9A1F; --txt:#fff4ec; --muted:#e0b39c;
+    --accent:#F4622A; --accent2:#E8291F; --ok:#5ED96B; --bad:#FF5A4E;
+    --line:rgba(255,197,49,.18);
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0;height:100%}
@@ -23,9 +24,10 @@
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     color:var(--txt);
     background:
-      radial-gradient(1200px 600px at 80% -10%, rgba(123,108,255,.28), transparent 60%),
-      radial-gradient(900px 500px at -10% 20%, rgba(79,123,255,.22), transparent 55%),
-      linear-gradient(180deg,#0b1026,#0a0e22 60%,#080b1c);
+      radial-gradient(1200px 600px at 80% -10%, rgba(244,98,42,.38), transparent 60%),
+      radial-gradient(900px 500px at -10% 20%, rgba(232,41,31,.30), transparent 55%),
+      radial-gradient(700px 400px at 50% 110%, rgba(255,197,49,.18), transparent 60%),
+      linear-gradient(180deg,#26100a,#1a0a06 60%,#140705);
     background-attachment:fixed;
     min-height:100%;
     -webkit-font-smoothing:antialiased;
@@ -40,19 +42,19 @@
 
   /* Header */
   .topbar{display:flex;align-items:center;gap:12px;padding:16px 4px 8px}
-  .topbar img{height:40px;width:auto;filter:drop-shadow(0 4px 12px rgba(123,108,255,.5))}
+  .topbar img{height:40px;width:auto;filter:drop-shadow(0 4px 14px rgba(255,154,31,.55))}
   .topbar .ttl{font-weight:800;font-size:19px;letter-spacing:.3px}
   .topbar .sub{font-size:12px;color:var(--muted);margin-top:-2px}
 
   /* Cards / panels */
-  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:20px;padding:18px;margin:14px 0;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:20px;padding:18px;margin:14px 0;box-shadow:0 10px 30px rgba(0,0,0,.45),0 0 0 1px rgba(255,154,31,.06)}
   .panel h2{font-size:16px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
 
   /* Loyalty card */
   .loyalty{
     position:relative;overflow:hidden;border-radius:24px;padding:22px;margin:16px 0;
-    background:linear-gradient(135deg,#6a4bff 0%,#4f7bff 55%,#7b6cff 100%);
-    box-shadow:0 18px 40px rgba(79,90,255,.4);
+    background:linear-gradient(135deg,#E8291F 0%,#F4622A 52%,#FF9A1F 100%);
+    box-shadow:0 18px 40px rgba(232,41,31,.45);
   }
   .loyalty::after{content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.35),transparent 70%)}
   .loyalty .lname{font-weight:700;font-size:17px}
@@ -67,8 +69,8 @@
   /* Buttons */
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 16px;border:0;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;transition:transform .06s ease, filter .15s}
   .btn:active{transform:scale(.98)}
-  .btn.primary{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#3a2600}
-  .btn.ghost{background:rgba(255,255,255,.07);color:var(--txt);border:1px solid var(--line)}
+  .btn.primary{background:linear-gradient(135deg,#FF9A1F,#E8291F);color:#fff;box-shadow:0 8px 22px rgba(232,41,31,.42)}
+  .btn.ghost{background:rgba(255,154,31,.10);color:var(--txt);border:1px solid rgba(255,154,31,.35)}
   .btn.mini{width:auto;padding:9px 14px;font-size:14px;border-radius:11px}
   .btn.link{background:none;color:var(--accent);width:auto;padding:6px;font-weight:600}
 
@@ -76,8 +78,8 @@
   label.fld{display:block;margin:12px 0 0}
   label.fld .lbl{font-size:13px;color:var(--muted);margin-bottom:6px;display:block}
   input,textarea,select{
-    width:100%;padding:14px;border-radius:13px;border:1px solid var(--line);
-    background:rgba(255,255,255,.05);color:var(--txt);font-size:16px;outline:none
+    width:100%;padding:14px;border-radius:13px;border:1px solid rgba(255,154,31,.25);
+    background:rgba(255,255,255,.06);color:var(--txt);font-size:16px;outline:none
   }
   input:focus,textarea:focus{border-color:var(--accent)}
   textarea{min-height:84px;resize:vertical}
@@ -94,51 +96,60 @@
 
   /* Chips / stats */
   .stats{display:flex;gap:10px;margin:12px 0}
-  .stat{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center}
-  .stat .n{font-size:22px;font-weight:800;color:var(--gold)}
+  .stat{flex:1;background:rgba(255,154,31,.09);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:center}
+  .stat .n{font-size:22px;font-weight:800;color:#FF9A1F}
   .stat .l{font-size:11.5px;color:var(--muted);margin-top:2px}
-  .codebox{display:flex;gap:8px;align-items:center;background:rgba(255,255,255,.06);border:1px dashed var(--accent);border-radius:14px;padding:12px 14px;margin:10px 0}
+  .codebox{display:flex;gap:8px;align-items:center;background:rgba(255,154,31,.10);border:1px dashed #FF9A1F;border-radius:14px;padding:12px 14px;margin:10px 0}
   .codebox .code{font-family:ui-monospace,monospace;font-weight:800;font-size:20px;letter-spacing:2px;flex:1}
 
   /* Tabbar */
   .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:20;
-    background:rgba(10,13,30,.92);backdrop-filter:blur(14px);border-top:1px solid var(--line);
+    background:rgba(26,10,6,.94);backdrop-filter:blur(14px);border-top:1px solid rgba(255,154,31,.22);
     display:flex;max-width:520px;margin:0 auto;padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
   .tab{flex:1;background:none;border:0;color:var(--muted);padding:8px 2px 6px;font-size:11px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
   .tab .ic{font-size:22px;line-height:1}
-  .tab.active{color:var(--gold)}
+  .tab.active{color:#FF9A1F}
 
   /* Auth */
   .authwrap{max-width:440px;margin:0 auto;padding:0 20px calc(30px + env(safe-area-inset-bottom));min-height:100vh;display:flex;flex-direction:column;justify-content:center}
   .brand{text-align:center;margin-bottom:6px}
-  .brand img{height:76px;filter:drop-shadow(0 8px 24px rgba(123,108,255,.6))}
+  .brand .logos{display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap}
+  .brand .lg-sep{width:1px;height:52px;background:linear-gradient(180deg,transparent,rgba(255,154,31,.6),transparent)}
+  .brand .lg-drift-wrap{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .brand .lg-drift{height:62px;filter:drop-shadow(0 8px 22px rgba(232,41,31,.55))}
+  .brand .lg-drift-name{font-weight:900;font-size:15px;letter-spacing:1.5px;color:#E8291F;
+    text-shadow:0 2px 10px rgba(232,41,31,.5)}
+  .brand .t .amp{color:#FF9A1F}
+  .topbar .lg-drift{height:34px;filter:drop-shadow(0 4px 12px rgba(232,41,31,.5))}
+  @media(max-width:380px){ .brand .lg-sep{display:none} .brand .lg-drift{height:52px} .topbar .lg-drift{display:none} }
+  .brand img{height:76px;filter:drop-shadow(0 8px 26px rgba(255,154,31,.6))}
   .brand .t{font-weight:800;font-size:24px;margin-top:8px}
   .brand .s{color:var(--muted);font-size:13.5px;margin-top:4px}
-  .seg{display:flex;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:14px;padding:4px;margin:18px 0 4px}
+  .seg{display:flex;background:rgba(255,154,31,.09);border:1px solid var(--line);border-radius:14px;padding:4px;margin:18px 0 4px}
   .seg button{flex:1;background:none;border:0;color:var(--muted);padding:11px;border-radius:11px;font-weight:700;font-size:15px;cursor:pointer}
-  .seg button.on{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+  .seg button.on{background:linear-gradient(135deg,#F4622A,#E8291F);color:#fff;box-shadow:0 6px 16px rgba(232,41,31,.4)}
 
   /* Toast */
   #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom));z-index:60;
-    background:#20264f;border:1px solid var(--line);color:var(--txt);padding:12px 18px;border-radius:12px;font-size:14px;
+    background:#3a1810;border:1px solid rgba(255,154,31,.35);color:var(--txt);padding:12px 18px;border-radius:12px;font-size:14px;
     box-shadow:0 12px 30px rgba(0,0,0,.5);opacity:0;transition:opacity .25s, transform .25s;pointer-events:none;max-width:90vw;text-align:center}
   #toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
   #toast.bad{border-color:var(--bad)}
 
-  .kid{display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0}
+  .kid{display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(255,154,31,.09);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0}
   .x{background:none;border:0;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px}
   .howto{font-size:13.5px;color:var(--muted);line-height:1.5}
-  .howto b{color:var(--gold)}
+  .howto b{color:#FF9A1F}
   /* Новости */
   .newsitem{padding:16px}
   .newsitem .n-img{width:100%;border-radius:14px;margin-bottom:12px;display:block}
   .newsitem .n-head{display:flex;gap:12px;align-items:flex-start}
   .newsitem .n-emoji{font-size:30px;line-height:1;flex:0 0 auto}
   .newsitem .n-ttl{font-weight:800;font-size:16px;line-height:1.25}
-  .newsitem .n-pin{font-size:10.5px;font-weight:700;color:#3a2600;background:var(--gold);padding:2px 7px;border-radius:8px;vertical-align:middle;white-space:nowrap}
+  .newsitem .n-pin{font-size:10.5px;font-weight:700;color:#fff;background:#E8291F;padding:2px 7px;border-radius:8px;vertical-align:middle;white-space:nowrap}
   .newsitem .n-date{font-size:12px;color:var(--muted);margin-top:3px}
-  .newsitem .n-body{font-size:14.5px;line-height:1.55;color:#d7ddff;margin-top:12px}
-  .spin{width:26px;height:26px;border:3px solid rgba(255,255,255,.2);border-top-color:var(--gold);border-radius:50%;animation:sp 1s linear infinite;margin:20px auto}
+  .newsitem .n-body{font-size:14.5px;line-height:1.55;color:#f6ded1;margin-top:12px}
+  .spin{width:26px;height:26px;border:3px solid rgba(255,255,255,.2);border-top-color:#FF9A1F;border-radius:50%;animation:sp 1s linear infinite;margin:20px auto}
   @keyframes sp{to{transform:rotate(360deg)}}
 </style>
 </head>
@@ -150,8 +161,15 @@
   <div class="safe-top"></div>
   <div class="authwrap">
     <div class="brand">
-      <img src="/logo.png" alt="Чайлэнд" />
-      <div class="t">Чайлэнд</div>
+      <div class="logos">
+        <img class="lg-park" src="/logo.png" alt="Чайлэнд" />
+        <span class="lg-sep"></span>
+        <span class="lg-drift-wrap">
+          <img class="lg-drift" src="/lk/driftland.svg" alt="ДрифтЛэнд" />
+          <span class="lg-drift-name">ДРИФТЛЭНД</span>
+        </span>
+      </div>
+      <div class="t">Чайлэнд <span class="amp">·</span> ДрифтЛэнд</div>
       <div class="s">Бонусы, карта и приглашения друзей</div>
     </div>
 
@@ -192,7 +210,8 @@
   <div class="wrap">
     <div class="safe-top"></div>
     <div class="topbar">
-      <img src="/logo.png" alt="" />
+      <img class="lg-park" src="/logo.png" alt="Чайлэнд" />
+      <img class="lg-drift" src="/lk/driftland.svg" alt="ДрифтЛэнд" />
       <div>
         <div class="ttl">Чайлэнд</div>
         <div class="sub" id="hiName">Личный кабинет</div>
@@ -285,7 +304,7 @@
       </div>
 
       <div style="margin:18px 0"><button class="btn ghost" onclick="logout()">Выйти</button></div>
-      <p class="center muted" style="font-size:12px">Парк развлечений «Чайлэнд»</p>
+      <p class="center muted" style="font-size:12px">Парки развлечений «Чайлэнд» и «ДрифтЛэнд»</p>
     </div>
   </div>
 

@@ -408,6 +408,10 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS time_to   text;                   
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS services  jsonb NOT NULL DEFAULT '[]'; -- [{name, option, price}]
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payments  jsonb NOT NULL DEFAULT '[]'; -- [{amount, method, fiscal, sale_id, at, by, by_name}]
 
+-- Максимальная доля чека, которую можно оплатить бонусами, — своя у каждой
+-- точки (100 = можно оплатить бонусами весь чек).
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS bonus_spend_percent int NOT NULL DEFAULT 100;
+
 -- Касса и продажи привязаны к точке (клиенты — НЕТ, они общие).
 ALTER TABLE cash_shifts ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES locations(id);
 ALTER TABLE sales       ADD COLUMN IF NOT EXISTS location_id bigint REFERENCES locations(id);

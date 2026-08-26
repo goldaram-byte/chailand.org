@@ -1323,7 +1323,10 @@ function renderPayScreen(){
     + `<div class="pay-sum"><span>Сумма чека:</span><span class="val">${fmt(PAY.total)}</span></div>`;
   if(PAY.client){
     const c = PAY.client;
-    const maxSpend = Math.min(c.bonus, PAY.total);
+    // Лимит оплаты бонусами — свой у каждой точки (ТЦ)
+    const spendPct = (typeof BONUS_SPEND_PCT === 'number') ? BONUS_SPEND_PCT : 100;
+    const byPct = Math.floor(PAY.total * spendPct / 100);
+    const maxSpend = Math.min(c.bonus, byPct);
     const willEarn = Math.floor((PAY.total - PAY.bonusSpend)*CFG.cashback/100);
     $('payBonusBox').innerHTML = `
       <div class="bonus-box">
@@ -1334,7 +1337,7 @@ function renderPayScreen(){
             oninput="PAY.bonusSpend=Math.min(Math.max(0,Math.round(+this.value||0)),${maxSpend});renderPayScreen()">
           <button class="btn btn-ghost btn-sm" onclick="PAY.bonusSpend=${maxSpend};renderPayScreen()">Максимум (${maxSpend})</button>
         </div>
-        <div class="bb-note">После подтверждения оплаты: спишем ${PAY.bonusSpend} и начислим +${willEarn} бонусов (кэшбэк ${CFG.cashback}%)</div>
+        <div class="bb-note">После подтверждения оплаты: спишем ${PAY.bonusSpend} и начислим +${willEarn} бонусов (кэшбэк ${CFG.cashback}%)${spendPct<100?`<br>В этой точке бонусами можно оплатить не более ${spendPct}% чека — это ${byPct} ₽`:''}</div>
       </div>`;
   } else {
     $('payBonusBox').innerHTML = `<div class="bonus-box" style="background:#f8fafc;border-color:var(--line)">
@@ -1360,6 +1363,12 @@ function cancelPay(){ $('payOverlay').classList.remove('open'); PAY=null; }
 
 function confirmPay(){
   if(!PAY.method) return toast('Выберите способ оплаты', true);
+  // Не даём превысить лимит списания бонусов этой точки
+  const _pct = (typeof BONUS_SPEND_PCT === 'number') ? BONUS_SPEND_PCT : 100;
+  if(PAY.client && _pct < 100){
+    const _lim = Math.floor(PAY.total * _pct / 100);
+    if(PAY.bonusSpend > _lim){ PAY.bonusSpend = _lim; renderPayScreen(); return toast('Бонусами можно оплатить не более '+_pct+'% чека — это '+_lim+' ₽', true); }
+  }
   const toPay = PAY.total - PAY.bonusSpend;
   if(PAY.method==='cash'){
     const given = +$('cashGiven').value||0;

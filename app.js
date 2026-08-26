@@ -1305,6 +1305,10 @@
     return api('/locations').then(function (list) {
       LOCS = list || [];
       window.ALL_LOCS = LOCS; // для журнала мероприятий, комнат и выбора ТЦ у билетов
+      // Лимит оплаты бонусами текущей точки (для кассы)
+      var _d = deviceLoc();
+      var _cur = _d ? LOCS.filter(function (l) { return l.id === Number(_d); })[0] : null;
+      window.BONUS_SPEND_PCT = _cur && _cur.bonus_spend_percent != null ? Number(_cur.bonus_spend_percent) : 100;
       renderLocBadge();
       // Если открыты настройки — перерисовать, чтобы подтянулись списки ТЦ
       if (typeof curPage !== 'undefined' && curPage === 'settings' && typeof renderSettings === 'function') {
@@ -1389,8 +1393,8 @@
     }
     card.innerHTML =
       '<h3>📍 Точки (ТЦ)</h3>' +
-      '<div class="muted" style="font-size:12.5px;margin-bottom:12px">Клиенты и бонусы общие для всех точек. Касса, смены и выручка — раздельные по каждому ТЦ. Касса определяет свой ТЦ по устройству.</div>' +
-      '<div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Адрес</th><th>Статус</th><th></th></tr></thead><tbody id="locTbl"></tbody></table></div>' +
+      '<div class="muted" style="font-size:12.5px;margin-bottom:12px">Клиенты и бонусы общие для всех точек. Касса, смены и выручка — раздельные по каждому ТЦ. Касса определяет свой ТЦ по устройству. «Списание бонусов» — какую долю чека можно оплатить бонусами в этой точке (100% — весь чек).</div>' +
+      '<div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Адрес</th><th>Списание бонусов, %</th><th>Статус</th><th></th></tr></thead><tbody id="locTbl"></tbody></table></div>' +
       '<div style="display:flex;gap:8px;margin-top:12px">' +
       '<input id="locNewName" placeholder="Название ТЦ" style="flex:1.4">' +
       '<input id="locNewAddr" placeholder="Адрес (необязательно)" style="flex:1.6">' +
@@ -1399,10 +1403,11 @@
     tb.innerHTML = LOCS.map(function (l) {
       return '<tr><td><input value="' + locEsc(l.name) + '" style="width:150px" onchange="locRename(' + l.id + ',this.value)"></td>' +
         '<td><input value="' + locEsc(l.address || '') + '" style="width:180px" onchange="locSetAddr(' + l.id + ',this.value)"></td>' +
+        '<td><input type="number" min="0" max="100" value="' + (l.bonus_spend_percent == null ? 100 : l.bonus_spend_percent) + '" style="width:80px" onchange="locSetBonusPct(' + l.id + ',this.value)"> %</td>' +
         '<td>' + (l.active ? '<span style="color:var(--green);font-weight:700">активна</span>' : '<span class="muted">отключена</span>') + '</td>' +
         '<td><button class="btn btn-ghost btn-sm" onclick="locToggle(' + l.id + ',' + (l.active ? 'false' : 'true') + ')">' + (l.active ? 'Откл.' : 'Вкл.') + '</button> ' +
         '<button class="btn btn-ghost btn-sm" onclick="locDel(' + l.id + ')">✕</button></td></tr>';
-    }).join('') || '<tr><td colspan="4" class="muted">Точек пока нет</td></tr>';
+    }).join('') || '<tr><td colspan="5" class="muted">Точек пока нет</td></tr>';
   }
   window.locAdd = function () {
     var n = document.getElementById('locNewName'), a = document.getElementById('locNewAddr');
@@ -1414,6 +1419,14 @@
   };
   window.locRename = function (id, v) { api('/locations/' + id, { method: 'PUT', body: { name: v } }).then(loadLocations).catch(function () {}); };
   window.locSetAddr = function (id, v) { api('/locations/' + id, { method: 'PUT', body: { address: v } }).then(loadLocations).catch(function () {}); };
+  // Доля чека, которую можно оплатить бонусами в этой точке
+  window.locSetBonusPct = function (id, v) {
+    var pct = Math.max(0, Math.min(100, Number(v) || 0));
+    api('/locations/' + id, { method: 'PUT', body: { bonus_spend_percent: pct } })
+      .then(loadLocations)
+      .then(function () { if (typeof toast === 'function') toast('Списание бонусов в этой точке: до ' + pct + '% чека'); })
+      .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+  };
   window.locToggle = function (id, on) { api('/locations/' + id, { method: 'PUT', body: { active: on } }).then(loadLocations).catch(function () {}); };
   window.locDel = function (id) {
     api('/locations/' + id, { method: 'DELETE' }).then(loadLocations)
