@@ -861,6 +861,11 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
         <div><label>Праздничные даты (тариф выходного дня), через запятую</label><input id="setHolidays" placeholder="2026-12-31, 2027-01-01" onchange="CFG.holidays=this.value.split(',').map(s=>s.trim()).filter(Boolean);renderTariffs();toast('Праздничные даты сохранены')"></div>
       </div>
       <div class="muted" style="font-size:12.5px">1 бонус = 1 ₽. Кэшбэк начисляется на денежную часть чека после подтверждения оплаты.</div>
+
+      <h3 style="margin-top:22px">💳 Сколько бонусов можно списать, по ТЦ</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Предел оплаты бонусами в каждой точке: 100% — бонусами можно закрыть весь чек, 50% — только половину, 0% — списание в этом ТЦ запрещено. Касса проверяет предел той точки, в которой открыта смена.</div>
+      <div class="tbl-wrap"><table><thead><tr><th>ТЦ (точка)</th><th>Можно списать бонусами</th><th>Пример: чек 1000 ₽</th></tr></thead>
+      <tbody id="bonusLocTbl"><tr><td colspan="3" class="muted">Доступно при работе с сервером</td></tr></tbody></table></div>
     </div>
     <div class="card set-pane" id="s-staff" hidden>
       <h3>👤 Сотрудники</h3>

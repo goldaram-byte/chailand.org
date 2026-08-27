@@ -863,6 +863,8 @@
         if (name === 'kpi') window.loadKpi('month');
         if (name === 'products') window.renderProducts();
         if (name === 'passes' && window.renderPassTypes) window.renderPassTypes();
+        // проценты списания бонусов по ТЦ — на вкладке «Бонусы»
+        if (name === 'loyalty' && window.renderBonusLocs) window.renderBonusLocs();
         return r;
       };
     }
@@ -1457,7 +1459,27 @@
         '<td><button class="btn btn-ghost btn-sm" onclick="locToggle(' + l.id + ',' + (l.active ? 'false' : 'true') + ')">' + (l.active ? 'Откл.' : 'Вкл.') + '</button> ' +
         '<button class="btn btn-ghost btn-sm" onclick="locDel(' + l.id + ')">✕</button></td></tr>';
     }).join('') || '<tr><td colspan="5" class="muted">Точек пока нет</td></tr>';
+    if (window.renderBonusLocs) window.renderBonusLocs();
   }
+
+  // Тот же процент списания, но в разделе «Бонусы и праздничные дни» —
+  // там его и ищут, когда настраивают бонусную программу.
+  window.renderBonusLocs = function () {
+    var tb = document.getElementById('bonusLocTbl');
+    if (!tb) return;
+    if (!SERVER) { tb.innerHTML = '<tr><td colspan="3" class="muted">Доступно при работе с сервером</td></tr>'; return; }
+    tb.innerHTML = LOCS.map(function (l) {
+      var pct = l.bonus_spend_percent == null ? 100 : Number(l.bonus_spend_percent);
+      var example = pct === 0
+        ? 'бонусами платить нельзя'
+        : 'бонусами до ' + fmtNum(Math.floor(1000 * pct / 100)) + ', остальное деньгами';
+      return '<tr><td><b>' + locEsc(l.name) + '</b>' +
+        (l.active ? '' : ' <span class="muted">(отключена)</span>') + '</td>' +
+        '<td><input type="number" min="0" max="100" value="' + pct + '" style="width:80px" ' +
+        'onchange="locSetBonusPct(' + l.id + ',this.value)"> % от чека</td>' +
+        '<td class="muted">' + example + '</td></tr>';
+    }).join('') || '<tr><td colspan="3" class="muted">Точек пока нет — добавьте ТЦ в разделе «Точки (ТЦ)»</td></tr>';
+  };
   window.locAdd = function () {
     var n = document.getElementById('locNewName'), a = document.getElementById('locNewAddr');
     if (!n || !n.value.trim()) { if (n) n.focus(); return; }
