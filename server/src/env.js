@@ -17,7 +17,9 @@ function required(name, fallback) {
 export const env = {
   databaseUrl: required('DATABASE_URL'),
   jwtSecret: required('JWT_SECRET'),
-  jwtTtl: process.env.JWT_TTL || '12h',
+  // Панель кассы: сессия скользящая (продлевается на /auth/me), поэтому
+  // срок можно держать длинным — иначе сотрудника выбрасывает наутро.
+  jwtTtl: process.env.JWT_TTL || '7d',
   port: Number(process.env.PORT || 4000),
   corsOrigins: (process.env.CORS_ORIGINS || '')
     .split(',')

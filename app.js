@@ -2263,10 +2263,26 @@
       .then(function () {
         SERVER = true; updatePill(); installHooks();
         if (localStorage.getItem(TOKEN_KEY)) {
-          // Уже был вход — проверить токен и гидрировать
-          api('/auth/me').then(function (me) { ME = me; applyRole(); return hydrateAll(); })
+          // Уже был вход — проверить токен и гидрировать.
+          // Экран входа показываем ТОЛЬКО если сервер отверг сам токен:
+          // при 401 api() уже стёр его. Ошибка загрузки данных (сеть моргнула,
+          // сервер перезапускается) не должна выкидывать кассира из аккаунта.
+          api('/auth/me')
+            .then(function (me) {
+              ME = me;
+              // сервер продлил сессию — сохраняем свежий токен
+              if (me && me.token) localStorage.setItem(TOKEN_KEY, me.token);
+              applyRole();
+              return hydrateAll().catch(function (e) {
+                if (typeof toast === 'function') toast('Данные не загрузились: ' + (e.message || 'ошибка сети') + '. Обновите страницу.', true);
+              });
+            })
             .then(function () { updatePill(); flush(); markLive(); })
-            .catch(function () { showLogin(); });
+            .catch(function () {
+              // сюда попадаем, когда /auth/me не прошёл — вход действительно нужен
+              if (!localStorage.getItem(TOKEN_KEY)) showLogin();
+              else { updatePill(); showLogin(); }
+            });
         } else { showLogin(); }
       })
       .catch(function () { SERVER = false; updatePill(); }); // сервера нет — демо-режим
