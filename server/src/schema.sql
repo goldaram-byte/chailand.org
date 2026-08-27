@@ -499,3 +499,13 @@ ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS pass_type_id bigint REFERENCES p
 -- (отчёты по сменам оставались пустыми). Выдаём право, если его ещё нет.
 UPDATE roles SET permissions = permissions || '["shifts"]'::jsonb
  WHERE code = 'cashier' AND NOT (permissions ? 'shifts') AND NOT (permissions ? '*');
+
+-- Фискализация по умолчанию выключена: касса не пробивает чеки и не рисует
+-- ненастоящие номера ФД — сумму вводят вручную на терминале. Существующим
+-- установкам, где стояла эмуляция (то есть настоящую кассу не подключали),
+-- выключаем один раз; выбор владельца в настройках после этого не трогаем.
+UPDATE settings SET value = '"off"'::jsonb
+ WHERE key = 'fiscal_driver' AND value #>> '{}' = 'emulation'
+   AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'fiscal_default_off_applied');
+INSERT INTO settings (key, value) VALUES ('fiscal_default_off_applied', 'true'::jsonb)
+  ON CONFLICT (key) DO NOTHING;

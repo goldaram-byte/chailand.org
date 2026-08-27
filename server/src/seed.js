@@ -83,7 +83,7 @@ const SETTINGS = [
   // KPI сотрудников кассы (цели за период)
   ['kpi_targets', '{"revenue":300000,"checks":300,"avg_check":800}'],
   // Фискализация (54-ФЗ). Драйвер: emulation | taxcom (ОФД Такском, касса Ferma).
-  ['fiscal_driver', '"emulation"'],
+  ['fiscal_driver', '"off"'],
   ['taxcom_ferma_url', '"https://ferma.ofd.ru"'],
   ['taxcom_login', '""'],
   ['taxcom_password', '""'],

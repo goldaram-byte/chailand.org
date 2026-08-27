@@ -142,7 +142,8 @@
       if (settings.holidays) CFG.holidays = settings.holidays;
       // Фискализация: 'emulation' (по умолчанию) | 'shtrih' (печать на кассе через
       // локальный HTTP-драйвер Штрих-М) | 'taxcom' (облачный ОФД, печатает сервер).
-      window.FISCAL_DRIVER = settings.fiscal_driver || 'emulation';
+      window.FISCAL_DRIVER = settings.fiscal_driver || 'off';
+      if (window.renderFiscalMode) window.renderFiscalMode();
       window.SHTRIH_URL = settings.shtrih_url || 'http://localhost:5893';
       if (acq) { ACQUIRING.bank = acq.bank || '—'; ACQUIRING.mode = acq.mode; ACQUIRING.connected = !!acq.connected; ACQUIRING.tid = acq.terminal_id || ''; ACQUIRING.merchant = acq.merchant_id || ''; }
 
@@ -489,6 +490,33 @@
         api('/clients/' + id, { method: 'DELETE' }).then(drop)
           .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
       } else drop();
+    };
+
+    // --- Режим фискализации ---
+    var FISCAL_HINT = {
+      off: 'Чеки не пробиваются и в ОФД не уходят. Продажи, смены и отчёты считаются как обычно.',
+      shtrih: 'Чек печатает касса Штрих-М по локальному адресу драйвера.',
+      taxcom: 'Чек уходит в облачную кассу Такском — нужны реквизиты ОФД.',
+      emulation: 'Учебный режим: номера ФД выдуманные, в налоговую ничего не уходит.',
+    };
+    window.renderFiscalMode = function () {
+      var sel = document.getElementById('setFiscalDriver');
+      var hint = document.getElementById('fiscalHint');
+      var cur = window.FISCAL_DRIVER || 'off';
+      if (sel) sel.value = cur;
+      if (hint) hint.textContent = FISCAL_HINT[cur] || '';
+    };
+    window.saveFiscalDriver = function (v) {
+      api('/settings', { method: 'PUT', body: { fiscal_driver: v } })
+        .then(function () {
+          window.FISCAL_DRIVER = v;
+          window.renderFiscalMode();
+          if (typeof toast === 'function') {
+            toast(v === 'off' ? 'Фискализация отключена — сумму пробиваем на терминале вручную'
+                              : 'Режим фискализации: ' + v);
+          }
+        })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
     };
 
     // --- Правка карточки клиента ---
@@ -865,6 +893,7 @@
         if (name === 'passes' && window.renderPassTypes) window.renderPassTypes();
         // проценты списания бонусов по ТЦ — на вкладке «Бонусы»
         if (name === 'loyalty' && window.renderBonusLocs) window.renderBonusLocs();
+        if (name === 'acquiring' && window.renderFiscalMode) window.renderFiscalMode();
         return r;
       };
     }

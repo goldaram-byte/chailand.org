@@ -9,7 +9,10 @@
 //     как только появляется связь.
 //
 // Активный драйвер выбирается настройкой settings.fiscal_driver:
-//   'emulation' (по умолчанию) | 'taxcom' (ОФД Такском, облачная касса Ferma).
+//   'off' (по умолчанию) — фискализация выключена: чеки не пробиваются и не
+//        уходят в ОФД, кассир пробивает сумму вручную на своём терминале;
+//   'emulation' — учебный режим с ненастоящими номерами ФД;
+//   'taxcom' (ОФД Такском, облачная касса Ferma) | 'shtrih' (ККТ Штрих-М).
 import { q, q1 } from '../db.js';
 
 /**
@@ -170,19 +173,29 @@ const shtrihDriver = stubDriver('shtrih');
 
 const DRIVERS = {
   emulation: () => emulationDriver,
+  off: () => null, // фискализация выключена — см. fiscalize()
   taxcom: () => taxcomDriver,
   shtrih: () => shtrihDriver,
   atol: () => stubDriver('atol'),
 };
 
-async function resolveDriver() {
+export async function fiscalDriverName() {
   const row = await q1(`SELECT value FROM settings WHERE key = 'fiscal_driver'`);
-  let name = 'emulation';
-  if (row?.value != null) {
-    name = typeof row.value === 'string' ? row.value.replace(/^"|"$/g, '') : row.value;
-  }
-  const make = DRIVERS[name];
-  return make ? make() : emulationDriver;
+  if (row?.value == null) return 'off';
+  const name = typeof row.value === 'string' ? row.value.replace(/^"|"$/g, '') : row.value;
+  return DRIVERS[name] ? name : 'off';
+}
+
+/** Выключена ли фискализация целиком. */
+export async function fiscalIsOff() {
+  return (await fiscalDriverName()) === 'off';
+}
+
+async function resolveDriver() {
+  const make = DRIVERS[await fiscalDriverName()];
+  const drv = make ? make() : null;
+  if (!drv) throw new Error('Фискализация отключена в настройках');
+  return drv;
 }
 
 // Пауза перед следующей попыткой: 30с, 1м, 2м, 5м (потолок).
@@ -245,6 +258,9 @@ export async function fiscalizeManual({ sale, kind = 'sale', driver = 'shtrih', 
  * отправлен фоновым воркером, как только появится связь с ОФД.
  */
 export async function fiscalize({ sale, items, payments, kind = 'sale' }) {
+  // Фискализация выключена: чек не пробивается и в очередь не ставится —
+  // сумму кассир вводит на своём терминале вручную.
+  if (await fiscalIsOff()) return { status: 'off' };
   const doc = await q1(
     `INSERT INTO fiscal_docs (sale_id, kind, status, driver, payload, next_attempt_at)
      VALUES ($1,$2,'queued','pending',$3, now()) RETURNING *`,
@@ -268,6 +284,7 @@ let flushing = false;
  */
 export async function flushFiscalQueue({ limit = 50 } = {}) {
   if (flushing) return { skipped: true };
+  if (await fiscalIsOff()) return { skipped: true, off: true };
   flushing = true;
   let registered = 0, failed = 0;
   try {
