@@ -1694,8 +1694,11 @@
         var pn = document.getElementById('pbName'); if (pn) pn.value = '';
         var pp = document.getElementById('pbPhone'); if (pp) pp.value = '';
         if (typeof renderPartyForm === 'function') renderPartyForm();
-        if (typeof toast === 'function') toast('Праздник забронирован 🎉 Предбронь в журнале мероприятий');
-        return window.loadBookings();
+        if (typeof closeNewBooking === 'function') closeNewBooking();
+        if (typeof toast === 'function') toast('Забронировано 🎉 Предбронь в журнале');
+        return window.loadBookings().then(function () {
+          if (typeof renderJournal === 'function') renderJournal();
+        });
       }).catch(bkErr);
     };
 
