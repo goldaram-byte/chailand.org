@@ -12,8 +12,9 @@ posRouter.get(
   '/shift/current',
   ah(async (req, res) => {
     const shift = await q1(
-      `SELECT s.*, u.full_name AS cashier_name FROM cash_shifts s
+      `SELECT s.*, u.full_name AS cashier_name, l.name AS location_name FROM cash_shifts s
          JOIN users u ON u.id = s.cashier_id
+         LEFT JOIN locations l ON l.id = s.location_id
         WHERE s.closed_at IS NULL AND s.cashier_id=$1
         ORDER BY s.opened_at DESC LIMIT 1`,
       [req.user.id]
@@ -26,9 +27,24 @@ posRouter.post(
   '/shift/open',
   requirePerm('shifts'),
   ah(async (req, res) => {
-    const existing = await q1(`SELECT id FROM cash_shifts WHERE closed_at IS NULL AND cashier_id=$1`, [req.user.id]);
-    if (existing) return res.status(409).json({ error: 'Смена уже открыта' });
     const { cash_start = 0, note, location_id = null } = req.body || {};
+    // У сотрудника может быть только одна открытая смена. Если она открыта в
+    // другом ТЦ — здесь работать нельзя, пока ту не закроют: иначе выручка
+    // одной точки попадёт в смену другой.
+    const existing = await q1(
+      `SELECT s.*, l.name AS location_name FROM cash_shifts s
+         LEFT JOIN locations l ON l.id = s.location_id
+        WHERE s.closed_at IS NULL AND s.cashier_id=$1`,
+      [req.user.id]
+    );
+    if (existing) {
+      const same = String(existing.location_id || '') === String(location_id || '');
+      if (same) return res.json({ ...existing, already_open: true }); // продолжаем начатую смену
+      return res.status(409).json({
+        error: 'У вас уже открыта смена в «' + (existing.location_name || 'другом ТЦ') +
+               '». Закройте её там, чтобы открыть смену здесь.',
+      });
+    }
     const row = await q1('INSERT INTO cash_shifts (cashier_id, cash_start, note, location_id) VALUES ($1,$2,$3,$4) RETURNING *', [
       req.user.id,
       cash_start,

@@ -16,6 +16,7 @@
 
   var TOKEN_KEY = 'gab_token';
   var ME = null;
+  var SERVER_SHIFT = null; // открытая смена с сервера (у неё своя точка)
   var ONLINE = navigator.onLine;
   var SERVER = false; // доступен ли backend
   var DASH_USERS = []; // кассиры для фильтра дашборда
@@ -123,7 +124,9 @@
       (ME && ME.role === 'cashier') ? Promise.resolve(null) : api('/settings/acquiring').catch(function () { return null; }),
       api('/reports/cashiers').catch(function () { return []; }),
       api('/passes/types').catch(function () { return []; }),
+      api('/pos/shift/current').catch(function () { return null; }),
     ]).then(function (res) {
+      restoreShift(res[8]);
       var cat = res[0], settings = res[1], cl = res[2], ld = res[3], sl = res[4], acq = res[5];
       DASH_USERS = (res[6] || []).map(function (u) { return { id: u.id, name: u.full_name }; });
       // Абонементы — отдельная группа в кассе
@@ -333,6 +336,41 @@
         pm.querySelectorAll('button').forEach(function (b) { if (/setRole/.test(b.getAttribute('onclick') || '')) b.style.display = 'none'; });
         var out = document.createElement('button'); out.textContent = '🚪 Выйти'; out.onclick = logout; pm.appendChild(out);
       }
+    }
+  }
+
+  // Открытая смена переживает перезагрузку страницы. Если она открыта в другом
+  // ТЦ — здесь смену не показываем: работать в этой точке нельзя, пока ту не
+  // закроют. Так выручка не попадёт в смену чужого ТЦ.
+  function restoreShift(sh) {
+    SERVER_SHIFT = sh || null;
+    if (typeof shift === 'undefined') return;
+    var d = deviceLoc();
+    var here = sh && (!sh.location_id || !d || String(sh.location_id) === String(d));
+    if (sh && here) {
+      shift = { cashStart: Number(sh.cash_start) || 0, cashier: (ME && ME.name) || sh.cashier_name || '' };
+      safe(function () {
+        var el = function (id) { return document.getElementById(id); };
+        if (el('shiftClosed')) el('shiftClosed').style.display = 'none';
+        if (el('posWork')) el('posWork').style.display = 'grid';
+        if (el('salesCard')) el('salesCard').hidden = false;
+        if (el('shiftDot')) el('shiftDot').classList.add('on');
+        if (el('shiftLbl')) el('shiftLbl').textContent = 'Смена: ' + shift.cashier + ' · размен ' + fmtNum(shift.cashStart);
+      });
+    } else {
+      shift = null;
+      safe(function () {
+        var el = function (id) { return document.getElementById(id); };
+        if (el('shiftClosed')) el('shiftClosed').style.display = 'block';
+        if (el('posWork')) el('posWork').style.display = 'none';
+        if (el('salesCard')) el('salesCard').hidden = true;
+        if (el('shiftDot')) el('shiftDot').classList.remove('on');
+        if (el('shiftLbl')) {
+          el('shiftLbl').textContent = sh
+            ? 'Смена открыта в «' + (sh.location_name || 'другом ТЦ') + '»'
+            : 'Смена закрыта';
+        }
+      });
     }
   }
 
@@ -2127,19 +2165,26 @@
     // Открытие/закрытие смены — на сервер.
     // Ошибку показываем: молчаливый catch раньше прятал отказ сервера, и касса
     // работала «без смены» — продажи не попадали ни в один сменный отчёт.
-    var shiftErr = function (e) {
-      if (typeof toast === 'function') toast('Смена не открыта на сервере: ' + (e.message || 'ошибка'), true);
-    };
-    wrap('openShift', function () {
+    // Смену рисуем ТОЛЬКО после того, как сервер её подтвердил. Иначе кассир
+    // видел открытую смену там, где сервер её не открыл (например, она открыта
+    // в другом ТЦ), и продавал «мимо» смены.
+    var _openShift = window.openShift;
+    window.openShift = function () {
+      if (!SERVER) return _openShift.apply(this, arguments);
+      var self = this, args = arguments;
       var cs = +(document.getElementById('cashStart') || {}).value || 0;
-      api('/pos/shift/open', { method: 'POST', body: { cash_start: cs, location_id: deviceLoc() } })
+      return api('/pos/shift/open', { method: 'POST', body: { cash_start: cs, location_id: deviceLoc() } })
+        .then(function (sh) {
+          SERVER_SHIFT = sh;
+          _openShift.apply(self, args);
+          if (sh && sh.already_open && typeof toast === 'function') toast('Продолжаем начатую смену');
+        })
         .catch(function (e) {
-          // уже открытая смена — не ошибка для кассира, просто продолжаем в ней
-          if (/уже открыта/i.test(e.message || '')) return;
-          shiftErr(e);
+          if (typeof toast === 'function') toast(e.message || 'Смена не открыта', true);
         });
-    });
+    };
     wrap('closeShift', function () {
+      SERVER_SHIFT = null;
       api('/pos/shift/close', { method: 'POST', body: {} }).catch(function (e) {
         if (/Открытой смены нет/i.test(e.message || '')) return;
         if (typeof toast === 'function') toast('Смена не закрыта на сервере: ' + (e.message || 'ошибка'), true);
