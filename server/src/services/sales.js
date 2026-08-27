@@ -17,6 +17,16 @@ async function cashbackPercent() {
   return Number(row?.value ?? 5);
 }
 
+// Кэшбэк за праздники — своя настройка. Пустая или не заданная означает
+// «как в кассе», чтобы включение раздела ничего не меняло само собой.
+export async function bookingCashbackPercent() {
+  const row = await q1(`SELECT value FROM settings WHERE key='cashback_booking'`);
+  const v = row?.value;
+  if (v == null || v === '' ) return cashbackPercent();
+  const n = Number(v);
+  return Number.isFinite(n) ? n : cashbackPercent();
+}
+
 // Реферальная программа: пригласившему начисляется процент от первой покупки
 // приглашённого. Читаем флаг и процент.
 async function referralReward() {
@@ -58,6 +68,7 @@ export async function createSale(user, body) {
     comment,
     location_id = null,
     fiscal: fiscalReceipt = null, // чек, уже пробитый локально на кассе (Штрих-М)
+    cashback_percent = null,      // свой процент кэшбэка (например, за праздник)
   } = body || {};
 
   if (!Array.isArray(items) || items.length === 0) throw new ApiError(400, 'Чек пуст');
@@ -102,7 +113,7 @@ export async function createSale(user, body) {
     }
   }
 
-  const percent = await cashbackPercent();
+  const percent = cashback_percent == null ? await cashbackPercent() : Number(cashback_percent);
   const bonusEarned = client_id ? Math.floor((total - Number(bonus_used)) * (percent / 100)) : 0;
   const payMethod =
     method ||
