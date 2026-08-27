@@ -13,6 +13,7 @@
     "migrate": "node src/migrate.js",
     "seed": "node src/seed.js",
     "seed:history": "node src/seed-history.js",
+    "reset:pos": "node src/reset-pos.js",
     "reset": "node src/migrate.js && node src/seed.js && node src/seed-history.js"
   },
   "dependencies": {

@@ -493,3 +493,9 @@ UPDATE clients SET referral_code = '9' || lpad(id::text, 5, '0')
 -- Абонемент продаётся строкой чека, как билет или товар: помним, какой вид
 -- абонемента стоял в позиции, чтобы возврат чека аннулировал выданное.
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS pass_type_id bigint REFERENCES pass_types(id);
+
+-- Открытие и закрытие смены — работа кассира, но права 'shifts' у роли не было:
+-- сервер отвечал 403, смена не создавалась, и продажи писались без смены
+-- (отчёты по сменам оставались пустыми). Выдаём право, если его ещё нет.
+UPDATE roles SET permissions = permissions || '["shifts"]'::jsonb
+ WHERE code = 'cashier' AND NOT (permissions ? 'shifts') AND NOT (permissions ? '*');

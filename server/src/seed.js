@@ -24,7 +24,7 @@ const ROLES = [
     permissions: ['pos', 'returns', 'shifts', 'clients', 'crm', 'bookings', 'reports', 'catalog', 'skud', 'news'],
     sort: 2,
   },
-  { code: 'cashier', name: 'Кассир', permissions: ['pos', 'returns', 'clients', 'crm', 'bookings', 'reports'], sort: 3 },
+  { code: 'cashier', name: 'Кассир', permissions: ['pos', 'returns', 'shifts', 'clients', 'crm', 'bookings', 'reports'], sort: 3 },
 ];
 
 const GROUPS = [
