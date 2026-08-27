@@ -509,3 +509,13 @@ UPDATE settings SET value = '"off"'::jsonb
    AND NOT EXISTS (SELECT 1 FROM settings WHERE key = 'fiscal_default_off_applied');
 INSERT INTO settings (key, value) VALUES ('fiscal_default_off_applied', 'true'::jsonb)
   ON CONFLICT (key) DO NOTHING;
+
+-- Абонемент может работать сразу в нескольких ТЦ: список точек, где его
+-- продают и где по нему пускают. Пустой список — во всех точках.
+-- Старая одиночная привязка location_id переносится сюда.
+ALTER TABLE pass_types ADD COLUMN IF NOT EXISTS location_ids bigint[] NOT NULL DEFAULT '{}';
+UPDATE pass_types SET location_ids = ARRAY[location_id]
+ WHERE location_id IS NOT NULL AND location_ids = '{}';
+-- Проданный абонемент хранит свой список точек: поменяли настройку вида —
+-- уже проданные карты работают там, где их продали.
+ALTER TABLE passes ADD COLUMN IF NOT EXISTS location_ids bigint[] NOT NULL DEFAULT '{}';

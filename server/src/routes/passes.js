@@ -13,6 +13,23 @@ export const passesRouter = Router();
 passesRouter.use(requireAuth);
 
 const canEditTypes = requirePerm('catalog');
+
+// Список ТЦ позиции: принимаем и новый location_ids, и старый location_id.
+// Пустой список = абонемент работает во всех точках.
+function locIdsFrom(body) {
+  if (Array.isArray(body?.location_ids)) {
+    return body.location_ids.map(Number).filter(Boolean);
+  }
+  if (body && body.location_id) return [Number(body.location_id)];
+  if (body && Object.prototype.hasOwnProperty.call(body, 'location_id')) return [];
+  return null; // поле не передали — не трогаем
+}
+// Работает ли абонемент в этой точке
+function passWorksIn(ids, locId) {
+  if (!Array.isArray(ids) || ids.length === 0) return true; // все ТЦ
+  if (!locId) return false;
+  return ids.map(Number).includes(Number(locId));
+}
 const canSell = requirePerm('pos');
 
 // ------------------------------ виды абонементов ---------------------------
@@ -27,12 +44,13 @@ passesRouter.post(
   '/types',
   canEditTypes,
   ah(async (req, res) => {
-    const { name, price = 0, visits = null, valid_days = 30, location_id = null } = req.body || {};
+    const { name, price = 0, visits = null, valid_days = 30 } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Укажите название абонемента' });
+    const locIds = locIdsFrom(req.body) || [];
     const row = await q1(
-      `INSERT INTO pass_types (name, price, visits, valid_days, location_id)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [String(name).trim(), price, visits || null, valid_days || 30, location_id || null]
+      `INSERT INTO pass_types (name, price, visits, valid_days, location_id, location_ids)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [String(name).trim(), price, visits || null, valid_days || 30, locIds[0] || null, locIds]
     );
     await audit(req, 'pass_type.create', { entity: 'pass_type', entityId: row.id });
     res.json(row);
@@ -43,9 +61,10 @@ passesRouter.put(
   '/types/:id',
   canEditTypes,
   ah(async (req, res) => {
-    const { name, price, visits, valid_days, location_id, is_active } = req.body || {};
+    const { name, price, visits, valid_days, is_active } = req.body || {};
     const visitsProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'visits');
-    const locProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'location_id');
+    const locIds = locIdsFrom(req.body);
+    const locProvided = locIds !== null;
     const row = await q1(
       `UPDATE pass_types SET
          name = COALESCE($2, name),
@@ -53,9 +72,11 @@ passesRouter.put(
          visits = CASE WHEN $4::bool THEN $5 ELSE visits END,
          valid_days = COALESCE($6, valid_days),
          location_id = CASE WHEN $7::bool THEN $8 ELSE location_id END,
-         is_active = COALESCE($9, is_active)
+         location_ids = CASE WHEN $7::bool THEN $9::bigint[] ELSE location_ids END,
+         is_active = COALESCE($10, is_active)
        WHERE id=$1 RETURNING *`,
-      [req.params.id, name, price, visitsProvided, visits || null, valid_days, locProvided, location_id || null, is_active]
+      [req.params.id, name, price, visitsProvided, visits || null, valid_days,
+       locProvided, (locIds && locIds[0]) || null, locIds || [], is_active]
     );
     if (!row) return res.status(404).json({ error: 'Вид абонемента не найден' });
     res.json(row);
@@ -106,12 +127,13 @@ passesRouter.post(
       saleId = sale.id;
     }
 
+    const typeLocs = (type.location_ids || []).map(Number);
     const pass = await q1(
       `INSERT INTO passes (pass_type_id, client_id, name, visits_total, visits_left,
-                           valid_to, sale_id, location_id, sold_by)
-       VALUES ($1,$2,$3,$4,$4, current_date + ($5 || ' days')::interval, $6, $7, $8) RETURNING *`,
+                           valid_to, sale_id, location_id, location_ids, sold_by)
+       VALUES ($1,$2,$3,$4,$4, current_date + ($5 || ' days')::interval, $6, $7, $8, $9) RETURNING *`,
       [type.id, client.id, type.name, type.visits || null, String(type.valid_days || 30), saleId,
-       location_id || type.location_id || null, req.user.id]
+       location_id || typeLocs[0] || null, typeLocs, req.user.id]
     );
     await audit(req, 'pass.sell', { entity: 'pass', entityId: pass.id, meta: { client_id: client.id, type: type.name, fiscal: !!fiscal, sale_id: saleId } });
     res.json({ ...pass, sale_id: saleId, client_name: client.full_name });
@@ -164,6 +186,16 @@ passesRouter.post(
       }
       if (p.status === 'used_up' || (p.visits_left != null && p.visits_left <= 0)) {
         throw Object.assign(new Error('Посещения по абонементу закончились'), { status: 409 });
+      }
+      // Абонемент действует не везде: списать посещение можно только в той
+      // точке, которая указана в его настройках.
+      if (!passWorksIn(p.location_ids, location_id)) {
+        const names = await q(
+          'SELECT name FROM locations WHERE id = ANY($1::bigint[]) ORDER BY sort, id',
+          [p.location_ids]
+        );
+        const where = names.map((l) => l.name).join(', ') || 'другой точке';
+        throw Object.assign(new Error('Абонемент действует только в: ' + where), { status: 409 });
       }
       let left = p.visits_left;
       if (left != null) {

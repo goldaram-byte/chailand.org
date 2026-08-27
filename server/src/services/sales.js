@@ -142,13 +142,14 @@ export async function createSale(user, body) {
       // Абонементы выдаём здесь же: сколько штук в позиции — столько и карт.
       if (it.pass_type_id) {
         const t = passTypes[it.pass_type_id];
+        const tLocs = (t.location_ids || []).map(Number);
         for (let i = 0; i < Number(it.qty || 1); i++) {
           await cq(
             `INSERT INTO passes (pass_type_id, client_id, name, visits_total, visits_left,
-                                 valid_to, sale_id, location_id, sold_by)
-             VALUES ($1,$2,$3,$4,$4, current_date + ($5 || ' days')::interval, $6, $7, $8)`,
+                                 valid_to, sale_id, location_id, location_ids, sold_by)
+             VALUES ($1,$2,$3,$4,$4, current_date + ($5 || ' days')::interval, $6, $7, $8, $9)`,
             [t.id, client_id, t.name, t.visits || null, String(t.valid_days || 30),
-             sale.id, saleLocation || t.location_id || null, user.id]
+             sale.id, saleLocation || tLocs[0] || null, tLocs, user.id]
           );
         }
       }

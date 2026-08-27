@@ -825,16 +825,16 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
     </div>
     <div class="card set-pane" id="s-passes" hidden>
       <h3>🎫 Абонементы в парк</h3>
-      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Виды абонементов, которые продаёт касса. Абонемент оформляется на карту клиента: при входе кассир сканирует карту и списывает посещение. Оставьте «Посещений» пустым — получится безлимит на срок действия.</div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Виды абонементов, которые продаёт касса. Абонемент оформляется на карту клиента: при входе кассир сканирует карту и списывает посещение. «Сколько списаний» — сколько раз по нему можно пройти; оставьте пустым, и получится безлимит на срок действия. «Где действует» — в каких ТЦ его продают и пускают по нему; можно отметить несколько точек, пусто — работает во всех.</div>
       <div class="frm" style="grid-template-columns:1.4fr 110px 120px 110px 130px auto;margin-bottom:14px">
         <div><label>Название</label><input id="ptName" placeholder="напр. 5 посещений"></div>
         <div><label>Цена, ₽</label><input type="number" id="ptPrice" min="0" placeholder="0"></div>
-        <div><label>Посещений</label><input type="number" id="ptVisits" min="1" placeholder="безлимит"></div>
+        <div><label>Сколько списаний</label><input type="number" id="ptVisits" min="1" placeholder="безлимит"></div>
         <div><label>Срок, дней</label><input type="number" id="ptDays" min="1" value="30"></div>
-        <div><label>ТЦ</label><select id="ptLoc"><option value="">Все ТЦ</option></select></div>
+        <div><label>Где действует</label><span id="ptLocPick"></span></div>
         <div style="align-self:end"><button class="btn btn-green" onclick="passTypeAdd()">+ Добавить</button></div>
       </div>
-      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Цена, ₽</th><th>Посещений</th><th>Срок, дней</th><th>ТЦ</th><th>Статус</th><th></th></tr></thead><tbody id="passTypesTbl"></tbody></table></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Цена, ₽</th><th>Сколько списаний</th><th>Срок, дней</th><th>Где действует</th><th>Статус</th><th></th></tr></thead><tbody id="passTypesTbl"></tbody></table></div>
     </div>
     <div class="card set-pane" id="s-acquiring" hidden>
       <h3>🧾 Фискализация чеков</h3>
@@ -1289,10 +1289,13 @@ const dayFits = (day, kind) => day==='any' || day===kind || (day==='workweek' &&
 function setPosGroup(id){ posGroup = id; renderTariffs(); }
 // Абонементы показываются в кассе отдельной группой (заполняется с сервера)
 let PASS_TYPES = [];
-// абонемент доступен в текущем ТЦ, если он не привязан к точке или привязан к ней
+// абонемент доступен в текущем ТЦ, если список точек пуст (все ТЦ) или
+// текущая точка в нём есть
 function passInLoc(t){
+  const ids = (t.locs||[]).map(Number);
+  if(!ids.length) return true;
   const d = (typeof deviceLoc==='function') ? deviceLoc() : null;
-  return !d || !t.loc || +t.loc === +d;
+  return !d ? true : ids.includes(+d);
 }
 function posPassList(){ return (window.PASS_TYPES||[]).filter(passInLoc); }
 function renderTariffs(){

@@ -128,7 +128,8 @@
       DASH_USERS = (res[6] || []).map(function (u) { return { id: u.id, name: u.full_name }; });
       // Абонементы — отдельная группа в кассе
       window.PASS_TYPES = (res[7] || []).filter(function (t) { return t.is_active; }).map(function (t) {
-        return { id: t.id, name: t.name, price: Number(t.price), visits: t.visits, days: t.valid_days, loc: t.location_id || null };
+        return { id: t.id, name: t.name, price: Number(t.price), visits: t.visits, days: t.valid_days,
+                 locs: (t.location_ids || []).map(Number) };
       });
 
       GROUPS = cat.groups.map(function (g) { return { id: g.id, name: g.name, kind: g.kind || 'goods' }; });
@@ -1779,13 +1780,11 @@
       var tb = document.getElementById('passTypesTbl');
       if (!SERVER) { if (tb) tb.innerHTML = '<tr><td colspan="7" class="muted">Доступно при работе с сервером</td></tr>'; return; }
       api('/passes/types').then(function (list) {
-        var locOpts = function (cur) {
-          return '<option value="">Все ТЦ</option>' + LOCS.map(function (l) {
-            return '<option value="' + l.id + '"' + (Number(cur) === l.id ? ' selected' : '') + '>' + pEsc(l.name) + '</option>';
-          }).join('');
-        };
-        var ptLoc = document.getElementById('ptLoc');
-        if (ptLoc && !ptLoc.dataset.filled) { ptLoc.innerHTML = locOpts(null); ptLoc.dataset.filled = '1'; }
+        // выбор ТЦ для нового вида абонемента: id 0 — «черновик» формы
+        var ptPick = document.getElementById('ptLocPick');
+        if (ptPick && typeof locSelHtml === 'function') {
+          ptPick.innerHTML = locSelHtml('newpass', 0, window.NEW_PASS_LOCS || []);
+        }
         if (!tb) return;
         tb.innerHTML = (list || []).map(function (t) {
           return '<tr>' +
@@ -1793,7 +1792,9 @@
             '<td><input type="number" min="0" value="' + Number(t.price) + '" style="width:90px" onchange="passTypeUpd(' + t.id + ',\'price\',this.value)"></td>' +
             '<td><input type="number" min="1" value="' + (t.visits == null ? '' : t.visits) + '" placeholder="безлимит" style="width:90px" onchange="passTypeUpd(' + t.id + ',\'visits\',this.value)"></td>' +
             '<td><input type="number" min="1" value="' + t.valid_days + '" style="width:80px" onchange="passTypeUpd(' + t.id + ',\'valid_days\',this.value)"></td>' +
-            '<td><select style="width:120px" onchange="passTypeUpd(' + t.id + ',\'location_id\',this.value)">' + locOpts(t.location_id) + '</select></td>' +
+            '<td>' + (typeof locSelHtml === 'function'
+              ? locSelHtml('passtype', t.id, (t.location_ids || []).map(Number))
+              : '<span class="muted">—</span>') + '</td>' +
             '<td>' + (t.is_active ? '<span style="color:var(--green);font-weight:700">продаётся</span>' : '<span class="muted">отключён</span>') + '</td>' +
             '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="passTypeUpd(' + t.id + ',\'is_active\',' + (t.is_active ? 'false' : 'true') + ')">' + (t.is_active ? 'Откл.' : 'Вкл.') + '</button> ' +
             '<button class="btn btn-ghost btn-sm" onclick="passTypeDel(' + t.id + ')">✕</button></td></tr>';
@@ -1803,18 +1804,45 @@
     window.passTypeAdd = function () {
       if (!SERVER) return;
       var n = document.getElementById('ptName'), p = document.getElementById('ptPrice'),
-          v = document.getElementById('ptVisits'), d = document.getElementById('ptDays'), l = document.getElementById('ptLoc');
+          v = document.getElementById('ptVisits'), d = document.getElementById('ptDays');
       if (!n.value.trim()) { if (typeof toast === 'function') toast('Укажите название абонемента', true); return; }
       api('/passes/types', { method: 'POST', body: {
         name: n.value.trim(), price: +p.value || 0,
         visits: v.value ? +v.value : null, valid_days: +d.value || 30,
-        location_id: l.value ? +l.value : null,
+        location_ids: window.NEW_PASS_LOCS || [],
       } }).then(function () {
         n.value = ''; p.value = ''; v.value = '';
+        window.NEW_PASS_LOCS = [];
         window.renderPassTypes();
         if (typeof toast === 'function') toast('Вид абонемента добавлен');
       }).catch(pErr);
     };
+    // выбор нескольких ТЦ для вида абонемента — через общий пикер
+    var _saveLocSelPass = window.saveLocSel;
+    window.saveLocSel = function (kind, id, ids) {
+      if (kind === 'newpass') {
+        window.NEW_PASS_LOCS = ids || [];
+        var box = document.getElementById('ptLocPick');
+        if (box && typeof locSelHtml === 'function') box.innerHTML = locSelHtml('newpass', 0, window.NEW_PASS_LOCS);
+        return;
+      }
+      if (kind === 'passtype') {
+        if (!SERVER) return;
+        api('/passes/types/' + id, { method: 'PUT', body: { location_ids: ids } })
+          .then(function () {
+            window.renderPassTypes();
+            if (typeof toast === 'function') {
+              toast(ids && ids.length
+                ? 'Абонемент действует в: ' + locsLabel(ids)
+                : 'Абонемент действует во всех ТЦ');
+            }
+          })
+          .catch(pErr);
+        return;
+      }
+      return _saveLocSelPass.apply(this, arguments);
+    };
+
     window.passTypeUpd = function (id, f, val) {
       var body = {};
       if (f === 'visits') body.visits = val === '' ? null : +val;
@@ -1924,7 +1952,10 @@
     window.openPassSell = function (clientId, containerId, inCard) {
       api('/passes/types').then(function (list) {
         var d = (typeof deviceLoc === 'function') ? deviceLoc() : null;
-        var types = (list || []).filter(function (t) { return t.is_active && (!d || !t.location_id || +t.location_id === +d); });
+        var types = (list || []).filter(function (t) {
+          var ids = (t.location_ids || []).map(Number);
+          return t.is_active && (!ids.length || !d || ids.indexOf(Number(d)) >= 0);
+        });
         if (!types.length) { if (typeof toast === 'function') toast('Нет видов абонементов — добавьте в Настройках → Абонементы', true); return; }
         PASS_SELL = { clientId: clientId, containerId: containerId, inCard: !!inCard, typeId: types[0].id, types: types };
         var body = document.getElementById('passSellBody');
