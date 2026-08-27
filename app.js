@@ -139,7 +139,11 @@
       TARIFFS = cat.products.map(function (p) {
         return { id: p.id, pid: p.id, name: p.name, day: p.day_kind || 'any', price: Number(p.price), doc: p.requires_document, group: p.group_id, loc: p.location_id || null, locs: (p.location_ids || []).map(Number), track: !!p.track_stock, stock: Number(p.stock || 0) };
       });
-      SERVICES = cat.services.map(function (s) { return { id: s.id, name: s.name, price: Number(s.price), options: s.options || '', locs: (s.location_ids || []).map(Number) }; });
+      SERVICES = cat.services.map(function (s) {
+        return { id: s.id, name: s.name, price: Number(s.price), options: s.options || '',
+                 group: s.group_id == null ? null : Number(s.group_id),
+                 locs: (s.location_ids || []).map(Number) };
+      });
       // У комнаты нет своей цены — стоимость праздника складывается из услуг
       ROOMS = cat.rooms.map(function (r) { return { id: r.id, name: r.name, cap: r.capacity, loc: r.location_id || null }; });
 
@@ -741,12 +745,16 @@
     };
 
     // --- Настройки → «Праздники» (услуги): изменения сразу на сервер ---
-    var S_FIELD = { name: 'name', price: 'price', options: 'options' };
+    var S_FIELD = { name: 'name', price: 'price', options: 'options', group: 'group_id' };
     var _updS = window.updS;
     window.updS = function (id, f, v) {
       if (SERVER && S_FIELD[f]) {
         var body = {}; body[S_FIELD[f]] = v;
         api('/catalog/services/' + id, { method: 'PUT', body: body })
+          .then(function () {
+            // Смена группы меняет раскладку по папкам — перерисовать бронирование
+            if (f === 'group' && typeof renderPartyForm === 'function') renderPartyForm();
+          })
           .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
       }
       return _updS ? _updS.apply(this, arguments) : undefined;
@@ -776,11 +784,28 @@
       if (SERVER) {
         api('/catalog/groups/' + id, { method: 'PUT', body: { kind: v } })
           .then(function () { return hydrateAll(); })
-          .then(function () { if (typeof renderSettings === 'function') renderSettings(); })
+          .then(function () {
+            if (typeof renderSettings === 'function') renderSettings();
+            if (typeof renderPartyForm === 'function') renderPartyForm();
+          })
           .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
       }
       return _updGKind ? _updGKind.apply(this, arguments) : undefined;
     };
+    window.addPartyGroup = function () {
+      var name = prompt('Название группы услуг (например, «Аниматоры», «Шоу-программы»):');
+      if (!name || !name.trim()) return;
+      if (!SERVER) { GROUPS.push({ id: Date.now(), name: name.trim(), kind: 'party' }); renderSettings(); return; }
+      api('/catalog/groups', { method: 'POST', body: { name: name.trim(), kind: 'party' } })
+        .then(function () { return hydrateAll(); })
+        .then(function () {
+          if (typeof renderSettings === 'function') renderSettings();
+          if (typeof renderPartyForm === 'function') renderPartyForm();
+          if (typeof toast === 'function') toast('Группа праздников создана: ' + name.trim());
+        })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+
     window.addTicketGroup = function () {
       var name = prompt('Название группы билетов (например «Будни», «Выходные», «Льготные»):');
       if (!name || !name.trim()) return;
@@ -807,7 +832,11 @@
       if (cnt && !confirm('В группе ' + cnt + ' позиц. Они будут перенесены в другую группу. Удалить группу?')) return;
       api('/catalog/groups/' + id, { method: 'DELETE' })
         .then(function () { return hydrateAll(); })
-        .then(function () { if (typeof renderSettings === 'function') renderSettings(); if (typeof toast === 'function') toast('Группа удалена'); })
+        .then(function () {
+          if (typeof renderSettings === 'function') renderSettings();
+          if (typeof renderPartyForm === 'function') renderPartyForm();
+          if (typeof toast === 'function') toast('Группа удалена');
+        })
         .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
     };
 
@@ -2327,6 +2356,7 @@
       if (SERVER) {
         api('/catalog/groups/' + id, { method: 'PUT', body: { name: v } })
           .then(function () { return hydrateAll(); })
+          .then(function () { if (typeof renderPartyForm === 'function') renderPartyForm(); })
           .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
       }
       return _updG ? _updG.apply(this, arguments) : undefined;

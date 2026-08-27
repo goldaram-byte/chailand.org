@@ -96,6 +96,9 @@ catalogRouter.delete(
     await tx(async ({ q: cq }) => {
       // Позиции группы не теряем — переносим в первую оставшуюся группу
       await cq('UPDATE products SET group_id=$2 WHERE group_id=$1', [req.params.id, other.id]);
+      // Услуги праздника переносить в чужую группу нельзя (она может быть
+      // билетной) — снимаем группу, при бронировании они попадут в «Прочее».
+      await cq('UPDATE services SET group_id=NULL WHERE group_id=$1', [req.params.id]);
       // В истории продаж группу обнуляем (сами строки продаж не трогаем)
       await cq('UPDATE sale_items SET group_id=NULL WHERE group_id=$1', [req.params.id]);
       await cq('DELETE FROM product_groups WHERE id=$1', [req.params.id]);
@@ -170,11 +173,11 @@ catalogRouter.post(
   '/services',
   canEdit,
   ah(async (req, res) => {
-    const { name, price = 0, unit = 'шт', options = null } = req.body || {};
+    const { name, price = 0, unit = 'шт', options = null, group_id = null } = req.body || {};
     const locIds = locIdsFrom(req.body);
     const row = await q1(
-      'INSERT INTO services (name, price, unit, options, location_id, location_ids) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-      [name, price, unit, options, locIds[0] || null, locIds]
+      'INSERT INTO services (name, price, unit, options, group_id, location_id, location_ids) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+      [name, price, unit, options, group_id || null, locIds[0] || null, locIds]
     );
     res.json(row);
   })
@@ -198,10 +201,12 @@ catalogRouter.put(
          options = CASE WHEN $5::bool THEN $6 ELSE options END,
          is_active = COALESCE($7, is_active),
          location_ids = CASE WHEN $8::bool THEN $9::bigint[] ELSE location_ids END,
-         location_id = CASE WHEN $8::bool THEN $10 ELSE location_id END
+         location_id = CASE WHEN $8::bool THEN $10 ELSE location_id END,
+         group_id = CASE WHEN $11::bool THEN $12 ELSE group_id END
        WHERE id=$1 RETURNING *`,
       [req.params.id, name, price, unit, optProvided, options || null, is_active,
-       locProvided, locIds, locIds[0] || null]
+       locProvided, locIds, locIds[0] || null,
+       Object.prototype.hasOwnProperty.call(b, 'group_id'), b.group_id || null]
     );
     res.json(row);
   })
