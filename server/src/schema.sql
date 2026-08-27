@@ -516,6 +516,8 @@ INSERT INTO settings (key, value) VALUES ('fiscal_default_off_applied', 'true'::
 ALTER TABLE pass_types ADD COLUMN IF NOT EXISTS location_ids bigint[] NOT NULL DEFAULT '{}';
 UPDATE pass_types SET location_ids = ARRAY[location_id]
  WHERE location_id IS NOT NULL AND location_ids = '{}';
--- Проданный абонемент хранит свой список точек: поменяли настройку вида —
--- уже проданные карты работают там, где их продали.
+-- Где абонемент действует, решает настройка вида: купили в одном ТЦ — ходить
+-- можно во всех, которым дали доступ, и открытая позже точка тоже начинает
+-- работать. Копия списка в самом абонементе нужна только как запасная, если
+-- вид абонемента удалили.
 ALTER TABLE passes ADD COLUMN IF NOT EXISTS location_ids bigint[] NOT NULL DEFAULT '{}';

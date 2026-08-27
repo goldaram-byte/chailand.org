@@ -284,11 +284,15 @@ clientAppRouter.get(
     await q(`UPDATE passes SET status='expired' WHERE client_id=$1 AND status='active' AND valid_to < current_date`, [req.client.id]);
     const rows = await q(
       `SELECT p.id, p.name, p.status, p.visits_total, p.visits_left, p.valid_from, p.valid_to,
-              l.name AS location_name,
+              -- Где абонемент действует сейчас (а не где его купили): список
+              -- берём из настройки вида, чтобы клиент видел актуальные парки.
+              (SELECT string_agg(lo.name, ', ' ORDER BY lo.sort, lo.id)
+                 FROM locations lo
+                WHERE lo.id = ANY(COALESCE(t.location_ids, p.location_ids))) AS works_in,
               (SELECT count(*)::int FROM pass_visits v WHERE v.pass_id = p.id) AS visits_used,
               (SELECT max(v.at) FROM pass_visits v WHERE v.pass_id = p.id) AS last_visit_at
          FROM passes p
-         LEFT JOIN locations l ON l.id = p.location_id
+         LEFT JOIN pass_types t ON t.id = p.pass_type_id
         WHERE p.client_id=$1
         ORDER BY (p.status='active') DESC, p.valid_to DESC, p.id DESC
         LIMIT 20`,

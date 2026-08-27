@@ -500,7 +500,7 @@
           : '<div class="p-left"><span class="n">'+fmt(left)+'</span><span class="u">'+plural(left)+' из '+fmt(total)+'</span></div>'+
             '<div class="p-bar"><i style="width:'+pct+'%"></i></div>';
         var meta = 'Действует до ' + dmy(p.valid_to);
-        if (p.location_name) meta += ' · ' + esc(p.location_name);
+        if (p.works_in) meta += '<br>Парки: ' + esc(p.works_in);
         if (p.last_visit_at) meta += '<br>Последнее посещение: ' + dmy(p.last_visit_at);
         return '<div class="pass'+(live?'':' off')+'">'+
           '<div class="p-top"><div class="p-n">'+esc(p.name)+'</div>'+
