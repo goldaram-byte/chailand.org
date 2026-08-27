@@ -1147,18 +1147,31 @@ const PAGES = {
 };
 let role = "owner", curPage = "dash";
 
+// Кто сейчас работает. При работе с сервером это реальный вошедший сотрудник
+// (window.CURRENT_USER заполняет app.js); имена из ROLES — только для демо.
+// Никаких автоматических переходов между пользователями быть не должно.
+function curUser(){ return window.CURRENT_USER || null; }
+function curUserName(){ const m = curUser(); return m ? m.name : ROLES[role].name; }
+function curUserRoleName(){ const m = curUser(); return (m && m.roleName) || ROLES[role].role; }
+function curUserAva(){
+  const m = curUser();
+  if(!m) return ROLES[role].ava;
+  return String(m.name).split(' ').filter(Boolean).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+}
 function setRole(r){
   role = r; const u = ROLES[r];
-  document.getElementById('profName').textContent = u.name;
-  document.getElementById('profRole').textContent = u.role;
-  document.getElementById('profAva').textContent = u.ava;
+  document.getElementById('profName').textContent = curUserName();
+  document.getElementById('profRole').textContent = curUserRoleName();
+  document.getElementById('profAva').textContent = curUserAva();
   document.querySelectorAll('.prof-menu button').forEach(b=>b.classList.remove('cur'));
-  document.getElementById('r-'+r).classList.add('cur');
+  const cur = document.getElementById('r-'+r); if(cur) cur.classList.add('cur');
   document.getElementById('profMenu').classList.remove('open');
   const all = [...u.main, ...u.bottom];
   if(!all.includes(curPage)) curPage = "pos";
   renderNav(); go(curPage);
-  toast('Вы вошли как: '+u.role+' ('+u.name+')');
+  // В демо-режиме это переключение ролей; с сервером роль задаёт вход,
+  // и сообщать о «смене пользователя» нечего.
+  if(!curUser()) toast('Вы вошли как: '+u.role+' ('+u.name+')');
 }
 function renderNav(){
   const u = ROLES[role];
@@ -1185,7 +1198,7 @@ function go(p){
   renderNav();
   // Владельцу не показываем экран «Открыть смену» — касса готова сразу
   if(p==='pos' && !shift && role==='owner'){
-    shift = {cashStart:0, cashier:ROLES[role].name};
+    shift = {cashStart:0, cashier:curUserName()};
     $('shiftClosed').style.display='none'; $('posWork').style.display='grid'; $('salesCard').hidden=false;
     $('shiftDot').classList.add('on'); $('shiftLbl').textContent='Смена: '+shift.cashier;
     renderSales();
@@ -1237,7 +1250,7 @@ function toast(msg, err=false){ const t=$('toast'); t.textContent=msg; t.classNa
 
 /* ================= СМЕНА ================= */
 function openShift(){
-  shift = {cashStart:+$('cashStart').value||0, cashier:ROLES[role].name};
+  shift = {cashStart:+$('cashStart').value||0, cashier:curUserName()};
   $('shiftClosed').style.display='none'; $('posWork').style.display='grid'; $('salesCard').hidden=false;
   $('shiftDot').classList.add('on'); $('shiftLbl').textContent='Смена: '+shift.cashier+' · размен '+fmt(shift.cashStart);
   renderSales(); toast('Смена открыта. Размен: '+fmt(shift.cashStart));
@@ -1574,7 +1587,7 @@ function addExpense(){
   const amt=+$('expAmt').value, note=$('expNote').value.trim();
   if(!amt||amt<=0) return toast('Укажите сумму расхода', true);
   if(!note) return toast('Напишите, на что расход', true);
-  expenses.unshift({time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}), who:ROLES[role].name, note, amt});
+  expenses.unshift({time:new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}), who:curUserName(), note, amt});
   $('expAmt').value=''; $('expNote').value='';
   renderReport(); toast('Расход '+fmt(amt)+' внесён');
 }
@@ -1614,7 +1627,7 @@ function createBooking(){
   bookings.push({id:Date.now(), date, from, to, roomId, room:(ROOMS.find(r=>r.id===roomId)||{}).name||'—', client:name, phone,
     kids:+$('pbKids').value||0,
     services:Object.entries(pbSel).map(([id,v])=>{const s=SERVICES.find(x=>x.id===+id);return{name:s.name,option:v.option,price:+s.price};}),
-    total:pbTotal(), prepaid:0, status:'new', seller:ROLES[role].name, payments:[], comment:''});
+    total:pbTotal(), prepaid:0, status:'new', seller:curUserName(), payments:[], comment:''});
   pbSel={}; if($('pbName'))$('pbName').value=''; $('pbPhone').value='';
   renderPartyForm(); renderBookings(); toast('Праздник забронирован 🎉 Предбронь в журнале мероприятий');
 }
@@ -1724,7 +1737,7 @@ function bkPay(id){
   const b=bkFind(id); if(!b) return;
   const amt=+$('bkPayAmount').value||0, method=$('bkPayMethod').value, fiscal=$('bkPayFiscal').checked;
   if(amt<=0) return toast('Укажите сумму оплаты', true);
-  (b.payments=b.payments||[]).push({amount:amt, method, fiscal, at:new Date().toISOString(), by_name:ROLES[role].name});
+  (b.payments=b.payments||[]).push({amount:amt, method, fiscal, at:new Date().toISOString(), by_name:curUserName()});
   b.prepaid+=amt;
   if(b.status!=='done') b.status = (b.total>0 && b.prepaid>=b.total) ? 'paid' : 'prepaid';
   renderBookings(); renderBookingCard();
