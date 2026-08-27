@@ -600,6 +600,8 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
         <div><label>До</label><input type="time" id="pbTo" value="14:00"></div>
         <div><label>Комната</label><select id="pbRoom"></select></div>
         <div><label>Детей</label><input type="number" id="pbKids" value="8" min="1"></div>
+        <div><label>Именинник</label><input id="pbKidName" placeholder="Имя ребёнка"></div>
+        <div><label>Сколько лет</label><input type="number" id="pbKidAge" min="1" max="18" placeholder="напр. 6"></div>
       </div>
       <div id="pbServices" style="margin:10px 0"></div>
       <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:10px">
@@ -1278,6 +1280,9 @@ let leads = [
 let leadSeq = 100;
 
 const fmt = n => (+n).toLocaleString('ru-RU') + ' ₽';
+// «6 лет», «1 год», «22 года» — чтобы возраст именинника читался по-русски
+const yearsRu = n => { const a=Math.abs(+n)%100, b=a%10;
+  if(a>10&&a<20) return 'лет'; if(b>1&&b<5) return 'года'; if(b===1) return 'год'; return 'лет'; };
 const $ = id => document.getElementById(id);
 function toast(msg, err=false){ const t=$('toast'); t.textContent=msg; t.className=err?'err show':'show'; setTimeout(()=>t.classList.remove('show'),3200); }
 
@@ -1320,6 +1325,9 @@ const DAY_RU = {workweek:'Будни (Пн–Пт)', weekday:'Пн–Чт', frid
 // Подходит ли билет под тип дня: «Будни» покрывают и Пн–Чт, и пятницу
 const dayFits = (day, kind) => day==='any' || day===kind || (day==='workweek' && (kind==='weekday' || kind==='friday'));
 function setPosGroup(id){ posGroup = id; renderTariffs(); }
+// Группы кассы: папки праздничных услуг (kind='party') сюда не попадают —
+// услуги не продаются на кассе, они собираются в бронировании в «Журнале».
+function posGroups(){ return GROUPS.filter(g=>g.kind!=='party'); }
 // Абонементы показываются в кассе отдельной группой (заполняется с сервера)
 let PASS_TYPES = [];
 // абонемент доступен в текущем ТЦ, если список точек пуст (все ТЦ) или
@@ -1335,9 +1343,10 @@ function renderTariffs(){
   const kind = dayKindOf($('posDate').value);
   $('dayKind').textContent = KIND_RU[kind];
   const passes = posPassList();
-  if(posGroup!=='passes' && !GROUPS.find(g=>g.id===posGroup)) posGroup = GROUPS.length ? GROUPS[0].id : (passes.length?'passes':null);
-  if(posGroup==='passes' && !passes.length) posGroup = GROUPS.length ? GROUPS[0].id : null;
-  $('posGroups').innerHTML = GROUPS.map(g=>
+  const posG = posGroups();
+  if(posGroup!=='passes' && !posG.find(g=>g.id===posGroup)) posGroup = posG.length ? posG[0].id : (passes.length?'passes':null);
+  if(posGroup==='passes' && !passes.length) posGroup = posG.length ? posG[0].id : null;
+  $('posGroups').innerHTML = posG.map(g=>
     `<button class="${g.id===posGroup?'act':''}" onclick="setPosGroup(${g.id})">${g.name}</button>`).join('')
     + (passes.length ? `<button class="${posGroup==='passes'?'act':''}" onclick="setPosGroup('passes')">🎫 Абонементы</button>` : '');
 
@@ -1692,11 +1701,15 @@ function createBooking(){
   if(!phone) return toast('Укажите телефон клиента', true);
   const clash = bookings.find(b=>b.roomId===roomId&&b.date===date&&b.status!=='cancelled'&&!(b.to<=from||b.from>=to));
   if(clash) return toast('Комната занята в это время ('+clash.from+'–'+clash.to+')', true);
+  const kidName=($('pbKidName')?$('pbKidName').value.trim():''), kidAgeRaw=($('pbKidAge')?$('pbKidAge').value:'');
+  const kidAge = kidAgeRaw==='' ? null : +kidAgeRaw;
+  if(kidAge!==null && (!Number.isInteger(kidAge) || kidAge<1 || kidAge>18)) return toast('Возраст именинника — число от 1 до 18', true);
   bookings.push({id:Date.now(), date, from, to, roomId, room:(ROOMS.find(r=>r.id===roomId)||{}).name||'—', client:name, phone,
-    kids:+$('pbKids').value||0,
+    kids:+$('pbKids').value||0, kidName, kidAge,
     services:Object.entries(pbSel).map(([id,v])=>{const s=SERVICES.find(x=>x.id===+id);return{name:s.name,option:v.option,price:+s.price};}),
     total:pbTotal(), prepaid:0, status:'new', seller:curUserName(), payments:[], comment:''});
   pbSel={}; if($('pbName'))$('pbName').value=''; $('pbPhone').value='';
+  if($('pbKidName'))$('pbKidName').value=''; if($('pbKidAge'))$('pbKidAge').value='';
   renderPartyForm(); renderBookings(); closeNewBooking();
   if(typeof renderJournal==='function') renderJournal();
   toast('Забронировано 🎉 Предбронь в журнале');
@@ -1708,7 +1721,7 @@ function renderBookings(){
   $('bookTbl').innerHTML = bookings.length ? bookings.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(b=>`
     <tr style="cursor:pointer" onclick="openBookingCard(${b.id})" title="Открыть карточку мероприятия">
     <td>${b.date.split('-').reverse().join('.')}</td><td>${b.from||''}${b.to?'–'+b.to:''}</td><td>${b.room||'—'}</td>
-    <td><b>${b.client||'—'}</b><br><span class="muted">${b.phone||''} · ${b.kids} детей</span></td>
+    <td><b>${b.client||'—'}</b><br><span class="muted">${b.phone||''} · ${b.kids} детей</span>${b.kidName?`<br><span class="muted">🎂 ${b.kidName}${b.kidAge?', '+b.kidAge+' '+yearsRu(b.kidAge):''}</span>`:''}</td>
     <td>${(b.services||[]).map(s=>s.name+(s.option?' <span class="muted">('+s.option+')</span>':'')).join('<br>')||'—'}</td>
     <td><b>${fmt(b.total)}</b></td><td>${fmt(b.prepaid)}</td>
     <td><span class="tag ${b.status}">${ST_RU[b.status]||b.status}</span></td>
@@ -1735,11 +1748,22 @@ function renderBookingCard(){
       <div style="flex:1">
         <div style="font-size:18px;font-weight:800">${b.client||'Мероприятие'} <span class="muted" style="font-weight:500;font-size:13px">№${b.id}</span></div>
         <div class="muted" style="font-size:13px">${b.phone||'—'} · ${b.date.split('-').reverse().join('.')} ${b.from||''}${b.to?'–'+b.to:''} · ${b.room||'—'} · ${b.kids} детей</div>
+        ${b.kidName?`<div style="font-size:13px;color:var(--gold);font-weight:700;margin-top:2px">🎂 ${b.kidName}${b.kidAge?' · '+b.kidAge+' '+yearsRu(b.kidAge):''}</div>`:''}
       </div>
       <button onclick="closeBookingCard()" style="font-size:20px;color:var(--dim);padding:4px 10px">✕</button>
     </div>
     <div style="font-size:11px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Статус</div>
     <div class="stage-chips">${BK_STATUSES.map(([code,label])=>`<button class="${(b.status===code||(code==='prepaid'&&b.status==='confirmed'))?'act':''}" onclick="bkSetStatus(${b.id},'${code}')">${label}</button>`).join('')}</div>
+
+    <div class="cc-sec"><h4>🎂 Именинник</h4>
+      <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:end">
+        <div style="flex:1;min-width:170px"><label style="font-size:10.5px;color:var(--dim);font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Имя ребёнка</label>
+          <input id="bkKidName" value="${(b.kidName||'').replace(/"/g,'&quot;')}" placeholder="не указан" style="width:100%" onchange="bkSetKid(${b.id})"></div>
+        <div><label style="font-size:10.5px;color:var(--dim);font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Сколько лет</label>
+          <input type="number" id="bkKidAge" min="1" max="18" value="${b.kidAge||''}" placeholder="—" style="width:110px" onchange="bkSetKid(${b.id})"></div>
+      </div>
+      <div class="muted" style="font-size:11.5px;margin-top:6px">Кому праздник и какой возраст — по этому готовят поздравление, торт и шары.</div>
+    </div>
 
     <div class="cc-sec"><h4>🎈 Услуги мероприятия</h4>
       ${(b.services||[]).map((s,i)=>`<div class="cl"><span class="nm">${s.name}${s.option?' <span class="muted">('+s.option+')</span>':''}</span>
@@ -1789,6 +1813,19 @@ function renderBookingCard(){
 function bkSetStatus(id,st){ const b=bkFind(id); if(!b) return; b.status=st; renderBookings(); renderBookingCard(); }
 function bkSetTotal(id,v){ const b=bkFind(id); if(!b) return; b.total=+v||0; renderBookings(); renderBookingCard(); }
 function bkSetComment(id,v){ const b=bkFind(id); if(!b) return; b.comment=v; }
+// Именинник: имя и возраст читаем сразу из обоих полей — их правят по очереди
+function bkKidRead(){
+  const name = ($('bkKidName')||{}).value || '';
+  const raw = ($('bkKidAge')||{}).value;
+  const age = (raw===''||raw==null) ? null : +raw;
+  if(age!==null && (!Number.isInteger(age) || age<1 || age>18)){ toast('Возраст именинника — число от 1 до 18', true); return null; }
+  return { name: name.trim(), age };
+}
+function bkSetKid(id){
+  const b=bkFind(id); const k=bkKidRead(); if(!b||!k) return;
+  b.kidName=k.name; b.kidAge=k.age;
+  renderBookings(); renderBookingCard(); toast('Именинник сохранён');
+}
 function bkAddService(id){
   const b=bkFind(id); if(!b) return;
   const sel=$('bkSvcSel'); const s=SERVICES.find(x=>x.id===+sel.value); if(!s) return;
@@ -1822,6 +1859,8 @@ function bkDelete(id){
 
 /* ================= ЖУРНАЛ: СЕТКА ЗАНЯТОСТИ КОМНАТ ================= */
 const JR_DAY_START=10, JR_DAY_END=22; // рабочее окно парка, часов
+// Именинник в подсказке к полосе журнала: «🎂 Маша, 6 лет»
+const jrKid = b => b.kidName ? ' · 🎂 '+b.kidName+(b.kidAge?', '+b.kidAge+' '+yearsRu(b.kidAge):'') : '';
 const JR_COLORS={new:'#64748b',confirmed:'#d97706',prepaid:'#d97706',paid:'#059669',done:'#94a3b8'};
 // Вид журнала: день (сетка по часам) / неделя / месяц. Выбор запоминается.
 let jrView = 'day';
@@ -1871,7 +1910,7 @@ function jrPayLabel(b){
 }
 function jrChip(b, withDate){
   const col=JR_COLORS[b.status]||'#64748b';
-  return `<div class="jr-chip" style="background:${col}" title="${b.client||''} · ${b.from||''}${b.to?'–'+b.to:''} · ${b.room||'—'} · ${jrPayLabel(b)}"
+  return `<div class="jr-chip" style="background:${col}" title="${b.client||''} · ${b.from||''}${b.to?'–'+b.to:''} · ${b.room||'—'} · ${jrPayLabel(b)}${jrKid(b)}"
     onclick="event.stopPropagation();openBookingCard(${b.id})">${b.from||''} ${b.client||'Бронь'}</div>`;
 }
 function renderJournal(){
@@ -1910,7 +1949,7 @@ function jrRenderDay(date, rooms, day){
       const col=JR_COLORS[b.status]||'#64748b';
       const pay=jrPayLabel(b);
       return `<div class="jr-block" style="left:${left}%;width:${width}%;background:${col}"
-        title="${b.client||''} · ${b.from||''}–${b.to||''} · ${pay}" onclick="openBookingCard(${b.id})">${b.client||'Бронь'}<small>${b.from||''}–${b.to||''} · ${pay}</small></div>`;
+        title="${b.client||''} · ${b.from||''}–${b.to||''} · ${pay}${jrKid(b)}" onclick="openBookingCard(${b.id})">${b.client||'Бронь'}<small>${b.from||''}–${b.to||''} · ${pay}</small></div>`;
     }).join('');
   };
   const rows=rooms.map(r=>{
@@ -1944,7 +1983,7 @@ function openNewBooking(pre){
   const set=(id,v)=>{ const el=document.getElementById(id); if(el && v!=null) el.value=v; };
   set('pbDate', d); set('pbFrom', pre.from || '12:00'); set('pbTo', pre.to || '14:00');
   if(pre.roomId) set('pbRoom', String(pre.roomId));
-  set('pbName',''); set('pbPhone','');
+  set('pbName',''); set('pbPhone',''); set('pbKidName',''); set('pbKidAge','');
   const room = ROOMS.find(r=>+r.id===+pre.roomId);
   const sub = document.getElementById('bkNewSub');
   if(sub) sub.textContent = (room?room.name+' · ':'') + dmy(d) + (pre.from?' · '+pre.from+'–'+pre.to:'');
@@ -2340,7 +2379,7 @@ function delG(id){
   GROUPS = GROUPS.filter(g=>g.id!==id);
   // Услуги удалённой папки остаются, но без группы — уйдут в «Прочее»
   SERVICES.forEach(s=>{ if(+s.group===id) s.group=null; });
-  if(posGroup===id) posGroup = GROUPS[0].id;
+  if(posGroup===id) posGroup = (posGroups()[0]||GROUPS[0]||{}).id;
   renderSettings(); renderTariffs(); renderPartyForm(); toast('Группа удалена');
 }
 function updS(id,f,v){ SERVICES.find(s=>s.id===id)[f]=v; renderPartyForm(); toast('Услуга обновлена'); }
@@ -2552,7 +2591,7 @@ function dashRange(){
 }
 function renderDash(){
   if(!$('dashGroup').dataset.filled){
-    $('dashGroup').insertAdjacentHTML('beforeend', GROUPS.map(g=>`<option value="${g.id}">${g.name}</option>`).join(''));
+    $('dashGroup').insertAdjacentHTML('beforeend', posGroups().map(g=>`<option value="${g.id}">${g.name}</option>`).join(''));
     $('dashCashier').insertAdjacentHTML('beforeend', CASHIERS.map(c=>`<option value="${c}">${c}</option>`).join(''));
     $('dashGroup').dataset.filled = '1';
   }

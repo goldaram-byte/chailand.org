@@ -531,3 +531,8 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS client_id bigint REFERENCES client
 -- дополнительное время и т.д. Группы берутся из общего списка групп продаж,
 -- раздел «Праздники» (kind='party'). Без группы — попадает в «Прочее».
 ALTER TABLE services ADD COLUMN IF NOT EXISTS group_id bigint REFERENCES product_groups(id);
+
+-- Именинник: чей праздник и сколько лет исполняется. Нужно администратору,
+-- чтобы подготовить поздравление, торт и шары к нужному возрасту.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS kid_name text;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS kid_age  int;
