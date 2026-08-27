@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { q, q1 } from '../db.js';
+import { q, q1, tx } from '../db.js';
 import { requireAuth, requirePerm, hashPassword } from '../auth.js';
 import { ah, audit } from '../util.js';
 
@@ -63,6 +63,52 @@ usersRouter.put(
     );
     await audit(req, 'user.update', { entity: 'user', entityId: req.params.id });
     res.json(row);
+  })
+);
+
+// DELETE /api/users/:id — убрать сотрудника из базы (только владелец).
+// История продаж, броней и абонементов сохраняется, но теряет привязку к нему.
+// Сотрудника с кассовыми сменами не удаляем: смена — это денежный документ,
+// её нельзя оставить без кассира. Такого сотрудника отключают.
+usersRouter.delete(
+  '/:id',
+  ah(async (req, res) => {
+    if (req.user.role !== 'owner') {
+      return res.status(403).json({ error: 'Удалять сотрудников может только владелец' });
+    }
+    const id = Number(req.params.id);
+    if (id === Number(req.user.id)) {
+      return res.status(400).json({ error: 'Нельзя удалить самого себя' });
+    }
+    const user = await q1('SELECT id, full_name, login, role_code FROM users WHERE id=$1', [id]);
+    if (!user) return res.status(404).json({ error: 'Сотрудник не найден' });
+
+    if (user.role_code === 'owner') {
+      const owners = await q1(`SELECT count(*)::int AS n FROM users WHERE role_code='owner' AND is_active`);
+      if (owners.n <= 1) return res.status(409).json({ error: 'Это последний владелец — удалить его нельзя' });
+    }
+
+    const shift = await q1('SELECT id FROM cash_shifts WHERE cashier_id=$1 LIMIT 1', [id]);
+    if (shift) {
+      return res.status(409).json({
+        error: 'У сотрудника есть кассовые смены — удалить нельзя, чтобы не потерять историю кассы. Отключите его.',
+      });
+    }
+
+    await tx(async ({ q: cq }) => {
+      // Отвязываем историю: записи остаются, автор в них просто пропадает
+      await cq('UPDATE sales SET cashier_id=NULL WHERE cashier_id=$1', [id]);
+      await cq('UPDATE bookings SET seller_id=NULL WHERE seller_id=$1', [id]);
+      await cq('UPDATE passes SET sold_by=NULL WHERE sold_by=$1', [id]);
+      await cq('UPDATE pass_visits SET by_user=NULL WHERE by_user=$1', [id]);
+      await cq('UPDATE stock_moves SET created_by=NULL WHERE created_by=$1', [id]);
+      await cq('UPDATE attendance SET created_by=NULL WHERE created_by=$1', [id]);
+      await cq('UPDATE personnel SET user_id=NULL WHERE user_id=$1', [id]);
+      await cq('UPDATE audit_log SET user_id=NULL WHERE user_id=$1', [id]);
+      await cq('DELETE FROM users WHERE id=$1', [id]);
+    });
+    await audit(req, 'user.delete', { entity: 'user', entityId: id, meta: { login: user.login, name: user.full_name } });
+    res.json({ ok: true });
   })
 );
 

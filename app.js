@@ -358,7 +358,12 @@
             '<td>' + (ROLE_RU[u.role_code] || u.role_code) + '</td>' +
             '<td>' + (u.is_active ? '<span style="color:var(--green);font-weight:700">активен</span>' : '<span class="muted">отключён</span>') + '</td>' +
             '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="staffPass(' + u.id + ')">Пароль</button> ' +
-            '<button class="btn btn-ghost btn-sm" onclick="staffToggle(' + u.id + ',' + (u.is_active ? 'false' : 'true') + ')">' + (u.is_active ? 'Отключить' : 'Включить') + '</button></td></tr>';
+            '<button class="btn btn-ghost btn-sm" onclick="staffToggle(' + u.id + ',' + (u.is_active ? 'false' : 'true') + ')">' + (u.is_active ? 'Отключить' : 'Включить') + '</button>' +
+            // удалять сотрудников может только владелец, и не самого себя
+            ((ME && ME.role === 'owner' && u.id !== ME.id)
+              ? ' <button class="btn btn-red btn-sm" title="Удалить сотрудника из базы" onclick="staffDel(' + u.id + ',\'' + String(u.full_name).replace(/'/g, "\\'") + '\')">🗑</button>'
+              : '') +
+            '</td></tr>';
         }).join('') || '<tr><td colspan="5" class="muted">Пока нет сотрудников</td></tr>';
       }).catch(function () {
         var tb = document.getElementById('setStaff');
@@ -376,6 +381,16 @@
         .then(function () {
           document.getElementById('stName').value = ''; document.getElementById('stLogin').value = ''; document.getElementById('stPass').value = '';
           if (typeof toast === 'function') toast('Сотрудник добавлен: ' + login.trim());
+          window.staffRender();
+        })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+
+    window.staffDel = function (id, name) {
+      if (!confirm('Удалить сотрудника «' + name + '» из базы?\n\nУчётка и вход пропадут навсегда. История продаж и броней останется, но без привязки к нему.\nЕсли нужно только закрыть доступ — лучше «Отключить».')) return;
+      api('/users/' + id, { method: 'DELETE' })
+        .then(function () {
+          if (typeof toast === 'function') toast('Сотрудник удалён из базы');
           window.staffRender();
         })
         .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
@@ -2248,10 +2263,26 @@
       .then(function () {
         SERVER = true; updatePill(); installHooks();
         if (localStorage.getItem(TOKEN_KEY)) {
-          // Уже был вход — проверить токен и гидрировать
-          api('/auth/me').then(function (me) { ME = me; applyRole(); return hydrateAll(); })
+          // Уже был вход — проверить токен и гидрировать.
+          // Экран входа показываем ТОЛЬКО если сервер отверг сам токен:
+          // при 401 api() уже стёр его. Ошибка загрузки данных (сеть моргнула,
+          // сервер перезапускается) не должна выкидывать кассира из аккаунта.
+          api('/auth/me')
+            .then(function (me) {
+              ME = me;
+              // сервер продлил сессию — сохраняем свежий токен
+              if (me && me.token) localStorage.setItem(TOKEN_KEY, me.token);
+              applyRole();
+              return hydrateAll().catch(function (e) {
+                if (typeof toast === 'function') toast('Данные не загрузились: ' + (e.message || 'ошибка сети') + '. Обновите страницу.', true);
+              });
+            })
             .then(function () { updatePill(); flush(); markLive(); })
-            .catch(function () { showLogin(); });
+            .catch(function () {
+              // сюда попадаем, когда /auth/me не прошёл — вход действительно нужен
+              if (!localStorage.getItem(TOKEN_KEY)) showLogin();
+              else { updatePill(); showLogin(); }
+            });
         } else { showLogin(); }
       })
       .catch(function () { SERVER = false; updatePill(); }); // сервера нет — демо-режим

@@ -26,7 +26,7 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-gabrileon}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-gabrileon}
       JWT_SECRET: ${JWT_SECRET:?нужно задать JWT_SECRET в .env}
-      JWT_TTL: ${JWT_TTL:-12h}
+      JWT_TTL: ${JWT_TTL:-7d}
       NODE_ENV: production
       PORT: "4000"
       AUTO_MIGRATE: "1"

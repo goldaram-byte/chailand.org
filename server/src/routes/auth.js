@@ -52,18 +52,23 @@ authRouter.get(
   requireAuth,
   ah(async (req, res) => {
     const user = await q1(
-      `SELECT u.id, u.full_name, u.phone, u.role_code, r.name AS role_name
+      `SELECT u.*, r.permissions AS role_permissions, r.name AS role_name
          FROM users u JOIN roles r ON r.code = u.role_code
         WHERE u.id = $1`,
       [req.user.id]
     );
+    if (!user || !user.is_active) return res.status(401).json({ error: 'Учётная запись отключена' });
+    // Скользящая сессия: пока сотрудник работает, отдаём свежий токен.
+    // Иначе смена длиннее срока токена заканчивалась выходом из аккаунта
+    // прямо на кассе — при первом же обновлении страницы.
     res.json({
       id: user.id,
       name: user.full_name,
       phone: user.phone,
       role: user.role_code,
       roleName: user.role_name,
-      perms: req.user.perms,
+      perms: effectivePerms(user),
+      token: signToken(user),
     });
   })
 );
