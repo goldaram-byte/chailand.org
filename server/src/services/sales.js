@@ -125,6 +125,15 @@ export async function createSale(user, body) {
   const shift = await q1(`SELECT id, location_id FROM cash_shifts WHERE closed_at IS NULL AND cashier_id=$1`, [user.id]);
   // Точка (ТЦ): приоритет — явно переданная устройством, иначе из открытой смены.
   const saleLocation = location_id || shift?.location_id || null;
+  // Смена привязана к своей точке: продажа другого ТЦ не должна в неё попадать,
+  // иначе выручка окажется в отчёте чужой смены.
+  if (shift && shift.location_id && saleLocation && String(shift.location_id) !== String(saleLocation)) {
+    const loc = await q1('SELECT name FROM locations WHERE id=$1', [shift.location_id]);
+    throw new ApiError(
+      409,
+      'Ваша смена открыта в «' + (loc?.name || 'другом ТЦ') + '» — продавать в этой точке нельзя. Закройте смену и откройте её здесь.'
+    );
+  }
 
   const saleId = await tx(async ({ q1: cq1, q: cq }) => {
     const sale = await cq1(
