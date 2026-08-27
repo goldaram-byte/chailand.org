@@ -779,7 +779,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
       <button onclick="setTab('products',this)">Товары</button>
       <button onclick="setTab('groups',this)">Группы продаж</button>
       <button onclick="setTab('passes',this)">Абонементы</button>
-      <button onclick="setTab('acquiring',this)">Эквайринг</button>
+      <button onclick="setTab('acquiring',this)">Касса и эквайринг</button>
       <button onclick="setTab('loyalty',this)">Бонусы и праздничные дни</button>
       <button onclick="setTab('referral',this)">Реферальная</button>
       <button onclick="setTab('kpi',this)">KPI кассиров</button>
@@ -837,7 +837,19 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
       <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Цена, ₽</th><th>Посещений</th><th>Срок, дней</th><th>ТЦ</th><th>Статус</th><th></th></tr></thead><tbody id="passTypesTbl"></tbody></table></div>
     </div>
     <div class="card set-pane" id="s-acquiring" hidden>
-      <h3>🏦 Эквайринг — подключение терминала <span id="acqBadge" style="margin-left:auto"></span></h3>
+      <h3>🧾 Фискализация чеков</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Когда фискализация отключена, касса только считает чек и ведёт учёт: фискальный документ не создаётся и в ОФД ничего не уходит — сумму кассир пробивает вручную на своём терминале.</div>
+      <div class="frm" style="grid-template-columns:320px 1fr;margin-bottom:6px">
+        <div><label>Режим</label><select id="setFiscalDriver" onchange="saveFiscalDriver(this.value)">
+          <option value="off">Отключена — пробиваем вручную на терминале</option>
+          <option value="shtrih">ККТ Штрих-М (локальный драйвер)</option>
+          <option value="taxcom">Облачная касса Такском (Ferma)</option>
+          <option value="emulation">Эмуляция (учебный режим, ненастоящие ФД)</option>
+        </select></div>
+        <div style="align-self:end"><div id="fiscalHint" class="muted" style="font-size:12.5px"></div></div>
+      </div>
+
+      <h3 style="margin-top:22px">🏦 Эквайринг — подключение терминала <span id="acqBadge" style="margin-left:auto"></span></h3>
       <div class="muted" style="font-size:12.5px;margin-bottom:14px">Подключение платёжного терминала банка для приёма оплаты картой в кассе.</div>
       <div class="frm" style="grid-template-columns:repeat(2,1fr)">
         <div><label>Банк-эквайер</label><select id="acqBank">
@@ -916,7 +928,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
   <div class="pay-modal">
     <div id="payMain">
       <h3>Приём оплаты</h3>
-      <div class="pay-step">Шаг 2 из 2 · подтверждение и фискализация</div>
+      <div class="pay-step" id="payStepHint">Шаг 2 из 2 · подтверждение оплаты</div>
       <div class="pay-items" id="payItems"></div>
       <div id="payBonusBox"></div>
       <div class="pay-topay"><span>К оплате:</span><span class="val" id="payToPay">0 ₽</span></div>
@@ -977,7 +989,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
   <div class="pay-modal">
     <div id="refundMain">
       <h3>↩️ Оформление возврата</h3>
-      <div class="pay-step">Возвратный чек · фискализация Штрих-М</div>
+      <div class="pay-step" id="refundStepHint">Возврат оплаты клиенту</div>
       <div class="pay-items" id="refundItems"></div>
       <div id="refundInfo"></div>
       <div style="font-size:11px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px">Причина возврата</div>
@@ -1434,11 +1446,16 @@ function confirmPay(){
     const given = +$('cashGiven').value||0;
     if(given < toPay) return toast('Получено меньше суммы к оплате', true);
   }
-  // Отправка в кассовый аппарат (эмуляция Штрих-М)
+  // Фискализация отключена — чек не пробиваем, сумму кассир вводит на терминале
+  const fiscalOff = (window.FISCAL_DRIVER || 'off') === 'off';
   $('payMain').style.display='none';
-  $('payFiscal').classList.add('show');
+  if(!fiscalOff){
+    $('payFiscal').classList.add('show');
+    $('payFiscal').querySelector('.fs-sub').textContent =
+      window.FISCAL_DRIVER==='taxcom' ? 'Такском · фискализация чека' : 'Штрих-М · фискализация чека';
+  }
   setTimeout(()=>{
-    const fd = 'ФД №'+String(fdSeq++).padStart(6,'0');
+    const fd = fiscalOff ? '—' : 'ФД №'+String(fdSeq++).padStart(6,'0');
     // Бонусы двигаются ТОЛЬКО после подтверждения фискализации
     let earned = 0;
     if(PAY.client){
@@ -1450,10 +1467,15 @@ function confirmPay(){
       items:PAY.items, client:PAY.client?PAY.client.name:'—', total:PAY.total,
       method:PAY.method, paid:toPay, bonus:PAY.bonusSpend, earned, fd, status:'done'});
     $('payFiscal').classList.remove('show');
-    $('doneSum').textContent = 'Чек на '+fmt(PAY.total)+' фискализирован';
-    $('doneFd').textContent = fd+' · Штрих-М · '+({cash:'наличные',card:'безналичные',online:'онлайн'})[PAY.method]
+    $('doneSum').textContent = fiscalOff
+      ? 'Оплата на '+fmt(PAY.total)+' проведена'
+      : 'Чек на '+fmt(PAY.total)+' фискализирован';
+    const way = ({cash:'наличные',card:'безналичные',online:'онлайн'})[PAY.method]
       + (PAY.method==='card' && ACQUIRING.connected ? ' · эквайринг '+ACQUIRING.bank : '')
       + (PAY.method==='cash' && +$('cashGiven').value>toPay ? ' · сдача '+fmt(+$('cashGiven').value-toPay) : '');
+    $('doneFd').textContent = fiscalOff
+      ? 'Без фискального чека · пробейте '+fmt(toPay)+' на терминале · '+way
+      : fd+' · '+(window.FISCAL_DRIVER==='taxcom'?'Такском':'Штрих-М')+' · '+way;
     $('doneBonus').textContent = PAY.client ? '⭐ Списано '+PAY.bonusSpend+' · начислено +'+earned+' бонусов' : '';
     $('payDone').classList.add('show');
     renderSales(); renderClients();
@@ -1494,10 +1516,11 @@ function setRefundMethod(m){
 function cancelRefund(){ $('refundOverlay').classList.remove('open'); REFUND=null; }
 function confirmRefund(){
   const s = REFUND.sale;
-  // Отправка возвратного чека в кассовый аппарат (эмуляция Штрих-М)
-  $('refundMain').style.display='none'; $('refundFiscal').classList.add('show');
+  const fiscalOff = (window.FISCAL_DRIVER || 'off') === 'off';
+  $('refundMain').style.display='none';
+  if(!fiscalOff) $('refundFiscal').classList.add('show');
   setTimeout(()=>{
-    const fd = 'ФД возврата №'+String(fdSeq++).padStart(6,'0');
+    const fd = fiscalOff ? '—' : 'ФД возврата №'+String(fdSeq++).padStart(6,'0');
     s.status='refunded';
     s.refundReason = $('refundReason').value;
     s.refundComment = $('refundComment').value.trim();
@@ -1508,7 +1531,9 @@ function confirmRefund(){
     if(c){ c.bonus += s.bonus - s.earned; bonusMsg = '⭐ Возвращено '+s.bonus+' списанных · снято '+s.earned+' начисленных'; }
     $('refundFiscal').classList.remove('show');
     $('refundDoneSum').textContent = 'Возврат на '+fmt(s.paid)+' оформлен';
-    $('refundDoneFd').textContent = fd+' · Штрих-М · '+RM_RU[REFUND.method];
+    $('refundDoneFd').textContent = fiscalOff
+      ? 'Без фискального чека · верните '+fmt(s.paid)+' '+RM_RU[REFUND.method]
+      : fd+' · '+(window.FISCAL_DRIVER==='taxcom'?'Такском':'Штрих-М')+' · '+RM_RU[REFUND.method];
     $('refundDoneBonus').textContent = bonusMsg;
     $('refundDone').classList.add('show');
     renderSales(); renderClients(); renderReport();
