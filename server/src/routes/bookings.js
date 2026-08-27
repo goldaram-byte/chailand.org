@@ -10,7 +10,7 @@ import { Router } from 'express';
 import { q, q1 } from '../db.js';
 import { requireAuth, requirePerm } from '../auth.js';
 import { ah, audit } from '../util.js';
-import { createSale } from '../services/sales.js';
+import { createSale, bookingCashbackPercent } from '../services/sales.js';
 
 export const bookingsRouter = Router();
 bookingsRouter.use(requireAuth, requirePerm('bookings'));
@@ -106,13 +106,34 @@ bookingsRouter.post(
     if (!b) return res.status(404).json({ error: 'Бронирование не найдено' });
     if (b.status === 'cancelled') return res.status(409).json({ error: 'Бронирование отменено' });
 
+    // Клиент брони: если её не привязали, ищем по телефону — иначе кэшбэк
+    // за праздник некому начислить.
+    let clientId = b.client_id || null;
+    if (!clientId && b.phone) {
+      const digits = String(b.phone).replace(/\D/g, '');
+      if (digits.length >= 10) {
+        const tail = digits.slice(-10);
+        const c = await q1(
+          `SELECT id FROM clients WHERE right(regexp_replace(phone, '\\D', '', 'g'), 10) = $1 LIMIT 1`,
+          [tail]
+        );
+        if (c) {
+          clientId = c.id;
+          await q('UPDATE bookings SET client_id=$2 WHERE id=$1', [b.id, clientId]);
+        }
+      }
+    }
+
     let saleId = null;
     if (fiscal) {
       // Провести по кассе: обычная продажа → фискальный чек + выручка кассира.
+      // Кэшбэк за праздник считается по своей настройке.
       const sale = await createSale(req.user, {
         items: [{ name: 'Праздник №' + b.id + ' · ' + b.client_name, qty: 1, price: a }],
         cash_amount: method === 'cash' ? a : 0,
         card_amount: method === 'card' ? a : 0,
+        client_id: clientId,
+        cashback_percent: await bookingCashbackPercent(),
         location_id: b.location_id || null,
         comment: 'Оплата бронирования №' + b.id,
       });

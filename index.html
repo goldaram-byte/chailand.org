@@ -879,10 +879,11 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
     <div class="card set-pane" id="s-loyalty" hidden>
       <h3>⭐ Бонусная программа</h3>
       <div class="frm" style="grid-template-columns:220px 1fr">
-        <div><label>Кэшбэк с покупки, %</label><input type="number" id="setCashback" onchange="CFG.cashback=+this.value;toast('Кэшбэк: '+this.value+'%')"></div>
+        <div><label>Кэшбэк с покупки в кассе, %</label><input type="number" id="setCashback" min="0" max="100" onchange="CFG.cashback=+this.value;toast('Кэшбэк в кассе: '+this.value+'%')"></div>
+        <div><label>Кэшбэк за праздник, %</label><input type="number" id="setCashbackBooking" min="0" max="100" placeholder="как в кассе" onchange="saveBookingCashback(this.value)"></div>
         <div><label>Праздничные даты (тариф выходного дня), через запятую</label><input id="setHolidays" placeholder="2026-12-31, 2027-01-01" onchange="CFG.holidays=this.value.split(',').map(s=>s.trim()).filter(Boolean);renderTariffs();toast('Праздничные даты сохранены')"></div>
       </div>
-      <div class="muted" style="font-size:12.5px">1 бонус = 1 ₽. Кэшбэк начисляется на денежную часть чека после подтверждения оплаты.</div>
+      <div class="muted" style="font-size:12.5px">1 бонус = 1 ₽. Кэшбэк начисляется на денежную часть чека после подтверждения оплаты. Оплата брони считается по своему проценту — оставьте поле пустым, и он будет как в кассе. Бонусы уходят на карту клиента, найденного по телефону из брони.</div>
 
       <h3 style="margin-top:22px">💳 Сколько бонусов можно списать, по ТЦ</h3>
       <div class="muted" style="font-size:12.5px;margin-bottom:12px">Предел оплаты бонусами в каждой точке: 100% — бонусами можно закрыть весь чек, 50% — только половину, 0% — списание в этом ТЦ запрещено. Касса проверяет предел той точки, в которой открыта смена.</div>
@@ -1611,7 +1612,7 @@ function addExpense(){
 /* ================= ПРАЗДНИКИ ================= */
 let pbSel = {};
 function renderPartyForm(){
-  $('pbRoom').innerHTML = ROOMS.map(r=>`<option value="${r.id}">${r.name} · ${fmt(r.price)}</option>`).join('');
+  $('pbRoom').innerHTML = ROOMS.map(r=>`<option value="${r.id}">${r.name}${r.cap?' · '+r.cap+' мест':''}</option>`).join('');
   $('pbServices').innerHTML = SERVICES.filter(s=>typeof prodInLoc!=='function'||prodInLoc(s)).map(s=>{
     const opts = s.options ? s.options.split('|') : [];
     return `<div class="svc ${pbSel[s.id]?'on':''}" onclick="toggleSvc(${s.id},event)">
@@ -1626,9 +1627,10 @@ function toggleSvc(id,e){
   else { const s=SERVICES.find(x=>x.id===id); pbSel[id]={option:(s.options?s.options.split('|')[0]:'')}; }
   renderPartyForm();
 }
+// Итог брони — сумма выбранных услуг. Своей цены у комнаты нет: раньше сюда
+// подмешивалась условная сумма, и итог всегда оказывался завышенным.
 function pbTotal(){
-  const room = ROOMS.find(r=>r.id===+$('pbRoom').value);
-  return (room?+room.price:0) + Object.keys(pbSel).reduce((a,id)=>a+ +SERVICES.find(s=>s.id===+id).price,0);
+  return Object.keys(pbSel).reduce((a,id)=>a+ +SERVICES.find(s=>s.id===+id).price,0);
 }
 function renderPbTotal(){ $('pbTotal').textContent = fmt(pbTotal()); }
 document.addEventListener('change', e=>{ if(e.target.id==='pbRoom') renderPbTotal(); });
@@ -2015,6 +2017,10 @@ function renderClients(){
 /* ===== КАРТОЧКА КЛИЕНТА ===== */
 // Правка данных клиента и ручное начисление бонусов.
 // В демо-режиме меняем только локально, с сервером — через app.js.
+function saveBookingCashback(v){
+  const pct = v==='' ? null : Math.max(0, Math.min(100, +v||0));
+  toast(pct==null ? 'Кэшбэк за праздник — как в кассе' : 'Кэшбэк за праздник: '+pct+'%');
+}
 function saveClientCard(id){
   const c=clients.find(x=>x.id===id); if(!c) return;
   const name=$('ecName').value.trim();
@@ -2183,6 +2189,7 @@ function setTab(t, btn){
 }
 function renderSettings(){
   $('setCashback').value = CFG.cashback;
+  if($('setCashbackBooking')) $('setCashbackBooking').value = (CFG.cashbackBooking==null?'':CFG.cashbackBooking);
   $('setHolidays').value = CFG.holidays.join(', ');
   // Вкладка «Тарифы» — только билеты в парк (группы раздела «Билеты»)
   const tg = ticketGroupIds();
@@ -2223,11 +2230,6 @@ function renderSettings(){
     <td><input value="${s.options}" onchange="updS(${s.id},'options',this.value)" style="width:100%;min-width:200px" placeholder="Вариант 1|Вариант 2"></td>
     <td>${locSelHtml('service', s.id, s.locs)}</td>
     <td><button class="btn btn-red btn-sm" onclick="delS(${s.id})">Удалить</button></td></tr>`).join('');
-  var _sr=$('setRooms'); if(_sr) _sr.innerHTML = ROOMS.map(r=>`
-    <tr><td><input value="${r.name}" onchange="updR(${r.id},'name',this.value)" style="min-width:160px"></td>
-    <td><input type="number" value="${r.cap}" onchange="updR(${r.id},'cap',+this.value)" style="width:80px"></td>
-    <td><input type="number" value="${r.price}" onchange="updR(${r.id},'price',+this.value)" style="width:90px"></td>
-    <td><button class="btn btn-red btn-sm" onclick="delR(${r.id})">Удалить</button></td></tr>`).join('');
   renderAcquiring();
 }
 

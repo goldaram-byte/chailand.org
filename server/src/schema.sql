@@ -521,3 +521,8 @@ UPDATE pass_types SET location_ids = ARRAY[location_id]
 -- работать. Копия списка в самом абонементе нужна только как запасная, если
 -- вид абонемента удалили.
 ALTER TABLE passes ADD COLUMN IF NOT EXISTS location_ids bigint[] NOT NULL DEFAULT '{}';
+
+-- Кэшбэк за праздники настраивается отдельно от кассового: бронь — крупная
+-- покупка, и процент по ней обычно свой. Пока не задан — берётся общий.
+-- Бронь связывается с клиентом, чтобы бонусы было кому начислить.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS client_id bigint REFERENCES clients(id);

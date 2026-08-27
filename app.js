@@ -140,9 +140,13 @@
         return { id: p.id, pid: p.id, name: p.name, day: p.day_kind || 'any', price: Number(p.price), doc: p.requires_document, group: p.group_id, loc: p.location_id || null, locs: (p.location_ids || []).map(Number), track: !!p.track_stock, stock: Number(p.stock || 0) };
       });
       SERVICES = cat.services.map(function (s) { return { id: s.id, name: s.name, price: Number(s.price), options: s.options || '', locs: (s.location_ids || []).map(Number) }; });
-      ROOMS = cat.rooms.map(function (r) { return { id: r.id, name: r.name, cap: r.capacity, price: 2000, loc: r.location_id || null }; });
+      // У комнаты нет своей цены — стоимость праздника складывается из услуг
+      ROOMS = cat.rooms.map(function (r) { return { id: r.id, name: r.name, cap: r.capacity, loc: r.location_id || null }; });
 
       if (settings.cashback != null) CFG.cashback = Number(settings.cashback);
+      // Кэшбэк за праздник: пусто = «как в кассе»
+      CFG.cashbackBooking = (settings.cashback_booking == null || settings.cashback_booking === '')
+        ? null : Number(settings.cashback_booking);
       if (settings.holidays) CFG.holidays = settings.holidays;
       // Фискализация: 'emulation' (по умолчанию) | 'shtrih' (печать на кассе через
       // локальный HTTP-драйвер Штрих-М) | 'taxcom' (облачный ОФД, печатает сервер).
@@ -556,6 +560,20 @@
         api('/clients/' + id, { method: 'DELETE' }).then(drop)
           .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
       } else drop();
+    };
+
+    // --- Кэшбэк за праздники (отдельно от кассового) ---
+    window.saveBookingCashback = function (v) {
+      var pct = String(v).trim() === '' ? null : Math.max(0, Math.min(100, Number(v) || 0));
+      if (!SERVER) return;
+      api('/settings', { method: 'PUT', body: { cashback_booking: pct } })
+        .then(function () {
+          CFG.cashbackBooking = pct;
+          if (typeof toast === 'function') {
+            toast(pct == null ? 'Кэшбэк за праздник — как в кассе' : 'Кэшбэк за праздник: ' + pct + '%');
+          }
+        })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
     };
 
     // --- Режим фискализации ---
