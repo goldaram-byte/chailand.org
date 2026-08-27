@@ -340,6 +340,10 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 .jr-lane{flex:1;position:relative;height:40px;background:#f8fafc;border:1px solid var(--line);border-radius:9px;overflow:hidden}
 .jr-lane .tick{position:absolute;top:0;bottom:0;width:1px;background:var(--line);opacity:.6}
 .jr-lane.free{cursor:copy}
+.jr-cell.book, .jr-mday.book{cursor:copy}
+.jr-cell.book:hover{background:#f1f5f9;box-shadow:inset 0 0 0 1px #cbd5e1}
+.jr-mday.book:hover{background:#f8fafc;box-shadow:inset 0 0 0 1px #cbd5e1}
+.jr-mday .dn{cursor:pointer}
 .jr-lane.free:hover{background:#f1f5f9;border-color:#cbd5e1}
 .jr-lane.free .jr-block{cursor:pointer}
 .jr-block{position:absolute;top:4px;bottom:4px;border-radius:7px;color:#fff;font-size:11px;font-weight:700;
@@ -606,7 +610,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
           <select id="jrLoc" onchange="renderJournal()" style="display:none"></select>
         </span>
       </h3>
-      <div class="muted" id="jrHint" style="font-size:12.5px;margin-bottom:10px">Полоса — занятое время комнаты. Нажмите на свободное место в строке комнаты, чтобы забронировать это время, или на полосу — чтобы открыть существующую бронь.</div>
+      <div class="muted" id="jrHint" style="font-size:12.5px;margin-bottom:10px">Нажмите на свободное место в сетке — откроется бронирование на эту комнату и время. В видах «Неделя» и «Месяц» кликабельны клетки дат, номер дня открывает расписание. Клик по цветной полосе — открыть существующую бронь.</div>
       <div id="jrGrid"></div>
       <div class="jr-legend">
         <span><i style="background:#64748b"></i> предбронь (без оплаты)</span>
@@ -1910,17 +1914,19 @@ function jrRenderWeek(date, rooms, all){
   const head=`<div class="jr-wk-wrap"><div class="jr-wk"><div></div>${dates.map((d,i)=>
     `<div class="wk-head ${d===today?'today':''}" onclick="jrGoDay('${d}')" title="Открыть день">${JR_WD[i]} ${d.slice(8,10)}.${d.slice(5,7)}</div>`).join('')}`;
   const hasNoRoom=all.some(b=>!b.roomId && dates.includes(b.date));
-  const rowFor=(label, sub, match)=>`
+  const rowFor=(label, sub, match, roomId)=>`
     <div class="wk-room">${label}<small>${sub||''}</small></div>`+
     dates.map(d=>{
       const list=all.filter(b=>b.date===d && match(b)).sort(sortT);
-      return `<div class="jr-cell ${d===today?'today':''}">${list.map(b=>jrChip(b)).join('')}</div>`;
+      // клик по клетке — бронь на эту комнату и дату
+      const book = roomId ? ` book" title="Забронировать ${label} на ${dmy(d)}" onclick="openNewBooking({roomId:${roomId},date:'${d}'})` : '';
+      return `<div class="jr-cell ${d===today?'today':''}${book}">${list.map(b=>jrChip(b)).join('')}</div>`;
     }).join('');
   const rows=rooms.map(r=>{
     const locName=(window.ALL_LOCS||[]).filter(l=>l.id===+r.loc).map(l=>l.name)[0];
-    return rowFor(r.name, (r.cap?r.cap+' мест':'')+(locName?(r.cap?' · ':'')+locName:''), b=>+b.roomId===+r.id);
+    return rowFor(r.name, (r.cap?r.cap+' мест':'')+(locName?(r.cap?' · ':'')+locName:''), b=>+b.roomId===+r.id, r.id);
   }).join('');
-  const extra=hasNoRoom?rowFor('Без комнаты','', b=>!b.roomId):'';
+  const extra=hasNoRoom?rowFor('Без комнаты','', b=>!b.roomId, null):'';
   return rooms.length||hasNoRoom
     ? head+rows+extra+'</div></div>'
     : '<div class="muted" style="padding:10px 0">Добавьте банкетные комнаты внизу страницы</div>';
@@ -1948,10 +1954,11 @@ function jrRenderMonth(date, all){
     const list=all.filter(b=>b.date===ds).sort(sortT);
     const shown=list.slice(0,3);
     const more=list.length-shown.length;
-    return `<div class="jr-mday ${other?'other':''} ${ds===today?'today':''}">
-      <span class="dn" onclick="jrGoDay('${ds}')" title="Открыть день">${x.getDate()}</span>
+    return `<div class="jr-mday book ${other?'other':''} ${ds===today?'today':''}"
+      title="Забронировать на ${dmy(ds)}" onclick="openNewBooking({date:'${ds}'})">
+      <span class="dn" onclick="event.stopPropagation();jrGoDay('${ds}')" title="Открыть расписание дня">${x.getDate()}</span>
       ${shown.map(b=>jrChip(b)).join('')}
-      ${more>0?`<span class="jr-more" onclick="jrGoDay('${ds}')">+ ещё ${more}</span>`:''}
+      ${more>0?`<span class="jr-more" onclick="event.stopPropagation();jrGoDay('${ds}')">+ ещё ${more}</span>`:''}
     </div>`;
   }).join('');
   return head+body+'</div>';
