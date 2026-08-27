@@ -343,10 +343,20 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 .svc-group{margin-bottom:12px}
 .svc-group:last-child{margin-bottom:0}
 .svc-group h5{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--dim);
-  margin:0 0 7px;display:flex;align-items:center;gap:7px}
-.svc-group h5::before{content:'📁'}
+  margin:0 0 7px;display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;
+  padding:3px 6px;margin-left:-6px;border-radius:8px;transition:background .12s}
+.svc-group h5:hover{background:#f1f5f9;color:var(--ink, #0f172a)}
+.svc-group h5::before{content:'📂'}
+.svc-group.fold h5::before{content:'📁'}
+.svc-group h5::after{content:'▾';font-size:11px;line-height:1}
+.svc-group.fold h5::after{content:'▸'}
+.svc-group.fold h5{margin-bottom:0}
+.svc-group.fold .svc-list{display:none}
 .svc-group h5 span{font-size:11px;font-weight:700;color:var(--dim);background:var(--bg2, #f1f5f9);
   border-radius:999px;padding:1px 8px}
+.svc-group h5:hover span{background:#e2e8f0}
+.svc-group h5 span.pick{color:#fff;background:var(--green, #059669)}
+.svc-group h5:hover span.pick{background:var(--green, #059669)}
 .jr-lane.free{cursor:copy}
 .jr-cell.book, .jr-mday.book{cursor:copy}
 .jr-cell.book:hover{background:#f1f5f9;box-shadow:inset 0 0 0 1px #cbd5e1}
@@ -1620,6 +1630,11 @@ function addExpense(){
 
 /* ================= ПРАЗДНИКИ ================= */
 let pbSel = {};
+// Свёрнутые папки услуг: ключ — id группы (0 — «Прочее»). По умолчанию все
+// открыты; состояние живёт до перезагрузки страницы, чтобы сотрудник не
+// разворачивал одно и то же на каждой брони.
+let pbFolds = {};
+function pbFold(id){ pbFolds[id] = !pbFolds[id]; renderPartyForm(); }
 // Услуги праздника, разложенные по группам-папкам. Показываем только те, что
 // работают в этом ТЦ: чужие услуги сотруднику в списке не нужны и попадали бы
 // в бронь по ошибке. Услуги без группы собираются в отдельную папку в конце.
@@ -1644,9 +1659,14 @@ function renderPartyForm(){
       ${opts.length?`<select onchange="pbSel[${s.id}]&&(pbSel[${s.id}].option=this.value)" onclick="event.stopPropagation()">${opts.map(o=>`<option>${o}</option>`).join('')}</select>`:''}
     </div>`;
   };
-  const blocks = partySvcGroups().map(gr=>
-    `<div class="svc-group"><h5>${gr.name}<span>${gr.list.length}</span></h5>
-      <div class="svc-list">${gr.list.map(svcCard).join('')}</div></div>`);
+  const blocks = partySvcGroups().map(gr=>{
+    const off = !!pbFolds[gr.id];
+    // Сколько услуг папки уже в брони — чтобы свёрнутая папка не прятала выбор
+    const picked = gr.list.filter(s=>pbSel[s.id]).length;
+    return `<div class="svc-group${off?' fold':''}">
+      <h5 onclick="pbFold(${gr.id})" title="${off?'Развернуть':'Свернуть'} папку">${gr.name}<span>${gr.list.length}</span>${picked?`<span class="pick">выбрано ${picked}</span>`:''}</h5>
+      <div class="svc-list">${gr.list.map(svcCard).join('')}</div></div>`;
+  });
   $('pbServices').innerHTML = blocks.join('')
     || '<div class="muted" style="font-size:12.5px;padding:8px 0">Для этого ТЦ услуг не заведено — добавьте их в «Настройки → Праздники»</div>';
   renderPbTotal();
