@@ -45,7 +45,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);
 CREATE TABLE IF NOT EXISTS product_groups (
   id    bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   name  text NOT NULL,
-  kind  text NOT NULL DEFAULT 'goods',         -- tickets | cafe | goods
+  kind  text NOT NULL DEFAULT 'goods',         -- tickets | party | cafe | goods
   sort  int  NOT NULL DEFAULT 0
 );
 
@@ -526,3 +526,8 @@ ALTER TABLE passes ADD COLUMN IF NOT EXISTS location_ids bigint[] NOT NULL DEFAU
 -- покупка, и процент по ней обычно свой. Пока не задан — берётся общий.
 -- Бронь связывается с клиентом, чтобы бонусы было кому начислить.
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS client_id bigint REFERENCES clients(id);
+
+-- Услуги праздника раскладываются по группам, как товары: аниматоры, шоу,
+-- дополнительное время и т.д. Группы берутся из общего списка групп продаж,
+-- раздел «Праздники» (kind='party'). Без группы — попадает в «Прочее».
+ALTER TABLE services ADD COLUMN IF NOT EXISTS group_id bigint REFERENCES product_groups(id);

@@ -339,6 +339,14 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 .jr-name small{display:block;color:var(--dim);font-weight:500;font-size:11px}
 .jr-lane{flex:1;position:relative;height:40px;background:#f8fafc;border:1px solid var(--line);border-radius:9px;overflow:hidden}
 .jr-lane .tick{position:absolute;top:0;bottom:0;width:1px;background:var(--line);opacity:.6}
+/* услуги праздника по группам-папкам */
+.svc-group{margin-bottom:12px}
+.svc-group:last-child{margin-bottom:0}
+.svc-group h5{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--dim);
+  margin:0 0 7px;display:flex;align-items:center;gap:7px}
+.svc-group h5::before{content:'📁'}
+.svc-group h5 span{font-size:11px;font-weight:700;color:var(--dim);background:var(--bg2, #f1f5f9);
+  border-radius:999px;padding:1px 8px}
 .jr-lane.free{cursor:copy}
 .jr-cell.book, .jr-mday.book{cursor:copy}
 .jr-cell.book:hover{background:#f1f5f9;box-shadow:inset 0 0 0 1px #cbd5e1}
@@ -583,7 +591,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
         <div><label>Комната</label><select id="pbRoom"></select></div>
         <div><label>Детей</label><input type="number" id="pbKids" value="8" min="1"></div>
       </div>
-      <div class="svc-list" id="pbServices"></div>
+      <div id="pbServices" style="margin:10px 0"></div>
       <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:10px">
         <div class="totrow big" style="border:none;padding:0;margin:0"><span>Итого:&nbsp;</span><span id="pbTotal">0 ₽</span></div>
         <button class="btn btn-orange" style="margin-left:auto" onclick="createBooking()">Забронировать 🎉</button>
@@ -830,8 +838,9 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
     </div>
     <div class="card set-pane" id="s-services" hidden>
       <h3>🎉 Праздники <button class="btn btn-green btn-sm" style="margin-left:auto" onclick="addService()">+ Добавить позицию</button></h3>
-      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Перечень для праздников и дней рождения: пакетные предложения, анимация, шоу-программы, продление комнат и другие услуги. Список ведёте сами — эти позиции доступны при бронировании в разделе «Праздники». В столбце «ТЦ» можно отметить точки, где услуга доступна (сразу несколько).</div>
-      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Цена, ₽</th><th>Варианты (через |)</th><th>ТЦ</th><th></th></tr></thead><tbody id="setServices"></tbody></table></div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Перечень для праздников и дней рождения: пакетные предложения, анимация, шоу-программы, продление комнат и другие услуги. Список ведёте сами — эти позиции предлагаются при бронировании в разделе «Журнал». В столбце «ТЦ» отметьте точки, где услуга доступна (сразу несколько): в других ТЦ она в бронировании не появится, «Все ТЦ» — работает везде.</div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:10px">Столбец «Группа» — папка, в которую услуга попадёт при бронировании («Аниматоры», «Шоу-программы», «Продление»). Папки заводятся здесь же и видны в «Группах продаж» с разделом «Праздники»; услуги без группы собираются в папку «Прочее». <button class="btn btn-ghost btn-sm" onclick="addPartyGroup()">＋ Группа праздников</button></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Группа</th><th>Цена, ₽</th><th>Варианты (через |)</th><th>ТЦ</th><th></th></tr></thead><tbody id="setServices"></tbody></table></div>
     </div>
     <div class="card set-pane" id="s-passes" hidden>
       <h3>🎫 Абонементы в парк</h3>
@@ -1611,14 +1620,35 @@ function addExpense(){
 
 /* ================= ПРАЗДНИКИ ================= */
 let pbSel = {};
+// Услуги праздника, разложенные по группам-папкам. Показываем только те, что
+// работают в этом ТЦ: чужие услуги сотруднику в списке не нужны и попадали бы
+// в бронь по ошибке. Услуги без группы собираются в отдельную папку в конце.
+function partySvcGroups(){
+  const here = SERVICES.filter(s=>typeof prodInLoc!=='function'||prodInLoc(s));
+  const groups = (typeof GROUPS!=='undefined'?GROUPS:[]).filter(g=>g.kind==='party');
+  const out = [];
+  groups.forEach(g=>{
+    const list = here.filter(s=>+s.group===g.id);
+    if(list.length) out.push({ id:g.id, name:g.name, list });
+  });
+  const rest = here.filter(s=>!groups.some(g=>+s.group===g.id));
+  if(rest.length) out.push({ id:0, name: out.length?'Прочее':'Услуги', list: rest });
+  return out;
+}
 function renderPartyForm(){
   $('pbRoom').innerHTML = ROOMS.map(r=>`<option value="${r.id}">${r.name}${r.cap?' · '+r.cap+' мест':''}</option>`).join('');
-  $('pbServices').innerHTML = SERVICES.filter(s=>typeof prodInLoc!=='function'||prodInLoc(s)).map(s=>{
+  const svcCard = (s)=>{
     const opts = s.options ? s.options.split('|') : [];
     return `<div class="svc ${pbSel[s.id]?'on':''}" onclick="toggleSvc(${s.id},event)">
       <div>${s.name}</div><div class="sp">${fmt(s.price)}</div>
       ${opts.length?`<select onchange="pbSel[${s.id}]&&(pbSel[${s.id}].option=this.value)" onclick="event.stopPropagation()">${opts.map(o=>`<option>${o}</option>`).join('')}</select>`:''}
-    </div>`;}).join('');
+    </div>`;
+  };
+  const blocks = partySvcGroups().map(gr=>
+    `<div class="svc-group"><h5>${gr.name}<span>${gr.list.length}</span></h5>
+      <div class="svc-list">${gr.list.map(svcCard).join('')}</div></div>`);
+  $('pbServices').innerHTML = blocks.join('')
+    || '<div class="muted" style="font-size:12.5px;padding:8px 0">Для этого ТЦ услуг не заведено — добавьте их в «Настройки → Праздники»</div>';
   renderPbTotal();
 }
 function toggleSvc(id,e){
@@ -1697,7 +1727,7 @@ function renderBookingCard(){
         <button title="Убрать услугу" onclick="bkRemoveService(${b.id},${i})">✕</button></div>`).join('')
         || '<div class="muted" style="font-size:12.5px;padding:4px 0">Услуг пока нет</div>'}
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-        <select id="bkSvcSel" style="flex:1;min-width:180px">${SERVICES.map(s=>`<option value="${s.id}">${s.name} · ${fmt(+s.price)}</option>`).join('')}</select>
+        <select id="bkSvcSel" style="flex:1;min-width:180px">${partySvcGroups().map(gr=>`<optgroup label="${gr.name}">${gr.list.map(s=>`<option value="${s.id}">${s.name} · ${fmt(+s.price)}</option>`).join('')}</optgroup>`).join('') || '<option value="">Услуг для этого ТЦ нет</option>'}</select>
         <button class="btn btn-ghost btn-sm" onclick="bkAddService(${b.id})">+ Добавить услугу</button>
       </div>
       <div class="totrow big" style="margin-top:10px"><span>Итого:</span>
@@ -2215,17 +2245,21 @@ function renderSettings(){
       (rows.map(ticketRow).join('') || `<tr><td colspan="7" class="muted" style="padding-left:18px">в группе пока нет билетов</td></tr>`);
   }).join(''))
     || '<tr><td colspan="7" class="muted">Пока нет групп билетов — нажмите «+ Группа билетов»</td></tr>';
-  const KIND_OPT = {tickets:'Билеты', cafe:'Товары (кафе)', goods:'Товары'};
+  const KIND_OPT = {tickets:'Билеты', party:'Праздники', cafe:'Товары (кафе)', goods:'Товары'};
   $('setGroups').innerHTML = GROUPS.map(g=>{
-    const cnt = TARIFFS.filter(t=>t.group===g.id).length;
+    const cnt = TARIFFS.filter(t=>t.group===g.id).length + SERVICES.filter(x=>+x.group===g.id).length;
     return `<tr><td><input value="${g.name}" onchange="updG(${g.id},this.value)" style="min-width:200px"></td>
     <td><select onchange="updGKind(${g.id},this.value)">
       ${Object.entries(KIND_OPT).map(([k,v])=>`<option value="${k}" ${(g.kind||'goods')===k?'selected':''}>${v}</option>`).join('')}</select></td>
     <td>${cnt}</td>
     <td><button class="btn btn-red btn-sm" onclick="delG(${g.id})" ${GROUPS.length<=1?'disabled':''}>Удалить</button></td></tr>`;
   }).join('');
+  const partyGroups = GROUPS.filter(g=>g.kind==='party');
+  const svcGroupOpts = (cur)=>'<option value="">Без группы</option>'+partyGroups.map(g=>
+    `<option value="${g.id}" ${+cur===g.id?'selected':''}>${g.name}</option>`).join('');
   $('setServices').innerHTML = SERVICES.map(s=>`
     <tr><td><input value="${s.name}" onchange="updS(${s.id},'name',this.value)" style="width:100%;min-width:180px"></td>
+    <td><select style="min-width:140px" onchange="updS(${s.id},'group',this.value?+this.value:null)">${svcGroupOpts(s.group)}</select></td>
     <td><input type="number" value="${s.price}" onchange="updS(${s.id},'price',+this.value)" style="width:90px"></td>
     <td><input value="${s.options}" onchange="updS(${s.id},'options',this.value)" style="width:100%;min-width:200px" placeholder="Вариант 1|Вариант 2"></td>
     <td>${locSelHtml('service', s.id, s.locs)}</td>
@@ -2266,9 +2300,15 @@ function updT(id,f,v){
   if(f==='loc') v = v ? +v : null; // «Все ТЦ» — без привязки к точке
   TARIFFS.find(t=>t.id===id)[f]=v; renderSettings(); renderTariffs(); toast('Позиция обновлена');
 }
-function updG(id,v){ GROUPS.find(g=>g.id===id).name=v; renderSettings(); renderTariffs(); toast('Группа переименована'); }
-function updGKind(id,v){ GROUPS.find(g=>g.id===id).kind=v; renderSettings(); renderTariffs(); toast('Раздел группы изменён'); }
+function updG(id,v){ GROUPS.find(g=>g.id===id).name=v; renderSettings(); renderTariffs(); renderPartyForm(); toast('Группа переименована'); }
+function updGKind(id,v){ GROUPS.find(g=>g.id===id).kind=v; renderSettings(); renderTariffs(); renderPartyForm(); toast('Раздел группы изменён'); }
 function addGroup(){ GROUPS.push({id:seq++, name:"Новая группа", kind:"goods"}); renderSettings(); renderTariffs(); toast('Группа добавлена'); }
+function addPartyGroup(){
+  const name = prompt('Название группы услуг (например, «Аниматоры»):');
+  if(!name || !name.trim()) return;
+  GROUPS.push({id:seq++, name:name.trim(), kind:'party'});
+  renderSettings(); renderPartyForm(); toast('Группа праздников создана: '+name.trim());
+}
 function delG(id){
   if(GROUPS.length<=1) return toast('Нельзя удалить последнюю группу', true);
   const has = TARIFFS.filter(t=>t.group===id);
@@ -2278,8 +2318,10 @@ function delG(id){
     has.forEach(t=>t.group=first);
   }
   GROUPS = GROUPS.filter(g=>g.id!==id);
+  // Услуги удалённой папки остаются, но без группы — уйдут в «Прочее»
+  SERVICES.forEach(s=>{ if(+s.group===id) s.group=null; });
   if(posGroup===id) posGroup = GROUPS[0].id;
-  renderSettings(); renderTariffs(); toast('Группа удалена');
+  renderSettings(); renderTariffs(); renderPartyForm(); toast('Группа удалена');
 }
 function updS(id,f,v){ SERVICES.find(s=>s.id===id)[f]=v; renderPartyForm(); toast('Услуга обновлена'); }
 function updR(id,f,v){ ROOMS.find(r=>r.id===id)[f]=v; renderPartyForm(); toast('Комната обновлена'); }
