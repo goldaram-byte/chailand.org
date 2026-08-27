@@ -187,12 +187,18 @@ passesRouter.post(
       if (p.status === 'used_up' || (p.visits_left != null && p.visits_left <= 0)) {
         throw Object.assign(new Error('Посещения по абонементу закончились'), { status: 409 });
       }
-      // Абонемент действует не везде: списать посещение можно только в той
-      // точке, которая указана в его настройках.
-      if (!passWorksIn(p.location_ids, location_id)) {
+      // Где абонемент действует — решает НАСТРОЙКА вида абонемента, а не место
+      // покупки: купили в одном ТЦ, ходить можно во всех, которым дали доступ.
+      // Открыли ещё точку — уже проданные абонементы начинают работать и там.
+      // Список из самого абонемента остаётся запасным на случай, если вид удалили.
+      const type = p.pass_type_id
+        ? await cq1('SELECT location_ids FROM pass_types WHERE id=$1', [p.pass_type_id])
+        : null;
+      const allowed = type ? type.location_ids || [] : p.location_ids || [];
+      if (!passWorksIn(allowed, location_id)) {
         const names = await q(
           'SELECT name FROM locations WHERE id = ANY($1::bigint[]) ORDER BY sort, id',
-          [p.location_ids]
+          [allowed]
         );
         const where = names.map((l) => l.name).join(', ') || 'другой точке';
         throw Object.assign(new Error('Абонемент действует только в: ' + where), { status: 409 });
