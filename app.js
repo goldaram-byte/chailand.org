@@ -1823,7 +1823,7 @@
         // В кассе абонемент продаётся как позиция чека (группа «Абонементы»),
         // отдельная кнопка нужна только в карточке клиента.
         var sell = inCard
-          ? '<button class="btn btn-ghost btn-sm" onclick="openPassSell(' + clientId + ',\'' + containerId + '\',true)">🎫 Продать абонемент</button>'
+          ? '<button class="btn btn-ghost btn-sm" onclick="openPassSell(' + clientId + ',\'' + containerId + '\',true)">🎫 Абонемент в чек</button>'
           : '';
         el.innerHTML = rows + (sell ? '<div style="margin:2px 0 8px">' + sell + '</div>' : '');
       }).catch(function () {});
@@ -1839,20 +1839,20 @@
         .catch(pErr);
     };
 
-    // ---- Продажа абонемента (модалка) ----
+    // ---- Добавление абонемента в чек из карточки клиента ----
+    // Единственный путь продажи абонемента — через чек кассы, как у билетов
+    // и товаров. Здесь только выбираем вид и кладём позицию в чек.
     var PASS_SELL = null;
-    window.openPassSell = function (clientId, containerId, inCard, presetTypeId) {
+    window.openPassSell = function (clientId, containerId, inCard) {
       api('/passes/types').then(function (list) {
         var d = (typeof deviceLoc === 'function') ? deviceLoc() : null;
         var types = (list || []).filter(function (t) { return t.is_active && (!d || !t.location_id || +t.location_id === +d); });
         if (!types.length) { if (typeof toast === 'function') toast('Нет видов абонементов — добавьте в Настройках → Абонементы', true); return; }
-        // из кассы приходит уже выбранный вид абонемента
-        var preset = presetTypeId && types.some(function (t) { return +t.id === +presetTypeId; }) ? +presetTypeId : types[0].id;
-        PASS_SELL = { clientId: clientId, containerId: containerId, inCard: !!inCard, typeId: preset, types: types };
+        PASS_SELL = { clientId: clientId, containerId: containerId, inCard: !!inCard, typeId: types[0].id, types: types };
         var body = document.getElementById('passSellBody');
         body.innerHTML =
-          '<div class="cc-head"><div style="flex:1"><div style="font-size:17px;font-weight:800">🎫 Продажа абонемента</div>' +
-          '<div class="muted" style="font-size:13px">Абонемент будет оформлен на карту клиента</div></div>' +
+          '<div class="cc-head"><div style="flex:1"><div style="font-size:17px;font-weight:800">🎫 Абонемент в чек</div>' +
+          '<div class="muted" style="font-size:13px">Позиция ляжет в чек кассы на карту клиента — оплата обычная, вместе с остальным чеком</div></div>' +
           '<button onclick="closePassSell()" style="font-size:20px;color:var(--dim);padding:4px 10px">✕</button></div>' +
           '<div id="passTypeList">' + types.map(function (t) {
             var vis = t.visits == null ? 'безлимит' : t.visits + ' посещ.';
@@ -1860,13 +1860,8 @@
               pEsc(t.name) + ' — ' + fmtNum(Number(t.price)) +
               '<small>' + vis + ' · срок ' + t.valid_days + ' дн.</small></button>';
           }).join('') + '</div>' +
-          '<div style="display:flex;gap:10px;align-items:end;margin-top:12px;flex-wrap:wrap">' +
-          '<div><label style="font-size:10.5px;color:var(--dim);font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Способ оплаты</label>' +
-          '<select id="psMethod"><option value="cash">Наличные</option><option value="card">Карта</option></select></div>' +
-          '<label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;padding-bottom:10px">' +
-          '<input type="checkbox" id="psFiscal" checked style="width:auto"> пробить чек (по кассе)</label>' +
-          '<button class="btn btn-green" style="margin-left:auto" onclick="passSellConfirm()">Оформить абонемент</button></div>' +
-          '<div class="muted" style="font-size:11.5px;margin-top:8px">С галочкой продажа проводится по кассе: фискальный чек и выручка смены (клиенту начислится кэшбэк). Без галочки — только запись абонемента.</div>';
+          '<div style="display:flex;gap:10px;align-items:center;margin-top:12px">' +
+          '<button class="btn btn-green" style="margin-left:auto" onclick="passSellConfirm()">Добавить в чек</button></div>';
         document.getElementById('passOverlay').classList.add('open');
       }).catch(pErr);
     };
@@ -1879,17 +1874,19 @@
     window.passSellConfirm = function () {
       if (!PASS_SELL) return;
       var s = PASS_SELL;
-      var method = (document.getElementById('psMethod') || {}).value || 'cash';
-      var fiscal = !!((document.getElementById('psFiscal') || {}).checked);
-      api('/passes/sell', { method: 'POST', body: {
-        pass_type_id: s.typeId, client_id: s.clientId, method: method, fiscal: fiscal,
-        location_id: (typeof deviceLoc === 'function') ? deviceLoc() : null,
-      } }).then(function (p) {
-        if (typeof toast === 'function') toast('🎫 Абонемент «' + p.name + '» оформлен' + (p.sale_id ? ' · чек пробит по кассе' : ' · без чека'));
-        window.closePassSell();
-        window.loadClientPasses(s.clientId, s.containerId, s.inCard);
-        hydrateAll().catch(function () {}); // обновить продажи/бонусы
-      }).catch(pErr);
+      if (!shift) { if (typeof toast === 'function') toast('Сначала откройте смену в кассе', true); return; }
+      var cl = clients.find(function (x) { return x.id === s.clientId; });
+      if (!cl) { if (typeof toast === 'function') toast('Клиент не найден', true); return; }
+      var t = s.types.find(function (x) { return +x.id === +s.typeId; });
+      if (!t) return;
+      // Клиент в чеке — абонемент оформляется на его карту
+      checkClient = cl;
+      if (typeof renderClientSlot === 'function') renderClientSlot();
+      addLine({ id: 'pass' + t.id, name: 'Абонемент «' + t.name + '»', price: Number(t.price), passType: t.id });
+      window.closePassSell();
+      if (typeof closeClientCard === 'function') closeClientCard();
+      if (typeof go === 'function') go('pos');
+      if (typeof toast === 'function') toast('🎫 Абонемент «' + t.name + '» добавлен в чек — проведите оплату');
     };
 
     // ---- Абонементы в карточке клиента ----
