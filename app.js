@@ -852,8 +852,9 @@
       }
       api('/catalog').then(function (c) {
         var groups = c.groups || [], products = c.products || [];
-        // «Товары» — всё, кроме групп раздела «Билеты» (те живут на вкладке «Тарифы»)
-        var goodsGroups = groups.filter(function (g) { return g.kind !== 'tickets'; });
+        // «Товары» — всё, кроме групп раздела «Билеты» (те живут на вкладке
+        // «Тарифы») и папок праздничных услуг (те живут в бронировании)
+        var goodsGroups = groups.filter(function (g) { return g.kind !== 'tickets' && g.kind !== 'party'; });
         var goodsIds = goodsGroups.map(function (g) { return g.id; });
         var goods = products.filter(function (p) { return goodsIds.indexOf(p.group_id) !== -1; });
         var gname = {}; groups.forEach(function (g) { gname[g.id] = g.name; });
@@ -1723,6 +1724,7 @@
         id: b.id, date: (b.date || '').slice(0, 10), from: b.time || '', to: b.time_to || '',
         roomId: b.room_id, room: b.room_name || '—', client: b.client_name, phone: b.phone || '',
         kids: Number(b.kids_count || 0),
+        kidName: b.kid_name || '', kidAge: b.kid_age == null ? null : Number(b.kid_age),
         services: Array.isArray(b.services) ? b.services : [],
         total: Number(b.total), prepaid: Number(b.prepay), status: b.status,
         seller_id: b.seller_id || null, seller: b.seller_name || '—',
@@ -1761,6 +1763,12 @@
       var to = (document.getElementById('pbTo') || {}).value || '';
       var roomId = +((document.getElementById('pbRoom') || {}).value || 0) || null;
       var kids = +((document.getElementById('pbKids') || {}).value || 0);
+      var kidName = ((document.getElementById('pbKidName') || {}).value || '').trim();
+      var kidAgeRaw = (document.getElementById('pbKidAge') || {}).value;
+      var kidAge = (kidAgeRaw === '' || kidAgeRaw == null) ? null : +kidAgeRaw;
+      if (kidAge !== null && (!Number.isInteger(kidAge) || kidAge < 1 || kidAge > 18)) {
+        return toast('Возраст именинника — число от 1 до 18', true);
+      }
       if (!name.trim()) return toast('Укажите имя клиента', true);
       if (!date) return toast('Укажите дату праздника', true);
       if (!phone.trim()) return toast('Укажите телефон клиента', true);
@@ -1772,12 +1780,15 @@
       });
       api('/bookings', { method: 'POST', body: {
         client_name: name.trim(), phone: phone.trim(), date: date, time: from, time_to: to,
-        room_id: roomId, kids_count: kids, services: services, total: pbTotal(),
+        room_id: roomId, kids_count: kids, kid_name: kidName, kid_age: kidAge,
+        services: services, total: pbTotal(),
         location_id: (typeof deviceLoc === 'function') ? deviceLoc() : null,
       } }).then(function () {
         pbSel = {};
         var pn = document.getElementById('pbName'); if (pn) pn.value = '';
         var pp = document.getElementById('pbPhone'); if (pp) pp.value = '';
+        var kn = document.getElementById('pbKidName'); if (kn) kn.value = '';
+        var ka = document.getElementById('pbKidAge'); if (ka) ka.value = '';
         if (typeof renderPartyForm === 'function') renderPartyForm();
         if (typeof closeNewBooking === 'function') closeNewBooking();
         if (typeof toast === 'function') toast('Забронировано 🎉 Предбронь в журнале');
@@ -1788,9 +1799,17 @@
     };
 
     // Операции карточки мероприятия
+    var _bkSetKid = window.bkSetKid;
     window.bkSetStatus = function (id, st) { if (!SERVER) return; bkPatch(id, { status: st }); };
     window.bkSetTotal = function (id, v) { if (!SERVER) return; bkPatch(id, { total: +v || 0 }); };
     window.bkSetComment = function (id, v) { if (!SERVER) return; bkPatch(id, { comment: v }); };
+    // Именинник: имя и возраст уходят вместе — их правят по очереди в одном блоке
+    window.bkSetKid = function (id) {
+      if (!SERVER) return _bkSetKid ? _bkSetKid.apply(this, arguments) : undefined;
+      var k = (typeof bkKidRead === 'function') ? bkKidRead() : null;
+      if (!k) return;
+      bkPatch(id, { kid_name: k.name, kid_age: k.age }, 'Именинник сохранён');
+    };
     window.bkAddService = function (id) {
       var b = bookings.find(function (x) { return x.id === id; }); if (!b) return;
       var sel = document.getElementById('bkSvcSel');
@@ -2306,8 +2325,9 @@
       var gsel = document.getElementById('dashGroup');
       if (gsel) {
         var gcur = gsel.value;
+        var dashG = (typeof posGroups === 'function') ? posGroups() : GROUPS;
         gsel.innerHTML = '<option value="all">Все группы</option>' +
-          GROUPS.map(function (g) { return '<option value="' + g.id + '">' + g.name + '</option>'; }).join('');
+          dashG.map(function (g) { return '<option value="' + g.id + '">' + g.name + '</option>'; }).join('');
         gsel.value = gcur || 'all';
         if (!gsel.value) gsel.value = 'all';
       }

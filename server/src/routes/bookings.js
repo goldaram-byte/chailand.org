@@ -17,6 +17,18 @@ bookingsRouter.use(requireAuth, requirePerm('bookings'));
 
 const STATUSES = ['new', 'prepaid', 'paid', 'done', 'cancelled', 'confirmed'];
 
+const trimOrNull = (v) => {
+  const s = v == null ? '' : String(v).trim();
+  return s ? s : null;
+};
+// Возраст именинника: пусто — не указан, иначе 1..18. false — значение неверное.
+function kidAge(v) {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 1 || n > 18) return false;
+  return n;
+}
+
 bookingsRouter.get(
   '/',
   ah(async (req, res) => {
@@ -47,17 +59,22 @@ bookingsRouter.post(
       room_id,
       services = [],
       kids_count = 0,
+      kid_name = null,
+      kid_age = null,
       comment,
       total = 0,
       location_id = null,
     } = req.body || {};
     if (!client_name || !date) return res.status(400).json({ error: 'Укажите имя и дату' });
+    const age = kidAge(kid_age);
+    if (age === false) return res.status(400).json({ error: 'Возраст именинника — число от 1 до 18' });
     const row = await q1(
       `INSERT INTO bookings (client_name, phone, date, time, time_to, room_id, services, kids_count,
-                             comment, total, location_id, seller_id, status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'new') RETURNING *`,
+                             kid_name, kid_age, comment, total, location_id, seller_id, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'new') RETURNING *`,
       [client_name, phone || null, date, time || null, time_to || null, room_id || null,
-       JSON.stringify(services), kids_count, comment || null, total, location_id || null, req.user.id]
+       JSON.stringify(services), kids_count, trimOrNull(kid_name), age,
+       comment || null, total, location_id || null, req.user.id]
     );
     await audit(req, 'booking.create', { entity: 'booking', entityId: row.id });
     res.json(row);
@@ -69,6 +86,12 @@ bookingsRouter.put(
   ah(async (req, res) => {
     const { status, total, comment, time, time_to, room_id, date, kids_count, services, seller_id } = req.body || {};
     if (status && !STATUSES.includes(status)) return res.status(400).json({ error: 'Неизвестный статус' });
+    // Именинника можно и стереть, поэтому COALESCE тут не подходит: смотрим,
+    // прислали поле или нет.
+    const kidNameSet = Object.prototype.hasOwnProperty.call(req.body || {}, 'kid_name');
+    const kidAgeSet = Object.prototype.hasOwnProperty.call(req.body || {}, 'kid_age');
+    const age = kidAgeSet ? kidAge(req.body.kid_age) : null;
+    if (age === false) return res.status(400).json({ error: 'Возраст именинника — число от 1 до 18' });
     // Менять, кому засчитана продажа праздника, может только владелец.
     if (seller_id !== undefined && req.user.role !== 'owner') {
       return res.status(403).json({ error: 'Менять продавца может только владелец' });
@@ -80,10 +103,13 @@ bookingsRouter.put(
          time=COALESCE($5,time), time_to=COALESCE($6,time_to), room_id=COALESCE($7,room_id),
          date=COALESCE($8,date), kids_count=COALESCE($9,kids_count),
          services = CASE WHEN $10::bool THEN $11::jsonb ELSE services END,
-         seller_id = COALESCE($12, seller_id)
+         seller_id = COALESCE($12, seller_id),
+         kid_name = CASE WHEN $13::bool THEN $14 ELSE kid_name END,
+         kid_age  = CASE WHEN $15::bool THEN $16 ELSE kid_age END
        WHERE id=$1 RETURNING *`,
       [req.params.id, status, total, comment, time, time_to, room_id, date, kids_count,
-       svcProvided, JSON.stringify(services || []), seller_id]
+       svcProvided, JSON.stringify(services || []), seller_id,
+       kidNameSet, trimOrNull(req.body.kid_name), kidAgeSet, age]
     );
     if (!row) return res.status(404).json({ error: 'Бронирование не найдено' });
     await audit(req, 'booking.update', { entity: 'booking', entityId: req.params.id });
