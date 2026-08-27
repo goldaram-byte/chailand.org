@@ -2007,12 +2007,27 @@
       }
     });
 
-    // Открытие/закрытие смены — на сервер
+    // Открытие/закрытие смены — на сервер.
+    // Ошибку показываем: молчаливый catch раньше прятал отказ сервера, и касса
+    // работала «без смены» — продажи не попадали ни в один сменный отчёт.
+    var shiftErr = function (e) {
+      if (typeof toast === 'function') toast('Смена не открыта на сервере: ' + (e.message || 'ошибка'), true);
+    };
     wrap('openShift', function () {
       var cs = +(document.getElementById('cashStart') || {}).value || 0;
-      api('/pos/shift/open', { method: 'POST', body: { cash_start: cs, location_id: deviceLoc() } }).catch(function () {});
+      api('/pos/shift/open', { method: 'POST', body: { cash_start: cs, location_id: deviceLoc() } })
+        .catch(function (e) {
+          // уже открытая смена — не ошибка для кассира, просто продолжаем в ней
+          if (/уже открыта/i.test(e.message || '')) return;
+          shiftErr(e);
+        });
     });
-    wrap('closeShift', function () { api('/pos/shift/close', { method: 'POST', body: {} }).catch(function () {}); });
+    wrap('closeShift', function () {
+      api('/pos/shift/close', { method: 'POST', body: {} }).catch(function (e) {
+        if (/Открытой смены нет/i.test(e.message || '')) return;
+        if (typeof toast === 'function') toast('Смена не закрыта на сервере: ' + (e.message || 'ошибка'), true);
+      });
+    });
 
     // Новый клиент — через офлайн-очередь: работает без интернета и не теряется.
     // Локальный демо-обработчик тем временем показывает клиента сразу (оптимистично),
