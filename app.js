@@ -151,7 +151,16 @@
       // количество покупок, ближайший ДР ребёнка и метка абонементов
       clients = cl.map(mapCli);
       leads = (ld || []).map(mapLead);
+      // Продажи, которые касса пробила офлайн и ещё не отправила, оставляем —
+      // остальное берём с сервера. Так чек не пропадает без сети и не двоится,
+      // когда синхронизация уже прошла.
+      var pending = (sales || []).filter(function (s) { return !s.serverId && s.uuid; });
       sales = (sl || []).filter(function (s) { return !s.is_return; }).map(mapSale);
+      if (pending.length) {
+        var known = {};
+        sales.forEach(function (s) { if (s.uuid) known[s.uuid] = true; });
+        pending.forEach(function (p) { if (!known[p.uuid]) sales.unshift(p); });
+      }
 
       // Перерисовать всё, что зависит от данных
       safe(renderTariffs); safe(renderClients); safe(renderClientSlot); safe(renderCheck);
@@ -308,6 +317,9 @@
   function applyRole() {
     // Синхронизировать роль/навигацию демо с ролью с сервера
     if (typeof setRole === 'function' && ME) {
+      // Кто работает на самом деле. Ставим ДО setRole, иначе интерфейс
+      // подставит демо-имя роли («Ольга», «Елена») вместо сотрудника.
+      window.CURRENT_USER = { id: ME.id, name: ME.name, role: ME.role, roleName: ME.roleName };
       try { setRole(ME.role); } catch (e) {}
       // Подставить реальное имя сотрудника
       var pn = document.getElementById('profName'); if (pn) pn.textContent = ME.name;
@@ -329,7 +341,7 @@
   }
 
   function logout() {
-    localStorage.removeItem(TOKEN_KEY); ME = null;
+    localStorage.removeItem(TOKEN_KEY); ME = null; window.CURRENT_USER = null;
     updatePill();
     if (SERVER) showLogin();
   }
@@ -2010,8 +2022,13 @@
           },
         });
       }
-      // Привязать серверный uuid к локальной продаже (для будущего возврата)
-      setTimeout(function () { if (sales[0] && !sales[0].uuid) sales[0].uuid = id; }, 1700);
+      // Привязать серверный uuid к локальной продаже (для будущего возврата),
+      // а затем свериться с сервером: если чек уже ушёл, локальная копия
+      // заменится серверной и в списке не останется двух одинаковых продаж.
+      setTimeout(function () {
+        if (sales[0] && !sales[0].uuid) sales[0].uuid = id;
+        hydrateAll().catch(function () {});
+      }, 1700);
       if (window.FISCAL_DRIVER === 'shtrih') {
         printShtrihReceipt('sale', items, payments).then(send).catch(function (e) {
           if (typeof toast === 'function') toast(e.message, true); else alert(e.message);
