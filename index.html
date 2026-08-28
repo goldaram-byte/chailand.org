@@ -867,7 +867,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
     </div>
     <div class="card set-pane" id="s-products" hidden>
       <h3>🛍️ Товары</h3>
-      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Напитки, еда, сувениры и прочие товары для кассы. Включите «Учёт», чтобы вести остатки: приход, списание при продаже, инвентаризация. Галочка «Предлагать» — при нажатии «Оплатить» кассир увидит окно-напоминание предложить гостю этот товар и добавит его в чек одним нажатием.</div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Напитки, еда, сувениры и прочие товары для кассы. Включите «Учёт», чтобы вести остатки: приход, списание при продаже, инвентаризация. Галочка «Предлагать» — при нажатии «Оплатить» кассир увидит окно-напоминание предложить гостю этот товар и добавит его в чек одним нажатием; рядом с галочкой выбирается, в каких ТЦ предлагать («Все ТЦ» — везде, где товар продаётся).</div>
       <div class="frm" style="grid-template-columns:1fr 1fr 110px 110px 130px auto;margin-bottom:14px">
         <div><label>Группа</label><select id="pdGroup"></select></div>
         <div><label>Название</label><input id="pdName" placeholder="напр. Попкорн"></div>
@@ -1519,8 +1519,12 @@ function renderClientSlot(){
 // которых ещё нет в чеке. Кассир добавляет в один тап и идёт к оплате.
 let upsShown = false;
 function upsCandidates(){
+  // Где предлагать — отдельная настройка: пустой список ТЦ = везде, где товар
+  // продаётся; иначе только в перечисленных точках.
+  const d = (typeof deviceLoc==='function') ? deviceLoc() : null;
+  const upsHere = t => !t.ulocs || !t.ulocs.length || !d || t.ulocs.indexOf(Number(d)) !== -1;
   return TARIFFS.filter(t=>t.upsell && (typeof prodInLoc!=='function'||prodInLoc(t))
-    && !check.some(l=>sameId(l.t.id, t.id)));
+    && upsHere(t) && !check.some(l=>sameId(l.t.id, t.id)));
 }
 function upsRender(list){
   $('upsGrid').innerHTML = list.map(t=>{

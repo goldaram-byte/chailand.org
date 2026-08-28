@@ -139,7 +139,7 @@
 
       GROUPS = cat.groups.map(function (g) { return { id: g.id, name: g.name, kind: g.kind || 'goods' }; });
       TARIFFS = cat.products.map(function (p) {
-        return { id: p.id, pid: p.id, name: p.name, day: p.day_kind || 'any', price: Number(p.price), doc: p.requires_document, group: p.group_id, loc: p.location_id || null, locs: (p.location_ids || []).map(Number), track: !!p.track_stock, stock: Number(p.stock || 0), upsell: !!p.upsell };
+        return { id: p.id, pid: p.id, name: p.name, day: p.day_kind || 'any', price: Number(p.price), doc: p.requires_document, group: p.group_id, loc: p.location_id || null, locs: (p.location_ids || []).map(Number), track: !!p.track_stock, stock: Number(p.stock || 0), upsell: !!p.upsell, ulocs: (p.upsell_location_ids || []).map(Number) };
       });
       SERVICES = cat.services.map(function (s) {
         return { id: s.id, name: s.name, price: Number(s.price), options: s.options || '',
@@ -739,6 +739,20 @@
     // не сохранялась, а у билета с тем же id могли смениться ТЦ.
     var _saveLocSelCat = window.saveLocSel;
     window.saveLocSel = function (kind, id, ids) {
+      // Где предлагать товар при оплате (окно «Предложите гостю»)
+      if (kind === 'upsell') {
+        if (!SERVER) return;
+        api('/catalog/products/' + id, { method: 'PUT', body: { upsell_location_ids: ids || [] } })
+          .then(function () { return hydrateAll(); })
+          .then(function () {
+            if (typeof renderProducts === 'function') renderProducts();
+            if (typeof toast === 'function') {
+              toast(ids && ids.length ? 'Предлагается в: ' + locsLabel(ids) : 'Предлагается во всех ТЦ, где товар продаётся');
+            }
+          })
+          .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+        return;
+      }
       if (kind !== 'service' && kind !== 'product') {
         return _saveLocSelCat ? _saveLocSelCat.apply(this, arguments) : undefined;
       }
@@ -887,7 +901,10 @@
               '<td>' + eH(gname[p.group_id] || '—') + '</td>' +
               '<td><input type="number" value="' + Number(p.price) + '" style="width:90px" onchange="editProductPrice(' + p.id + ',this.value)"></td>' +
               '<td>' + (typeof locSelHtml === 'function' ? locSelHtml('product', p.id, (p.location_ids || []).map(Number)) : '') + '</td>' +
-              '<td style="text-align:center"><input type="checkbox" ' + (p.upsell ? 'checked' : '') + ' title="Предлагать при оплате: кассир увидит напоминание предложить этот товар" onchange="toggleUpsell(' + p.id + ',this.checked)"></td>' +
+              '<td style="text-align:center;white-space:nowrap"><input type="checkbox" ' + (p.upsell ? 'checked' : '') + ' title="Предлагать при оплате: кассир увидит напоминание предложить этот товар" onchange="toggleUpsell(' + p.id + ',this.checked)">' +
+                (p.upsell && typeof locSelHtml === 'function'
+                  ? ' ' + locSelHtml('upsell', p.id, (p.upsell_location_ids || []).map(Number))
+                  : '') + '</td>' +
               '<td style="text-align:center"><input type="checkbox" ' + (p.track_stock ? 'checked' : '') + ' title="Вести учёт остатков" onchange="toggleTrackStock(' + p.id + ',this.checked)"></td>' +
               '<td>' + (p.track_stock ? '<b style="color:' + (st <= 0 ? 'var(--red)' : 'var(--green)') + '">' + st + '</b>' : '<span class="muted">—</span>') + '</td>' +
               '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="stockReceipt(' + p.id + ')">+ Приход</button> ' +
@@ -931,6 +948,7 @@
       api('/catalog/products/' + id, { method: 'PUT', body: { upsell: !!on } })
         .then(function () { return hydrateAll(); })
         .then(function () {
+          if (typeof renderProducts === 'function') renderProducts();
           if (typeof toast === 'function') toast(on ? 'Кассир будет предлагать этот товар при оплате' : 'Товар убран из предложений');
         })
         .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });

@@ -133,6 +133,10 @@ catalogRouter.put(
     const locProvided = Object.prototype.hasOwnProperty.call(b, 'location_ids')
       || Object.prototype.hasOwnProperty.call(b, 'location_id');
     const locIds = locIdsFrom(b);
+    // Где предлагать товар при оплате: пусто — во всех ТЦ, где он продаётся
+    const upsLocProvided = Object.prototype.hasOwnProperty.call(b, 'upsell_location_ids');
+    const upsLocs = upsLocProvided && Array.isArray(b.upsell_location_ids)
+      ? b.upsell_location_ids.map(Number).filter(Boolean) : [];
     const row = await q1(
       `UPDATE products SET
          group_id = COALESCE($2, group_id),
@@ -144,10 +148,12 @@ catalogRouter.put(
          location_ids = CASE WHEN $8::bool THEN $9::bigint[] ELSE location_ids END,
          location_id = CASE WHEN $8::bool THEN $10 ELSE location_id END,
          track_stock = COALESCE($11, track_stock),
-         upsell = COALESCE($12, upsell)
+         upsell = COALESCE($12, upsell),
+         upsell_location_ids = CASE WHEN $13::bool THEN $14::bigint[] ELSE upsell_location_ids END
        WHERE id=$1 RETURNING *`,
       [req.params.id, group_id, name, day_kind, price, requires_document, is_active,
-       locProvided, locIds, locIds[0] || null, track_stock, upsell]
+       locProvided, locIds, locIds[0] || null, track_stock, upsell,
+       upsLocProvided, upsLocs]
     );
     await audit(req, 'catalog.product.update', { entity: 'product', entityId: req.params.id });
     res.json(row);

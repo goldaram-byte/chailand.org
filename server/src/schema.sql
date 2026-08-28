@@ -565,6 +565,9 @@ ALTER TABLE passes ADD COLUMN IF NOT EXISTS kid_name text;
 -- предложить гостю попкорн/лимонад/сувенир. Список настраивается на вкладке
 -- «Товары» и фильтруется по ТЦ кассы, как и весь каталог.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS upsell boolean NOT NULL DEFAULT false;
+-- В каких ТЦ предлагать: пусто — во всех точках, где товар продаётся;
+-- список — только в перечисленных (галочка «Предлагать» при этом главная).
+ALTER TABLE products ADD COLUMN IF NOT EXISTS upsell_location_ids bigint[] NOT NULL DEFAULT '{}';
 
 -- Чат сотрудников: общий канал внутри админки, чтобы смены и точки могли
 -- переписываться без сторонних мессенджеров (передать смену, спросить
