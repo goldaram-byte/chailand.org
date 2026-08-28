@@ -559,3 +559,9 @@ ALTER TABLE pass_types ADD COLUMN IF NOT EXISTS day_kind text NOT NULL DEFAULT '
 -- чтобы кассир различал абонементы детей одной семьи на одной карте.
 UPDATE pass_types SET visits_per_day = 1, per_day_kids = false WHERE per_day_kids;
 ALTER TABLE passes ADD COLUMN IF NOT EXISTS kid_name text;
+
+-- Сопутствующие товары: отмеченные галочкой «Предлагать» товары касса
+-- показывает кассиру всплывающим окном при нажатии «Оплатить» — напоминание
+-- предложить гостю попкорн/лимонад/сувенир. Список настраивается на вкладке
+-- «Товары» и фильтруется по ТЦ кассы, как и весь каталог.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS upsell boolean NOT NULL DEFAULT false;

@@ -121,6 +121,15 @@ aside nav{flex:1;padding:12px 10px;overflow-y:auto;display:flex;flex-direction:c
 
 /* ===== экран оплаты ===== */
 .pay-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:80;display:none;place-items:center;padding:16px}
+/* всплывающее напоминание о сопутствующих товарах перед оплатой */
+.ups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:14px 0}
+.ups-item{border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;cursor:pointer;text-align:left;
+  transition:border-color .12s, background .12s;background:#fff}
+.ups-item:hover{border-color:var(--orange)}
+.ups-item.on{border-color:var(--green);background:#f0fdf4}
+.ups-item .un{font-weight:700;font-size:13.5px;line-height:1.25}
+.ups-item .up{font-weight:800;font-size:13px;color:var(--orange);margin-top:4px}
+.ups-item .uq{font-size:12px;color:var(--green);font-weight:800;margin-top:2px}
 .pay-overlay.open{display:grid}
 .pay-modal{width:100%;max-width:560px;background:#fff;border-radius:18px;padding:26px;box-shadow:0 30px 80px rgba(15,23,42,.4);
   max-height:92vh;overflow-y:auto}
@@ -832,7 +841,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
     </div>
     <div class="card set-pane" id="s-products" hidden>
       <h3>🛍️ Товары</h3>
-      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Напитки, еда, сувениры и прочие товары для кассы. Включите «Учёт», чтобы вести остатки: приход, списание при продаже, инвентаризация.</div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Напитки, еда, сувениры и прочие товары для кассы. Включите «Учёт», чтобы вести остатки: приход, списание при продаже, инвентаризация. Галочка «Предлагать» — при нажатии «Оплатить» кассир увидит окно-напоминание предложить гостю этот товар и добавит его в чек одним нажатием.</div>
       <div class="frm" style="grid-template-columns:1fr 1fr 110px 110px 130px auto;margin-bottom:14px">
         <div><label>Группа</label><select id="pdGroup"></select></div>
         <div><label>Название</label><input id="pdName" placeholder="напр. Попкорн"></div>
@@ -841,7 +850,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
         <div><label>ТЦ</label><select id="pdLoc"></select></div>
         <div style="align-self:end"><button class="btn btn-green" onclick="addProduct()">+ Добавить</button></div>
       </div>
-      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Группа</th><th>Цена, ₽</th><th>ТЦ</th><th>Учёт</th><th>Остаток</th><th>Приход</th><th></th></tr></thead><tbody id="setProducts"></tbody></table></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Группа</th><th>Цена, ₽</th><th>ТЦ</th><th title="Показывать кассиру в напоминании при оплате">Предлагать</th><th>Учёт</th><th>Остаток</th><th>Приход</th><th></th></tr></thead><tbody id="setProducts"></tbody></table></div>
       <div style="margin-top:20px;border-top:1px solid var(--line);padding-top:16px">
         <h3 style="margin-bottom:8px">📦 Инвентаризация</h3>
         <div class="muted" style="font-size:12.5px;margin-bottom:12px">Пересчитайте товары и внесите фактические остатки. После применения учётный остаток станет равен фактическому, разница запишется в историю движений.</div>
@@ -972,6 +981,19 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 
   </div>
 </div>
+</div>
+
+<!-- Напоминание кассиру: предложить сопутствующий товар перед оплатой -->
+<div class="pay-overlay" id="upsOverlay" onclick="if(event.target===this)upsSkip()">
+  <div class="pay-modal" style="max-width:520px">
+    <div style="font-size:17px;font-weight:800;margin-bottom:4px">💡 Предложите гостю</div>
+    <div class="muted" style="font-size:13px">Нажмите на товар — он добавится в чек. Настройка списка — «Товары», галочка «Предлагать».</div>
+    <div class="ups-grid" id="upsGrid"></div>
+    <div style="display:flex;gap:9px;align-items:center">
+      <span class="muted" style="font-size:13px" id="upsTotal"></span>
+      <button class="btn btn-green btn-big" style="margin-left:auto" onclick="upsGo()">К оплате →</button>
+    </div>
+  </div>
 </div>
 
 <!-- ============ ЭКРАН ОПЛАТЫ ============ -->
@@ -1431,7 +1453,7 @@ function renderCheck(){
     : '<div class="muted" style="padding:12px 0;text-align:center">Нажмите тариф слева</div>';
   $('checkTotal').textContent = fmt(checkTotal());
 }
-function clearCheck(){ check=[]; checkClient=null; renderClientSlot(); renderCheck(); }
+function clearCheck(){ check=[]; checkClient=null; upsShown=false; renderClientSlot(); renderCheck(); }
 
 function findCard(){
   const v = $('cardInput').value.trim().toUpperCase();
@@ -1453,11 +1475,42 @@ function renderClientSlot(){
   if(checkClient && typeof loadClientPasses==='function') loadClientPasses(checkClient.id, 'clientPasses');
 }
 
+/* ============ СОПУТСТВУЮЩИЕ ТОВАРЫ (напоминание перед оплатой) ============ */
+// Показывается один раз на чек: товары с галочкой «Предлагать» этого ТЦ,
+// которых ещё нет в чеке. Кассир добавляет в один тап и идёт к оплате.
+let upsShown = false;
+function upsCandidates(){
+  return TARIFFS.filter(t=>t.upsell && (typeof prodInLoc!=='function'||prodInLoc(t))
+    && !check.some(l=>sameId(l.t.id, t.id)));
+}
+function upsRender(list){
+  $('upsGrid').innerHTML = list.map(t=>{
+    const line = check.find(l=>sameId(l.t.id, t.id));
+    return `<button class="ups-item ${line?'on':''}" onclick="upsAdd('${t.id}')">
+      <div class="un">${t.name}</div><div class="up">${fmt(t.price)}</div>
+      ${line?`<div class="uq">в чеке × ${line.qty}</div>`:''}</button>`;
+  }).join('');
+  $('upsTotal').textContent = 'Итого по чеку: ' + fmt(checkTotal());
+}
+function upsAdd(tid){
+  const t = TARIFFS.find(x=>sameId(x.id, tid)); if(!t) return;
+  addLine(t);
+  upsRender(UPS_LIST);
+}
+let UPS_LIST = [];
+function upsSkip(){ $('upsOverlay').classList.remove('open'); }
+function upsGo(){ upsSkip(); upsShown = true; goPay(); }
+
 /* ================= ОПЛАТА (Шаг 2) ================= */
 let PAY = null;
 function goPay(){
   if(!shift) return toast('Откройте смену', true);
   if(!check.length) return toast('Чек пуст — выберите тарифы', true);
+  if(!upsShown){
+    const cand = upsCandidates();
+    if(cand.length){ UPS_LIST = cand; upsRender(cand); $('upsOverlay').classList.add('open'); return; }
+    upsShown = true; // предлагать нечего — не показываем и больше не проверяем этот чек
+  }
   PAY = { items:check.map(l=>({name:l.t.name,qty:l.qty,price:l.t.price})),
           total:checkTotal(), client:checkClient, bonusSpend:0, method:null };
   $('payMain').style.display='block'; $('payFiscal').classList.remove('show'); $('payDone').classList.remove('show');
