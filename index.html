@@ -712,6 +712,12 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
         <div class="tbl-wrap"><table><thead><tr><th>Время</th><th>Кто</th><th>На что</th><th>Сумма</th></tr></thead><tbody id="expTbl"></tbody></table></div>
       </div>
     </div>
+    <div class="card" style="margin-top:16px">
+      <h3>🗂 История смен</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:10px">Каждая смена — отдельной строкой со своими итогами: чеки, выручка, наличные и безнал, расхождение при закрытии. Сверху текущая. Кассир видит свои смены, владелец и администратор — всех сотрудников.</div>
+      <div class="tbl-wrap"><table><thead><tr><th>Открыта</th><th>Закрыта</th><th>Кассир</th><th>ТЦ</th><th>Чеков</th><th>Выручка</th><th>Возвраты</th><th>Наличные</th><th>Безнал</th><th>Сдано / расхождение</th></tr></thead>
+      <tbody id="shiftsTbl"><tr><td colspan="10" class="muted">Доступно при работе с сервером</td></tr></tbody></table></div>
+    </div>
     <div class="card" style="margin-top:16px" id="closeCard" hidden>
       <h3>🔒 Закрытие смены</h3>
       <div class="frm" style="grid-template-columns:220px auto">
