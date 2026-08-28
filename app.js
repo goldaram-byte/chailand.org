@@ -1894,7 +1894,7 @@
 
     // ---- Настройки → «Абонементы»: виды абонементов ----
     // «В день»: '' — без ограничения, 'kids' — по числу детей в карте, N — лимит
-    function perDayVal(t) { return t.per_day_kids ? 'kids' : (t.visits_per_day == null ? '' : String(t.visits_per_day)); }
+    function perDayVal(t) { return t.visits_per_day == null ? '' : String(t.visits_per_day); }
     var PASS_DAYS_RU = { any: 'Любой день', weekday: 'Будни (Пн–Чт)', workweek: 'Будни + пятница', weekend: 'Выходные и праздники' };
     function dayKindSel(t) {
       var cur = t.day_kind || 'any';
@@ -1905,9 +1905,9 @@
     }
     function perDaySel(t) {
       var cur = perDayVal(t);
-      var base = ['1', 'kids', '2', '3', '5', ''];
+      var base = ['1', '2', '3', '5', ''];
       if (base.indexOf(cur) === -1) base.push(cur); // произвольный лимит, заданный через API
-      var label = { '': 'Без ограничения', kids: 'По числу детей' };
+      var label = { '': 'Без ограничения' };
       return '<select style="min-width:130px" onchange="passTypeUpd(' + t.id + ',\'per_day\',this.value)">' +
         base.map(function (v) {
           return '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + (label[v] || v + ' в день') + '</option>';
@@ -2010,15 +2010,40 @@
         : 'осталось ' + p.visits_left + (p.visits_total ? ' из ' + p.visits_total : '');
       var st = { used_up: 'использован', expired: 'истёк', cancelled: 'аннулирован' }[p.status] || '';
       var args = p.id + ',' + clientId + ',\'' + containerId + '\',' + !!inCard;
+      // На кого оформлен: подпись, чтобы различать абонементы детей одной семьи
+      var kid = p.kid_name ? ' <b style="color:var(--gold)">· ' + pEsc(p.kid_name) + '</b>' : '';
+      var kidSel = '';
+      if (inCard && !dead) {
+        var c = (typeof clients !== 'undefined') ? clients.find(function (x) { return x.id === clientId; }) : null;
+        var names = ((c && c.kids) || []).map(function (k) { return k.name; });
+        if (p.kid_name && names.indexOf(p.kid_name) === -1) names.push(p.kid_name);
+        kidSel = '<select class="btn-sm" style="max-width:130px" title="На кого оформлен абонемент" ' +
+          'onchange="passSetKid(' + args + ',this.value)">' +
+          '<option value=""' + (p.kid_name ? '' : ' selected') + '>— ребёнок —</option>' +
+          names.map(function (n) {
+            return '<option value="' + pEsc(n) + '"' + (n === p.kid_name ? ' selected' : '') + '>' + pEsc(n) + '</option>';
+          }).join('') + '</select>';
+      }
       return '<div class="pass-row' + (dead ? ' dead' : '') + '">' +
-        '<span class="pr-info">🎫 ' + pEsc(p.name) +
+        '<span class="pr-info">🎫 ' + pEsc(p.name) + kid +
         '<small>' + (dead ? st : left + ' · до ' + pDate(p.valid_to)) + (p.visits_used ? ' · посещений: ' + p.visits_used : '') + '</small></span>' +
+        kidSel +
         (!dead ? '<button class="btn btn-green btn-sm" onclick="passCheckin(' + args + ')">✓ Посещение</button>' : '') +
         // в карточке клиента — раскрыть покупку и все списания
         (inCard ? '<button class="btn btn-ghost btn-sm" onclick="passHistToggle(' + args + ')">История</button>' : '') +
         (inCard ? '<div class="pass-hist" id="ph' + p.id + '" hidden></div>' : '') +
         '</div>';
     }
+
+    // На кого оформлен абонемент — сохранить подпись на сервере
+    window.passSetKid = function (passId, clientId, containerId, inCard, name) {
+      api('/passes/' + passId, { method: 'PUT', body: { kid_name: name || null } })
+        .then(function () {
+          if (typeof toast === 'function') toast(name ? 'Абонемент оформлен на: ' + name : 'Подпись снята');
+          window.loadClientPasses(clientId, containerId, inCard);
+        })
+        .catch(pErr);
+    };
 
     // ---- История покупки и списаний по абонементу ----
     window.passHistToggle = function (passId, clientId, containerId, inCard) {
