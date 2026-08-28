@@ -23,6 +23,95 @@ posRouter.get(
   })
 );
 
+// Кассир видит только свои смены; владелец и администратор — все.
+async function canSeeShift(user, shiftId) {
+  if (['owner', 'admin'].includes(user.role)) return true;
+  const sh = await q1('SELECT cashier_id FROM cash_shifts WHERE id=$1', [shiftId]);
+  return !!sh && String(sh.cashier_id) === String(user.id);
+}
+
+// GET /api/pos/shifts — история смен, каждая отдельной строкой со своими
+// итогами. Раньше отчёт складывал все смены кассира в одну сумму, и понять,
+// сколько сдал человек за конкретный день, было нельзя.
+//   ?location_id=N  — только смены этой точки
+//   ?cashier_id=N   — только смены сотрудника (владелец/админ)
+//   ?from&to        — период по дате открытия (YYYY-MM-DD)
+//   ?limit=N        — сколько смен вернуть (по умолчанию 50, максимум 200)
+posRouter.get(
+  '/shifts',
+  ah(async (req, res) => {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const params = [limit];
+    const where = [];
+    // Кассиру — только его смены, чужую выручку он видеть не должен
+    if (!['owner', 'admin'].includes(req.user.role)) {
+      params.push(req.user.id);
+      where.push(`sh.cashier_id = $${params.length}`);
+    } else if (req.query.cashier_id && req.query.cashier_id !== 'all') {
+      params.push(Number(req.query.cashier_id));
+      where.push(`sh.cashier_id = $${params.length}`);
+    }
+    if (req.query.location_id && req.query.location_id !== 'all') {
+      params.push(Number(req.query.location_id));
+      where.push(`sh.location_id = $${params.length}`);
+    }
+    if (req.query.from) { params.push(req.query.from); where.push(`sh.opened_at >= $${params.length}::date`); }
+    if (req.query.to) { params.push(req.query.to); where.push(`sh.opened_at < ($${params.length}::date + 1)`); }
+    const rows = await q(
+      `SELECT sh.id, sh.cashier_id, u.full_name AS cashier_name,
+              sh.location_id, l.name AS location_name,
+              sh.opened_at, sh.closed_at, sh.cash_start, sh.cash_end, sh.note,
+              COALESCE(SUM(s.total)   FILTER (WHERE NOT s.is_return), 0) AS revenue,
+              COALESCE(-SUM(s.total)  FILTER (WHERE s.is_return), 0)     AS refunds,
+              COALESCE(SUM(s.cash_amount), 0)                            AS cash,
+              COALESCE(SUM(s.card_amount), 0)                            AS card,
+              COALESCE(SUM(s.bonus_used)   FILTER (WHERE NOT s.is_return), 0) AS bonus_used,
+              COALESCE(SUM(s.bonus_earned) FILTER (WHERE NOT s.is_return), 0) AS bonus_earned,
+              count(s.id) FILTER (WHERE NOT s.is_return)::int AS checks,
+              count(s.id) FILTER (WHERE s.is_return)::int     AS returns
+         FROM cash_shifts sh
+         JOIN users u ON u.id = sh.cashier_id
+         LEFT JOIN locations l ON l.id = sh.location_id
+         LEFT JOIN sales s ON s.shift_id = sh.id
+        ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
+        GROUP BY sh.id, u.full_name, l.name
+        ORDER BY sh.opened_at DESC
+        LIMIT $1`,
+      params
+    );
+    res.json(
+      rows.map((r) => {
+        const cash = Number(r.cash);
+        const expected = Number(r.cash_start) + cash; // наличные, которые должны быть в кассе
+        return {
+          id: r.id,
+          cashier_id: r.cashier_id,
+          cashier_name: r.cashier_name,
+          location_id: r.location_id,
+          location_name: r.location_name,
+          opened_at: r.opened_at,
+          closed_at: r.closed_at,
+          open: !r.closed_at,
+          note: r.note,
+          cash_start: Number(r.cash_start),
+          cash_end: r.cash_end == null ? null : Number(r.cash_end),
+          revenue: Number(r.revenue),
+          refunds: Number(r.refunds),
+          cash,
+          card: Number(r.card),
+          bonus_used: Number(r.bonus_used),
+          bonus_earned: Number(r.bonus_earned),
+          checks: r.checks,
+          returns: r.returns,
+          expected_cash: expected,
+          // Расхождение считаем только у закрытых смен, где кассир внёс факт
+          diff: r.cash_end == null ? null : Math.round((Number(r.cash_end) - expected) * 100) / 100,
+        };
+      })
+    );
+  })
+);
+
 posRouter.post(
   '/shift/open',
   requirePerm('shifts'),
@@ -86,6 +175,26 @@ posRouter.get(
     const limit = Math.min(Number(req.query.limit) || 50, 200);
     // Фильтр по точке (ТЦ): выбран конкретный — показываем продажи только этой точки
     const loc = req.query.location_id && req.query.location_id !== 'all' ? Number(req.query.location_id) : null;
+    // Фильтр по смене. Касса запрашивает shift_id=current: каждая смена —
+    // отдельная история, после закрытия список пуст, прошлые дни в кассу не
+    // подмешиваются. Конкретный id смены доступен только своей смене — чужую
+    // может открыть админ или владелец.
+    let shiftId = null;
+    if (req.query.shift_id === 'current') {
+      const cur = await q1('SELECT id FROM cash_shifts WHERE closed_at IS NULL AND cashier_id=$1', [req.user.id]);
+      if (cur) {
+        shiftId = cur.id;
+      } else if (!['owner', 'admin'].includes(req.user.role)) {
+        return res.json([]); // смена закрыта — кассиру показывать нечего
+      }
+      // Владелец и администратор без открытой смены — надзорный режим: видят
+      // последние продажи точки, иначе ошибочную оплату им не найти и не удалить.
+    } else if (req.query.shift_id) {
+      shiftId = Number(req.query.shift_id);
+      if (!(await canSeeShift(req.user, shiftId))) {
+        return res.status(403).json({ error: 'Смотреть чужую смену может владелец или администратор' });
+      }
+    }
     const rows = await q(
       `SELECT s.*, u.full_name AS cashier_name, c.full_name AS client_name,
               f.status AS fiscal_status, f.driver AS fiscal_driver, f.fd_number,
@@ -100,9 +209,10 @@ posRouter.get(
             WHERE d.sale_id = s.id ORDER BY d.id DESC LIMIT 1
          ) f ON true
         WHERE ($2::bigint IS NULL OR s.location_id = $2)
+          AND ($3::bigint IS NULL OR s.shift_id = $3)
         GROUP BY s.id, u.full_name, c.full_name, f.status, f.driver, f.fd_number
         ORDER BY s.created_at DESC LIMIT $1`,
-      [limit, loc]
+      [limit, loc, shiftId]
     );
     res.json(rows);
   })

@@ -119,7 +119,9 @@
       api('/settings'),
       api('/clients'),
       api('/crm/leads').catch(function () { return []; }),
-      api('/pos/sales?limit=200' + (curLoc() ? '&location_id=' + curLoc() : '')).catch(function () { return []; }),
+      // Только чеки текущей открытой смены: смена закрылась — история оплат
+      // в кассе закрылась вместе с ней, прошлые дни живут в отчёте по сменам
+      api('/pos/sales?limit=200&shift_id=current' + (curLoc() ? '&location_id=' + curLoc() : '')).catch(function () { return []; }),
       // Эквайринг доступен не всем ролям — кассиру не запрашиваем (иначе 403 в консоли)
       (ME && ME.role === 'cashier') ? Promise.resolve(null) : api('/settings/acquiring').catch(function () { return null; }),
       api('/reports/cashiers').catch(function () { return []; }),
@@ -2249,13 +2251,78 @@
           if (typeof toast === 'function') toast(e.message || 'Смена не открыта', true);
         });
     };
-    wrap('closeShift', function () {
+    // Закрытие смены — полностью своя версия вместо wrap: старый вариант
+    // отправлял закрытие на сервер ДО проверок демо-функции (пустое поле или
+    // отмена confirm закрывали смену на сервере, а интерфейс оставался
+    // открытым) и не передавал фактическую сумму — расхождение не сохранялось.
+    var _closeShift = window.closeShift;
+    window.closeShift = function () {
+      if (!SERVER) return _closeShift ? _closeShift.apply(this, arguments) : undefined;
+      var factRaw = (document.getElementById('cashFact') || {}).value;
+      if (!factRaw) return toast('Пересчитайте наличные и введите сумму', true);
+      var fact = +factRaw;
+      var exp = (typeof expectedCash === 'function') ? expectedCash() : 0;
+      var diff = fact - exp;
+      var msg = diff === 0 ? 'Касса сошлась ✓' : (diff > 0 ? 'Излишек ' : 'Недостача ') + fmtNum(Math.abs(diff));
+      if (!confirm('Закрыть смену?\nОжидалось: ' + fmtNum(exp) + '\nФактически: ' + fmtNum(fact) + '\n' + msg)) return;
       SERVER_SHIFT = null;
-      api('/pos/shift/close', { method: 'POST', body: {} }).catch(function (e) {
-        if (/Открытой смены нет/i.test(e.message || '')) return;
-        if (typeof toast === 'function') toast('Смена не закрыта на сервере: ' + (e.message || 'ошибка'), true);
-      });
-    });
+      api('/pos/shift/close', { method: 'POST', body: { cash_end: fact } })
+        .catch(function (e) {
+          if (/Открытой смены нет/i.test(e.message || '')) return;
+          if (typeof toast === 'function') toast('Смена не закрыта на сервере: ' + (e.message || 'ошибка'), true);
+        })
+        .then(function () { if (window.loadShifts) window.loadShifts(); });
+      // Локальная уборка — как в демо-версии, но без второго confirm
+      shift = null; sales = []; expenses = [];
+      safe(function () { if (typeof clearCheck === 'function') clearCheck(); });
+      var cf = document.getElementById('cashFact'); if (cf) cf.value = '';
+      restoreShift(null);
+      safe(function () { if (typeof renderSales === 'function') renderSales(); if (typeof renderReport === 'function') renderReport(); });
+      if (typeof toast === 'function') toast('Смена закрыта. ' + msg);
+    };
+
+    // ---- История смен: каждая смена отдельной строкой в отчёте ----
+    function shDT(v) {
+      if (!v) return '';
+      var d = new Date(v);
+      return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') +
+        ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    }
+    window.loadShifts = function () {
+      if (!SERVER || !localStorage.getItem(TOKEN_KEY)) return Promise.resolve();
+      var tb = document.getElementById('shiftsTbl'); if (!tb) return Promise.resolve();
+      var d = (typeof deviceLoc === 'function') ? deviceLoc() : null;
+      return api('/pos/shifts?limit=60' + (d ? '&location_id=' + d : '')).then(function (rows) {
+        tb.innerHTML = (rows || []).length ? rows.map(function (r) {
+          var closed = !r.open;
+          var handed = !closed ? '<span class="tag new">открыта</span>'
+            : (r.cash_end == null ? '<span class="muted">без пересчёта</span>'
+              : '<b>' + fmtNum(r.cash_end) + '</b>' + (r.diff === 0 ? ' <span style="color:var(--green);font-weight:700">✓ сошлась</span>'
+                : (r.diff > 0 ? ' <span style="color:var(--gold);font-weight:700">+' + fmtNum(r.diff) + '</span>'
+                  : ' <span style="color:var(--red);font-weight:700">−' + fmtNum(Math.abs(r.diff)) + '</span>')));
+          return '<tr' + (r.open ? ' style="background:#f0fdf4"' : '') + '>' +
+            '<td>' + shDT(r.opened_at) + '</td>' +
+            '<td>' + (closed ? shDT(r.closed_at) : '<span class="tag new">сейчас</span>') + '</td>' +
+            '<td>' + (r.cashier_name || '—') + '</td>' +
+            '<td>' + (r.location_name || '—') + '</td>' +
+            '<td>' + r.checks + (r.returns ? ' <span class="muted">(возвр. ' + r.returns + ')</span>' : '') + '</td>' +
+            '<td><b>' + fmtNum(r.revenue) + '</b></td>' +
+            '<td>' + (r.refunds ? '<span style="color:var(--red)">−' + fmtNum(r.refunds) + '</span>' : '—') + '</td>' +
+            '<td>' + fmtNum(r.cash) + '</td>' +
+            '<td>' + fmtNum(r.card) + '</td>' +
+            '<td>' + handed + '</td></tr>';
+        }).join('') : '<tr><td colspan="10" class="muted">Смен ещё не было</td></tr>';
+      }).catch(function () {});
+    };
+    // Отчёт открыли — подтянуть свежую историю смен
+    var _renderReport = window.renderReport;
+    if (typeof _renderReport === 'function') {
+      window.renderReport = function () {
+        var r = _renderReport.apply(this, arguments);
+        if (SERVER) window.loadShifts();
+        return r;
+      };
+    }
 
     // Новый клиент — через офлайн-очередь: работает без интернета и не теряется.
     // Локальный демо-обработчик тем временем показывает клиента сразу (оптимистично),
