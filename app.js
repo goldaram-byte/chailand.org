@@ -387,6 +387,8 @@
   function markLive() {
     var badge = document.getElementById('demoBadge');
     if (badge) { badge.textContent = '● Данные с сервера · PostgreSQL'; badge.style.color = '#065f46'; }
+    // после входа включаем чат сотрудников (кнопка + поллинг новых сообщений)
+    if (typeof window.chatStart === 'function') window.chatStart();
   }
 
   function logout() {
@@ -1358,6 +1360,92 @@
   }
 
   // -------------------- Раздел «Новости» (владелец/админ) --------------------
+  /* ---------------- Чат сотрудников (общий канал) ---------------- */
+  function installChat() {
+    var LAST_ID = 0;                 // последнее показанное сообщение
+    var SEEN_KEY = 'chailand_chat_seen';
+    var OPEN = false, TIMER = null;
+    function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function seen() { return Number(localStorage.getItem(SEEN_KEY) || 0); }
+    function markSeen(id) { if (id > seen()) localStorage.setItem(SEEN_KEY, String(id)); updateBadge(0); }
+    function updateBadge(n) {
+      var b = document.getElementById('chatBadge'); if (!b) return;
+      if (n > 0) { b.textContent = n > 9 ? '9+' : n; b.hidden = false; } else b.hidden = true;
+    }
+    function fmtTm(ts) {
+      var d = new Date(ts); var today = new Date().toDateString() === d.toDateString();
+      var hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+      return today ? hm : (String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + hm);
+    }
+    function draw(list, append) {
+      var box = document.getElementById('chatMsgs'); if (!box) return;
+      var me = (window.CURRENT_USER || {}).id;
+      var html = list.map(function (m) {
+        var mine = m.user_id === me;
+        var canDel = mine || (ME && ME.role === 'owner');
+        return '<div class="ch-m' + (mine ? ' mine' : '') + '" data-id="' + m.id + '">' +
+          (mine ? '' : '<div class="who">' + esc(m.user_name) + (m.location_name ? ' <small>· ' + esc(m.location_name) + '</small>' : '') + '</div>') +
+          esc(m.text).replace(/\n/g, '<br>') +
+          '<div class="tm">' + fmtTm(m.created_at) + '</div>' +
+          (canDel ? '<button class="del" title="Удалить" onclick="chatDel(' + m.id + ')">✕</button>' : '') +
+          '</div>';
+      }).join('');
+      if (append) box.insertAdjacentHTML('beforeend', html); else box.innerHTML = html ||
+        '<div class="muted" style="font-size:12.5px;text-align:center;padding:20px 0">Пока пусто — напишите первым 👋</div>';
+      box.scrollTop = box.scrollHeight;
+    }
+    function poll() {
+      if (!SERVER || !localStorage.getItem(TOKEN_KEY)) return Promise.resolve();
+      return api('/chat?after_id=' + LAST_ID).then(function (list) {
+        list = list || [];
+        if (!list.length) return;
+        var wasEmpty = LAST_ID === 0;
+        LAST_ID = list[list.length - 1].id;
+        if (OPEN) { draw(list, !wasEmpty); markSeen(LAST_ID); }
+        else updateBadge(list.filter(function (m) { return m.id > seen(); }).length +
+                         Number((document.getElementById('chatBadge') || { textContent: 0 }).hidden ? 0 : 0));
+      }).catch(function () {});
+    }
+    window.chatToggle = function () {
+      var pnl = document.getElementById('chatPanel'); if (!pnl) return;
+      OPEN = !pnl.classList.contains('open');
+      pnl.classList.toggle('open', OPEN);
+      if (OPEN) {
+        // перерисовать целиком (могли удалить сообщения) и отметить прочитанным
+        LAST_ID = 0;
+        api('/chat').then(function (list) {
+          list = list || [];
+          if (list.length) LAST_ID = list[list.length - 1].id;
+          draw(list, false); markSeen(LAST_ID);
+        }).catch(function () {});
+        setTimeout(function () { var t = document.getElementById('chatText'); if (t) t.focus(); }, 100);
+      }
+    };
+    window.chatSend = function () {
+      var t = document.getElementById('chatText'); if (!t) return;
+      var text = t.value.trim(); if (!text) return;
+      t.value = '';
+      api('/chat', { method: 'POST', body: { text: text, location_id: (typeof deviceLoc === 'function') ? deviceLoc() : null } })
+        .then(function () { return poll(); })
+        .catch(function (e) { t.value = text; if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+    window.chatDel = function (id) {
+      if (!confirm('Удалить сообщение?')) return;
+      api('/chat/' + id, { method: 'DELETE' })
+        .then(function () {
+          var el = document.querySelector('.ch-m[data-id="' + id + '"]'); if (el) el.remove();
+        })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+    // Кнопка появляется после входа; поллинг раз в 8 секунд, пока вкладка видна
+    window.chatStart = function () {
+      var fab = document.getElementById('chatFab'); if (fab) fab.style.display = 'grid';
+      if (TIMER) clearInterval(TIMER);
+      poll();
+      TIMER = setInterval(function () { if (!document.hidden) poll(); }, 8000);
+    };
+  }
+
   function installNews() {
     function nH(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
     function nDate(s) { if (!s) return ''; var d = String(s).slice(0, 10).split('-'); return d.length === 3 ? d[2] + '.' + d[1] + '.' + d[0] : s; }
@@ -2203,6 +2291,7 @@
     installBookings();
     installSkud();
     installNews();
+    installChat();
     // Продажа: enqueue до того, как оригинал очистит чек
     wrap('confirmPay', function () {
       if (!PAY || !PAY.method) return;
