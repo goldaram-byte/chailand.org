@@ -862,16 +862,30 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
     </div>
     <div class="card set-pane" id="s-passes" hidden>
       <h3>🎫 Абонементы в парк</h3>
-      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Виды абонементов, которые продаёт касса. Абонемент оформляется на карту клиента: при входе кассир сканирует карту и списывает посещение. «Сколько списаний» — сколько раз по нему можно пройти; оставьте пустым, и получится безлимит на срок действия. «Где действует» — в каких ТЦ его продают и пускают по нему; можно отметить несколько точек, пусто — работает во всех.</div>
-      <div class="frm" style="grid-template-columns:1.4fr 110px 120px 110px 130px auto;margin-bottom:14px">
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Виды абонементов, которые продаёт касса. Абонемент оформляется на карту клиента: при входе кассир сканирует карту и списывает посещение. «Сколько списаний» — сколько раз по нему можно пройти; оставьте пустым, и получится безлимит на срок действия. «В день» — сколько списаний разрешено за один день: «1 в день» — один вход, «по числу детей» — сколько детей вписано в карту клиента, столько проходов (семья с тремя детьми пройдёт втроём). «Дни» — когда по нему пускают: «будни» дешевле, «любой день» дороже, а посещений одинаково. «Где действует» — в каких ТЦ его продают и пускают по нему; можно отметить несколько точек, пусто — работает во всех.</div>
+      <div class="frm" style="grid-template-columns:1.2fr 95px 105px 95px 130px 140px 130px auto;margin-bottom:14px">
         <div><label>Название</label><input id="ptName" placeholder="напр. 5 посещений"></div>
         <div><label>Цена, ₽</label><input type="number" id="ptPrice" min="0" placeholder="0"></div>
         <div><label>Сколько списаний</label><input type="number" id="ptVisits" min="1" placeholder="безлимит"></div>
         <div><label>Срок, дней</label><input type="number" id="ptDays" min="1" value="30"></div>
+        <div><label>Дни</label><select id="ptDayKind">
+          <option value="any" selected>Любой день</option>
+          <option value="weekday">Будни (Пн–Чт)</option>
+          <option value="workweek">Будни + пятница</option>
+          <option value="weekend">Выходные и праздники</option>
+        </select></div>
+        <div><label>В день</label><select id="ptPerDay">
+          <option value="1" selected>1 в день</option>
+          <option value="kids">По числу детей</option>
+          <option value="2">2 в день</option>
+          <option value="3">3 в день</option>
+          <option value="5">5 в день</option>
+          <option value="">Без ограничения</option>
+        </select></div>
         <div><label>Где действует</label><span id="ptLocPick"></span></div>
         <div style="align-self:end"><button class="btn btn-green" onclick="passTypeAdd()">+ Добавить</button></div>
       </div>
-      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Цена, ₽</th><th>Сколько списаний</th><th>Срок, дней</th><th>Где действует</th><th>Статус</th><th></th></tr></thead><tbody id="passTypesTbl"></tbody></table></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Цена, ₽</th><th>Сколько списаний</th><th>Срок, дней</th><th>Дни</th><th>В день</th><th>Где действует</th><th>Статус</th><th></th></tr></thead><tbody id="passTypesTbl"></tbody></table></div>
     </div>
     <div class="card set-pane" id="s-acquiring" hidden>
       <h3>🧾 Фискализация чеков</h3>

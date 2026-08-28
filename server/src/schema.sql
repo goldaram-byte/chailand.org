@@ -536,3 +536,17 @@ ALTER TABLE services ADD COLUMN IF NOT EXISTS group_id bigint REFERENCES product
 -- чтобы подготовить поздравление, торт и шары к нужному возрасту.
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS kid_name text;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS kid_age  int;
+
+-- Дневной лимит списаний по абонементу. Абонемент привязан к карте клиента,
+-- а не к ребёнку, поэтому без лимита одну карту можно было бы «прокатывать»
+-- на всю компанию. visits_per_day: NULL — без ограничения, N — не больше N
+-- списаний в день. per_day_kids: лимит равен числу детей в карте клиента
+-- (минимум 1) — семья с тремя детьми проходит втроём, чужие уже нет.
+ALTER TABLE pass_types ADD COLUMN IF NOT EXISTS visits_per_day int;
+ALTER TABLE pass_types ADD COLUMN IF NOT EXISTS per_day_kids boolean NOT NULL DEFAULT false;
+-- В какие дни действует абонемент: any — любой день, weekday — будни (Пн–Чт),
+-- workweek — будни и пятница, weekend — выходные и праздники. Праздничные
+-- даты берутся из настройки holidays, как и у билетов. Так один и тот же
+-- абонемент (например, 10 посещений) продаётся по разной цене: «будни»
+-- дешевле, «любой день» дороже.
+ALTER TABLE pass_types ADD COLUMN IF NOT EXISTS day_kind text NOT NULL DEFAULT 'any';

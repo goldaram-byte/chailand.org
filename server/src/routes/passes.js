@@ -8,6 +8,7 @@ import { q, q1, tx } from '../db.js';
 import { requireAuth, requirePerm } from '../auth.js';
 import { ah, audit } from '../util.js';
 import { createSale } from '../services/sales.js';
+import { dayKindFor } from './catalog.js';
 
 export const passesRouter = Router();
 passesRouter.use(requireAuth);
@@ -32,6 +33,34 @@ function passWorksIn(ids, locId) {
 }
 const canSell = requirePerm('pos');
 
+// Дневной лимит из тела запроса: '' / null — без ограничения, 'kids' — по
+// числу детей в карте клиента, число — фиксированный лимит. false — ошибка.
+// Дни действия абонемента (как у билетов): any | weekday | workweek | weekend
+const PASS_DAYS = ['any', 'weekday', 'workweek', 'weekend'];
+const PASS_DAYS_RU = {
+  any: 'в любой день',
+  weekday: 'только в будни (Пн–Чт)',
+  workweek: 'только в будни и пятницу',
+  weekend: 'только в выходные и праздники',
+};
+// Пускает ли настройка дней в день такого типа (тип дня считает dayKindFor —
+// он же учитывает праздники из настроек, как у билетов).
+function passDayFits(dayKind, todayKind) {
+  if (!dayKind || dayKind === 'any') return true;
+  if (dayKind === 'weekday') return todayKind === 'weekday';
+  if (dayKind === 'workweek') return todayKind === 'weekday' || todayKind === 'friday';
+  if (dayKind === 'weekend') return todayKind === 'weekend';
+  return true;
+}
+
+function perDayFrom(v) {
+  if (v == null || v === '') return { visits_per_day: null, per_day_kids: false };
+  if (v === 'kids') return { visits_per_day: null, per_day_kids: true };
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 1 || n > 50) return false;
+  return { visits_per_day: n, per_day_kids: false };
+}
+
 // ------------------------------ виды абонементов ---------------------------
 passesRouter.get(
   '/types',
@@ -44,13 +73,17 @@ passesRouter.post(
   '/types',
   canEditTypes,
   ah(async (req, res) => {
-    const { name, price = 0, visits = null, valid_days = 30 } = req.body || {};
+    const { name, price = 0, visits = null, valid_days = 30, per_day, day_kind = 'any' } = req.body || {};
     if (!name || !String(name).trim()) return res.status(400).json({ error: 'Укажите название абонемента' });
+    const pd = perDayFrom(per_day);
+    if (pd === false) return res.status(400).json({ error: 'Лимит в день — число от 1 до 50, «по числу детей» или пусто' });
+    if (!PASS_DAYS.includes(day_kind)) return res.status(400).json({ error: 'Дни действия: любой / будни / будни+пятница / выходные' });
     const locIds = locIdsFrom(req.body) || [];
     const row = await q1(
-      `INSERT INTO pass_types (name, price, visits, valid_days, location_id, location_ids)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [String(name).trim(), price, visits || null, valid_days || 30, locIds[0] || null, locIds]
+      `INSERT INTO pass_types (name, price, visits, valid_days, location_id, location_ids, visits_per_day, per_day_kids, day_kind)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [String(name).trim(), price, visits || null, valid_days || 30, locIds[0] || null, locIds,
+       pd.visits_per_day, pd.per_day_kids, day_kind]
     );
     await audit(req, 'pass_type.create', { entity: 'pass_type', entityId: row.id });
     res.json(row);
@@ -61,8 +94,12 @@ passesRouter.put(
   '/types/:id',
   canEditTypes,
   ah(async (req, res) => {
-    const { name, price, visits, valid_days, is_active } = req.body || {};
+    const { name, price, visits, valid_days, is_active, day_kind } = req.body || {};
     const visitsProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'visits');
+    const perDayProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'per_day');
+    const pd = perDayProvided ? perDayFrom(req.body.per_day) : { visits_per_day: null, per_day_kids: false };
+    if (pd === false) return res.status(400).json({ error: 'Лимит в день — число от 1 до 50, «по числу детей» или пусто' });
+    if (day_kind != null && !PASS_DAYS.includes(day_kind)) return res.status(400).json({ error: 'Дни действия: любой / будни / будни+пятница / выходные' });
     const locIds = locIdsFrom(req.body);
     const locProvided = locIds !== null;
     const row = await q1(
@@ -73,10 +110,14 @@ passesRouter.put(
          valid_days = COALESCE($6, valid_days),
          location_id = CASE WHEN $7::bool THEN $8 ELSE location_id END,
          location_ids = CASE WHEN $7::bool THEN $9::bigint[] ELSE location_ids END,
-         is_active = COALESCE($10, is_active)
+         is_active = COALESCE($10, is_active),
+         visits_per_day = CASE WHEN $11::bool THEN $12 ELSE visits_per_day END,
+         per_day_kids = CASE WHEN $11::bool THEN $13 ELSE per_day_kids END,
+         day_kind = COALESCE($14, day_kind)
        WHERE id=$1 RETURNING *`,
       [req.params.id, name, price, visitsProvided, visits || null, valid_days,
-       locProvided, (locIds && locIds[0]) || null, locIds || [], is_active]
+       locProvided, (locIds && locIds[0]) || null, locIds || [], is_active,
+       perDayProvided, pd.visits_per_day, pd.per_day_kids, day_kind]
     );
     if (!row) return res.status(404).json({ error: 'Вид абонемента не найден' });
     res.json(row);
@@ -192,8 +233,19 @@ passesRouter.post(
       // Открыли ещё точку — уже проданные абонементы начинают работать и там.
       // Список из самого абонемента остаётся запасным на случай, если вид удалили.
       const type = p.pass_type_id
-        ? await cq1('SELECT location_ids FROM pass_types WHERE id=$1', [p.pass_type_id])
+        ? await cq1('SELECT location_ids, visits_per_day, per_day_kids, day_kind FROM pass_types WHERE id=$1', [p.pass_type_id])
         : null;
+      // Дни действия: «будничный» абонемент в выходной не пускает — за это он
+      // и дешевле. Тип дня считаем так же, как у билетов (учитывая праздники).
+      if (type && type.day_kind && type.day_kind !== 'any') {
+        const todayKind = await dayKindFor();
+        if (!passDayFits(type.day_kind, todayKind)) {
+          const todayRu = todayKind === 'weekend' ? 'выходной или праздник' : todayKind === 'friday' ? 'пятница' : 'будний день';
+          throw Object.assign(new Error(
+            'Абонемент действует ' + PASS_DAYS_RU[type.day_kind] + ', а сегодня ' + todayRu
+          ), { status: 409 });
+        }
+      }
       const allowed = type ? type.location_ids || [] : p.location_ids || [];
       if (!passWorksIn(allowed, location_id)) {
         const names = await q(
@@ -202,6 +254,25 @@ passesRouter.post(
         );
         const where = names.map((l) => l.name).join(', ') || 'другой точке';
         throw Object.assign(new Error('Абонемент действует только в: ' + where), { status: 409 });
+      }
+      // Дневной лимит: фиксированный или «по числу детей в карте» (минимум 1 —
+      // чтобы абонемент работал, даже если детей в карту ещё не вписали).
+      if (type && (type.visits_per_day != null || type.per_day_kids)) {
+        let limit = type.visits_per_day;
+        if (type.per_day_kids) {
+          const k = await cq1('SELECT count(*)::int AS c FROM client_kids WHERE client_id=$1', [p.client_id]);
+          limit = Math.max(1, k ? k.c : 0);
+        }
+        const t = await cq1(
+          `SELECT count(*)::int AS c FROM pass_visits WHERE pass_id=$1 AND at >= date_trunc('day', now())`,
+          [p.id]
+        );
+        if (t.c >= limit) {
+          throw Object.assign(new Error(
+            'Сегодня по этому абонементу уже прошло ' + t.c + ' — лимит ' + limit + ' в день' +
+            (type.per_day_kids ? ' (по числу детей в карте клиента)' : '')
+          ), { status: 409 });
+        }
       }
       let left = p.visits_left;
       if (left != null) {
