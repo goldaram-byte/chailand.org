@@ -565,3 +565,18 @@ ALTER TABLE passes ADD COLUMN IF NOT EXISTS kid_name text;
 -- предложить гостю попкорн/лимонад/сувенир. Список настраивается на вкладке
 -- «Товары» и фильтруется по ТЦ кассы, как и весь каталог.
 ALTER TABLE products ADD COLUMN IF NOT EXISTS upsell boolean NOT NULL DEFAULT false;
+-- В каких ТЦ предлагать: пусто — во всех точках, где товар продаётся;
+-- список — только в перечисленных (галочка «Предлагать» при этом главная).
+ALTER TABLE products ADD COLUMN IF NOT EXISTS upsell_location_ids bigint[] NOT NULL DEFAULT '{}';
+
+-- Чат сотрудников: общий канал внутри админки, чтобы смены и точки могли
+-- переписываться без сторонних мессенджеров (передать смену, спросить
+-- владельца, предупредить о брони). Сообщения видят все сотрудники.
+CREATE TABLE IF NOT EXISTS staff_messages (
+  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id     bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  text        text NOT NULL,
+  location_id bigint REFERENCES locations(id),    -- откуда писали (ТЦ кассы), NULL — без привязки
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_staff_messages_id ON staff_messages(id DESC);
