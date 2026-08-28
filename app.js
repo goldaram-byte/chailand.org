@@ -1885,9 +1885,29 @@
     var pErr = function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); };
 
     // ---- Настройки → «Абонементы»: виды абонементов ----
+    // «В день»: '' — без ограничения, 'kids' — по числу детей в карте, N — лимит
+    function perDayVal(t) { return t.per_day_kids ? 'kids' : (t.visits_per_day == null ? '' : String(t.visits_per_day)); }
+    var PASS_DAYS_RU = { any: 'Любой день', weekday: 'Будни (Пн–Чт)', workweek: 'Будни + пятница', weekend: 'Выходные и праздники' };
+    function dayKindSel(t) {
+      var cur = t.day_kind || 'any';
+      return '<select style="min-width:130px" onchange="passTypeUpd(' + t.id + ',\'day_kind\',this.value)">' +
+        Object.keys(PASS_DAYS_RU).map(function (v) {
+          return '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + PASS_DAYS_RU[v] + '</option>';
+        }).join('') + '</select>';
+    }
+    function perDaySel(t) {
+      var cur = perDayVal(t);
+      var base = ['1', 'kids', '2', '3', '5', ''];
+      if (base.indexOf(cur) === -1) base.push(cur); // произвольный лимит, заданный через API
+      var label = { '': 'Без ограничения', kids: 'По числу детей' };
+      return '<select style="min-width:130px" onchange="passTypeUpd(' + t.id + ',\'per_day\',this.value)">' +
+        base.map(function (v) {
+          return '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + (label[v] || v + ' в день') + '</option>';
+        }).join('') + '</select>';
+    }
     window.renderPassTypes = function () {
       var tb = document.getElementById('passTypesTbl');
-      if (!SERVER) { if (tb) tb.innerHTML = '<tr><td colspan="7" class="muted">Доступно при работе с сервером</td></tr>'; return; }
+      if (!SERVER) { if (tb) tb.innerHTML = '<tr><td colspan="8" class="muted">Доступно при работе с сервером</td></tr>'; return; }
       api('/passes/types').then(function (list) {
         // выбор ТЦ для нового вида абонемента: id 0 — «черновик» формы
         var ptPick = document.getElementById('ptLocPick');
@@ -1901,23 +1921,27 @@
             '<td><input type="number" min="0" value="' + Number(t.price) + '" style="width:90px" onchange="passTypeUpd(' + t.id + ',\'price\',this.value)"></td>' +
             '<td><input type="number" min="1" value="' + (t.visits == null ? '' : t.visits) + '" placeholder="безлимит" style="width:90px" onchange="passTypeUpd(' + t.id + ',\'visits\',this.value)"></td>' +
             '<td><input type="number" min="1" value="' + t.valid_days + '" style="width:80px" onchange="passTypeUpd(' + t.id + ',\'valid_days\',this.value)"></td>' +
+            '<td>' + dayKindSel(t) + '</td>' +
+            '<td>' + perDaySel(t) + '</td>' +
             '<td>' + (typeof locSelHtml === 'function'
               ? locSelHtml('passtype', t.id, (t.location_ids || []).map(Number))
               : '<span class="muted">—</span>') + '</td>' +
             '<td>' + (t.is_active ? '<span style="color:var(--green);font-weight:700">продаётся</span>' : '<span class="muted">отключён</span>') + '</td>' +
             '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="passTypeUpd(' + t.id + ',\'is_active\',' + (t.is_active ? 'false' : 'true') + ')">' + (t.is_active ? 'Откл.' : 'Вкл.') + '</button> ' +
             '<button class="btn btn-ghost btn-sm" onclick="passTypeDel(' + t.id + ')">✕</button></td></tr>';
-        }).join('') || '<tr><td colspan="7" class="muted">Пока нет видов абонементов — добавьте первый выше</td></tr>';
+        }).join('') || '<tr><td colspan="9" class="muted">Пока нет видов абонементов — добавьте первый выше</td></tr>';
       }).catch(pErr);
     };
     window.passTypeAdd = function () {
       if (!SERVER) return;
       var n = document.getElementById('ptName'), p = document.getElementById('ptPrice'),
-          v = document.getElementById('ptVisits'), d = document.getElementById('ptDays');
+          v = document.getElementById('ptVisits'), d = document.getElementById('ptDays'),
+          pd = document.getElementById('ptPerDay'), dk = document.getElementById('ptDayKind');
       if (!n.value.trim()) { if (typeof toast === 'function') toast('Укажите название абонемента', true); return; }
       api('/passes/types', { method: 'POST', body: {
         name: n.value.trim(), price: +p.value || 0,
         visits: v.value ? +v.value : null, valid_days: +d.value || 30,
+        per_day: pd ? pd.value : '1', day_kind: dk ? dk.value : 'any',
         location_ids: window.NEW_PASS_LOCS || [],
       } }).then(function () {
         n.value = ''; p.value = ''; v.value = '';
@@ -1954,7 +1978,9 @@
 
     window.passTypeUpd = function (id, f, val) {
       var body = {};
-      if (f === 'visits') body.visits = val === '' ? null : +val;
+      if (f === 'per_day') body.per_day = val;
+      else if (f === 'day_kind') body.day_kind = val;
+      else if (f === 'visits') body.visits = val === '' ? null : +val;
       else if (f === 'price' || f === 'valid_days') body[f] = +val || 0;
       else if (f === 'location_id') body.location_id = val ? +val : null;
       else if (f === 'is_active') body.is_active = val === true || val === 'true';
