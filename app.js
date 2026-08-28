@@ -139,7 +139,7 @@
 
       GROUPS = cat.groups.map(function (g) { return { id: g.id, name: g.name, kind: g.kind || 'goods' }; });
       TARIFFS = cat.products.map(function (p) {
-        return { id: p.id, pid: p.id, name: p.name, day: p.day_kind || 'any', price: Number(p.price), doc: p.requires_document, group: p.group_id, loc: p.location_id || null, locs: (p.location_ids || []).map(Number), track: !!p.track_stock, stock: Number(p.stock || 0) };
+        return { id: p.id, pid: p.id, name: p.name, day: p.day_kind || 'any', price: Number(p.price), doc: p.requires_document, group: p.group_id, loc: p.location_id || null, locs: (p.location_ids || []).map(Number), track: !!p.track_stock, stock: Number(p.stock || 0), upsell: !!p.upsell };
       });
       SERVICES = cat.services.map(function (s) {
         return { id: s.id, name: s.name, price: Number(s.price), options: s.options || '',
@@ -856,7 +856,7 @@
       var tb = document.getElementById('setProducts');
       var inv = document.getElementById('invTbl');
       if (!SERVER) {
-        if (tb) tb.innerHTML = '<tr><td colspan="8" class="muted">Доступно при работе с сервером</td></tr>';
+        if (tb) tb.innerHTML = '<tr><td colspan="9" class="muted">Доступно при работе с сервером</td></tr>';
         if (inv) inv.innerHTML = '<tr><td colspan="4" class="muted">Доступно при работе с сервером</td></tr>';
         return;
       }
@@ -885,13 +885,14 @@
               '<td>' + eH(gname[p.group_id] || '—') + '</td>' +
               '<td><input type="number" value="' + Number(p.price) + '" style="width:90px" onchange="editProductPrice(' + p.id + ',this.value)"></td>' +
               '<td>' + (typeof locSelHtml === 'function' ? locSelHtml('product', p.id, (p.location_ids || []).map(Number)) : '') + '</td>' +
+              '<td style="text-align:center"><input type="checkbox" ' + (p.upsell ? 'checked' : '') + ' title="Предлагать при оплате: кассир увидит напоминание предложить этот товар" onchange="toggleUpsell(' + p.id + ',this.checked)"></td>' +
               '<td style="text-align:center"><input type="checkbox" ' + (p.track_stock ? 'checked' : '') + ' title="Вести учёт остатков" onchange="toggleTrackStock(' + p.id + ',this.checked)"></td>' +
               '<td>' + (p.track_stock ? '<b style="color:' + (st <= 0 ? 'var(--red)' : 'var(--green)') + '">' + st + '</b>' : '<span class="muted">—</span>') + '</td>' +
               '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="stockReceipt(' + p.id + ')">+ Приход</button> ' +
               '<button class="btn btn-ghost btn-sm" title="История движений" onclick="stockHistory(' + p.id + ')">🕓</button></td>' +
               '<td><button class="btn btn-ghost btn-sm" onclick="delProduct(' + p.id + ')">Удалить</button></td>' +
               '</tr>';
-          }).join('') || '<tr><td colspan="8" class="muted">Пока нет товаров</td></tr>';
+          }).join('') || '<tr><td colspan="9" class="muted">Пока нет товаров</td></tr>';
         }
         // Инвентаризация — товары с включённым учётом
         if (inv) {
@@ -924,6 +925,14 @@
         .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
     };
     // Учёт остатков: вкл/выкл, приход, история движений, инвентаризация
+    window.toggleUpsell = function (id, on) {
+      api('/catalog/products/' + id, { method: 'PUT', body: { upsell: !!on } })
+        .then(function () { return hydrateAll(); })
+        .then(function () {
+          if (typeof toast === 'function') toast(on ? 'Кассир будет предлагать этот товар при оплате' : 'Товар убран из предложений');
+        })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
     window.toggleTrackStock = function (id, on) {
       api('/catalog/products/' + id, { method: 'PUT', body: { track_stock: !!on } })
         .then(function () { window.renderProducts(); hydrateAll().catch(function () {}); })

@@ -128,7 +128,7 @@ catalogRouter.put(
   '/products/:id',
   canEdit,
   ah(async (req, res) => {
-    const { group_id, name, day_kind, price, requires_document, is_active, track_stock } = req.body || {};
+    const { group_id, name, day_kind, price, requires_document, is_active, track_stock, upsell } = req.body || {};
     const b = req.body || {};
     const locProvided = Object.prototype.hasOwnProperty.call(b, 'location_ids')
       || Object.prototype.hasOwnProperty.call(b, 'location_id');
@@ -143,10 +143,11 @@ catalogRouter.put(
          is_active = COALESCE($7, is_active),
          location_ids = CASE WHEN $8::bool THEN $9::bigint[] ELSE location_ids END,
          location_id = CASE WHEN $8::bool THEN $10 ELSE location_id END,
-         track_stock = COALESCE($11, track_stock)
+         track_stock = COALESCE($11, track_stock),
+         upsell = COALESCE($12, upsell)
        WHERE id=$1 RETURNING *`,
       [req.params.id, group_id, name, day_kind, price, requires_document, is_active,
-       locProvided, locIds, locIds[0] || null, track_stock]
+       locProvided, locIds, locIds[0] || null, track_stock, upsell]
     );
     await audit(req, 'catalog.product.update', { entity: 'product', entityId: req.params.id });
     res.json(row);
