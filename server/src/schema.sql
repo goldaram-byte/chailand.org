@@ -580,3 +580,14 @@ CREATE TABLE IF NOT EXISTS staff_messages (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_staff_messages_id ON staff_messages(id DESC);
+
+-- Личные переписки: recipient_id — кому адресовано (NULL — общий чат).
+-- Прочитанность храним на сервере, чтобы бейджи сходились на всех кассах.
+ALTER TABLE staff_messages ADD COLUMN IF NOT EXISTS recipient_id bigint REFERENCES users(id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_staff_messages_recipient ON staff_messages(recipient_id, id DESC);
+CREATE TABLE IF NOT EXISTS staff_chat_reads (
+  user_id      bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  peer_key     text NOT NULL,                        -- 'all' или id собеседника
+  last_read_id bigint NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, peer_key)
+);

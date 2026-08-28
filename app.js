@@ -1378,16 +1378,17 @@
   }
 
   // -------------------- Раздел «Новости» (владелец/админ) --------------------
-  /* ---------------- Чат сотрудников (общий канал) ---------------- */
+  /* ------------- Чат сотрудников: общий канал + личные переписки ------------- */
   function installChat() {
-    var LAST_ID = 0;                 // последнее показанное сообщение
-    var SEEN_KEY = 'chailand_chat_seen';
     var OPEN = false, TIMER = null;
+    var PEER = undefined;            // undefined — список чатов, null — общий, число — собеседник
+    var PEER_NAME = '';
+    var LAST_ID = 0;                 // последнее показанное сообщение открытого чата
+    var THREADS = [];
     function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-    function seen() { return Number(localStorage.getItem(SEEN_KEY) || 0); }
-    function markSeen(id) { if (id > seen()) localStorage.setItem(SEEN_KEY, String(id)); updateBadge(0); }
-    function updateBadge(n) {
-      var b = document.getElementById('chatBadge'); if (!b) return;
+    function el(id) { return document.getElementById(id); }
+    function updateFab(n) {
+      var b = el('chatBadge'); if (!b) return;
       if (n > 0) { b.textContent = n > 9 ? '9+' : n; b.hidden = false; } else b.hidden = true;
     }
     function fmtTm(ts) {
@@ -1395,72 +1396,117 @@
       var hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
       return today ? hm : (String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + ' ' + hm);
     }
-    function draw(list, append) {
-      var box = document.getElementById('chatMsgs'); if (!box) return;
+    var AV_COLORS = ['#ea580c', '#2563eb', '#059669', '#8e5bd9', '#db2777', '#0891b2'];
+    function ava(t) {
+      if (t.peer_id == null) return '<span class="av" style="background:var(--ink)">📢</span>';
+      var ch = (t.name || '?').trim().charAt(0).toUpperCase();
+      return '<span class="av" style="background:' + AV_COLORS[t.peer_id % AV_COLORS.length] + '">' + esc(ch) + '</span>';
+    }
+    var ROLE_RU = { owner: 'владелец', admin: 'администратор', cashier: 'кассир' };
+
+    function showList() {
+      PEER = undefined; PEER_NAME = ''; LAST_ID = 0;
+      el('chatBack').hidden = true;
+      el('chatTitle').textContent = '💬 Чаты';
+      el('chatSub').textContent = '';
+      el('chatList').hidden = false; el('chatMsgs').hidden = true; el('chatForm').hidden = true;
+      drawThreads();
+    }
+    function drawThreads() {
+      var box = el('chatList'); if (!box || PEER !== undefined) return;
+      box.innerHTML = THREADS.map(function (t) {
+        return '<div class="ch-t" onclick="chatOpen(' + (t.peer_id == null ? 'null' : t.peer_id) + ',\'' + esc(t.name).replace(/'/g, '&#39;') + '\')">' +
+          ava(t) +
+          '<span class="ti"><span class="tn">' + esc(t.name) +
+          (t.role ? '<small>' + (ROLE_RU[t.role] || t.role) + '</small>' : '<small>все сотрудники</small>') + '</span>' +
+          '<span class="tp">' + (t.last_text ? esc(t.last_text) : '<i style="color:#cbd5e1">сообщений пока нет</i>') + '</span></span>' +
+          (t.unread ? '<span class="un">' + (t.unread > 9 ? '9+' : t.unread) + '</span>' : '') +
+          '</div>';
+      }).join('');
+    }
+    function drawMsgs(list, append) {
+      var box = el('chatMsgs'); if (!box) return;
       var me = (window.CURRENT_USER || {}).id;
       var html = list.map(function (m) {
         var mine = m.user_id === me;
-        var canDel = mine || (ME && ME.role === 'owner');
+        var canDel = mine || (ME && ME.role === 'owner' && PEER === null);
         return '<div class="ch-m' + (mine ? ' mine' : '') + '" data-id="' + m.id + '">' +
-          (mine ? '' : '<div class="who">' + esc(m.user_name) + (m.location_name ? ' <small>· ' + esc(m.location_name) + '</small>' : '') + '</div>') +
+          (mine || PEER !== null ? '' : '<div class="who">' + esc(m.user_name) + (m.location_name ? ' <small>· ' + esc(m.location_name) + '</small>' : '') + '</div>') +
           esc(m.text).replace(/\n/g, '<br>') +
           '<div class="tm">' + fmtTm(m.created_at) + '</div>' +
           (canDel ? '<button class="del" title="Удалить" onclick="chatDel(' + m.id + ')">✕</button>' : '') +
           '</div>';
       }).join('');
       if (append) box.insertAdjacentHTML('beforeend', html); else box.innerHTML = html ||
-        '<div class="muted" style="font-size:12.5px;text-align:center;padding:20px 0">Пока пусто — напишите первым 👋</div>';
+        '<div class="muted" style="font-size:12.5px;text-align:center;padding:20px 0">Сообщений пока нет — напишите первым 👋</div>';
       box.scrollTop = box.scrollHeight;
     }
-    function poll() {
+    function pollThreads() {
       if (!SERVER || !localStorage.getItem(TOKEN_KEY)) return Promise.resolve();
-      return api('/chat?after_id=' + LAST_ID).then(function (list) {
-        list = list || [];
-        if (!list.length) return;
-        var wasEmpty = LAST_ID === 0;
-        LAST_ID = list[list.length - 1].id;
-        if (OPEN) { draw(list, !wasEmpty); markSeen(LAST_ID); }
-        else updateBadge(list.filter(function (m) { return m.id > seen(); }).length +
-                         Number((document.getElementById('chatBadge') || { textContent: 0 }).hidden ? 0 : 0));
+      return api('/chat/threads').then(function (list) {
+        THREADS = list || [];
+        updateFab(THREADS.reduce(function (a, t) { return a + (t.unread || 0); }, 0));
+        if (OPEN && PEER === undefined) drawThreads();
       }).catch(function () {});
     }
+    function pollThread() {
+      if (PEER === undefined) return Promise.resolve();
+      var qp = (PEER == null ? '' : 'peer_id=' + PEER + '&') + 'after_id=' + LAST_ID + '&mark_read=1';
+      return api('/chat?' + qp).then(function (list) {
+        list = list || [];
+        if (!list.length) return;
+        var fresh = LAST_ID === 0;
+        LAST_ID = list[list.length - 1].id;
+        drawMsgs(list, !fresh);
+      }).catch(function () {});
+    }
+    window.chatOpen = function (peerId, name) {
+      PEER = peerId; PEER_NAME = name; LAST_ID = 0;
+      el('chatBack').hidden = false;
+      el('chatTitle').textContent = peerId == null ? '📢 Общий чат' : name;
+      el('chatSub').textContent = peerId == null ? 'видят все сотрудники' : 'личная переписка';
+      el('chatList').hidden = true; el('chatMsgs').hidden = false; el('chatForm').hidden = false;
+      el('chatMsgs').innerHTML = '';
+      pollThread().then(pollThreads);
+      setTimeout(function () { var t = el('chatText'); if (t) t.focus(); }, 80);
+    };
+    window.chatBack = function () { showList(); pollThreads(); };
     window.chatToggle = function () {
-      var pnl = document.getElementById('chatPanel'); if (!pnl) return;
+      var pnl = el('chatPanel'); if (!pnl) return;
       OPEN = !pnl.classList.contains('open');
       pnl.classList.toggle('open', OPEN);
-      if (OPEN) {
-        // перерисовать целиком (могли удалить сообщения) и отметить прочитанным
-        LAST_ID = 0;
-        api('/chat').then(function (list) {
-          list = list || [];
-          if (list.length) LAST_ID = list[list.length - 1].id;
-          draw(list, false); markSeen(LAST_ID);
-        }).catch(function () {});
-        setTimeout(function () { var t = document.getElementById('chatText'); if (t) t.focus(); }, 100);
-      }
+      if (OPEN) { showList(); pollThreads(); }
     };
     window.chatSend = function () {
-      var t = document.getElementById('chatText'); if (!t) return;
+      if (PEER === undefined) return;
+      var t = el('chatText'); if (!t) return;
       var text = t.value.trim(); if (!text) return;
       t.value = '';
-      api('/chat', { method: 'POST', body: { text: text, location_id: (typeof deviceLoc === 'function') ? deviceLoc() : null } })
-        .then(function () { return poll(); })
+      api('/chat', { method: 'POST', body: {
+        text: text, recipient_id: PEER == null ? null : PEER,
+        location_id: (typeof deviceLoc === 'function') ? deviceLoc() : null,
+      } })
+        .then(function () { return pollThread(); })
         .catch(function (e) { t.value = text; if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
     };
     window.chatDel = function (id) {
       if (!confirm('Удалить сообщение?')) return;
       api('/chat/' + id, { method: 'DELETE' })
         .then(function () {
-          var el = document.querySelector('.ch-m[data-id="' + id + '"]'); if (el) el.remove();
+          var m = document.querySelector('.ch-m[data-id="' + id + '"]'); if (m) m.remove();
         })
         .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
     };
     // Кнопка появляется после входа; поллинг раз в 8 секунд, пока вкладка видна
     window.chatStart = function () {
-      var fab = document.getElementById('chatFab'); if (fab) fab.style.display = 'grid';
+      var fab = el('chatFab'); if (fab) fab.style.display = 'grid';
       if (TIMER) clearInterval(TIMER);
-      poll();
-      TIMER = setInterval(function () { if (!document.hidden) poll(); }, 8000);
+      pollThreads();
+      TIMER = setInterval(function () {
+        if (document.hidden) return;
+        pollThreads();
+        if (OPEN && PEER !== undefined) pollThread();
+      }, 8000);
     };
   }
 
@@ -2583,11 +2629,17 @@
         psel.value = pcur || 'all';
         if (!psel.value) psel.value = 'all';
       }
-      // Кассиры — один раз.
+      // Кассиры — пересобираем каждый раз из живого списка сотрудников:
+      // раньше список заполнялся «один раз», и если дашборд открыли до
+      // загрузки данных, в фильтре навсегда оставались демо-имена, а
+      // настоящие сотрудники не появлялись.
       var csel = document.getElementById('dashCashier');
-      if (csel && !csel.dataset.filled) {
-        csel.insertAdjacentHTML('beforeend', (DASH_USERS || []).map(function (u) { return '<option value="' + u.id + '">' + u.name + '</option>'; }).join(''));
-        csel.dataset.filled = '1';
+      if (csel) {
+        var ccur = csel.value;
+        csel.innerHTML = '<option value="all">Все кассиры</option>' +
+          (DASH_USERS || []).map(function (u) { return '<option value="' + u.id + '">' + u.name + '</option>'; }).join('');
+        csel.value = ccur || 'all';
+        if (!csel.value) csel.value = 'all';
       }
       var qs = dashQuery();
       api('/reports/overview' + qs.query).then(function (r) {
