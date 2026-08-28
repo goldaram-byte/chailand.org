@@ -283,7 +283,7 @@ clientAppRouter.get(
     // Лениво помечаем истёкшие, чтобы клиент видел актуальный статус
     await q(`UPDATE passes SET status='expired' WHERE client_id=$1 AND status='active' AND valid_to < current_date`, [req.client.id]);
     const rows = await q(
-      `SELECT p.id, p.name, p.status, p.visits_total, p.visits_left, p.valid_from, p.valid_to,
+      `SELECT p.id, p.name, p.kid_name, p.status, p.visits_total, p.visits_left, p.valid_from, p.valid_to,
               -- Где абонемент действует сейчас (а не где его купили): список
               -- берём из настройки вида, чтобы клиент видел актуальные парки.
               (SELECT string_agg(lo.name, ', ' ORDER BY lo.sort, lo.id)

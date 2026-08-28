@@ -550,3 +550,12 @@ ALTER TABLE pass_types ADD COLUMN IF NOT EXISTS per_day_kids boolean NOT NULL DE
 -- абонемент (например, 10 посещений) продаётся по разной цене: «будни»
 -- дешевле, «любой день» дороже.
 ALTER TABLE pass_types ADD COLUMN IF NOT EXISTS day_kind text NOT NULL DEFAULT 'any';
+
+-- Абонемент — на одного ребёнка: ровно одно списание в день. Режим «лимит по
+-- числу детей в карте» убран — детей в кабинет можно добавить сколько угодно,
+-- и по одному абонементу проходила бы вся компания. Старые виды с этим
+-- режимом переводятся на «1 в день» (идемпотентно: после апдейта строк с
+-- per_day_kids не остаётся). На кого оформлен абонемент — подпись kid_name,
+-- чтобы кассир различал абонементы детей одной семьи на одной карте.
+UPDATE pass_types SET visits_per_day = 1, per_day_kids = false WHERE per_day_kids;
+ALTER TABLE passes ADD COLUMN IF NOT EXISTS kid_name text;

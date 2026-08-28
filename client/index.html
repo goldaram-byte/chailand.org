@@ -503,7 +503,7 @@
         if (p.works_in) meta += '<br>Парки: ' + esc(p.works_in);
         if (p.last_visit_at) meta += '<br>Последнее посещение: ' + dmy(p.last_visit_at);
         return '<div class="pass'+(live?'':' off')+'">'+
-          '<div class="p-top"><div class="p-n">'+esc(p.name)+'</div>'+
+          '<div class="p-top"><div class="p-n">'+esc(p.name)+(p.kid_name?' <span style="opacity:.85">· '+esc(p.kid_name)+'</span>':'')+'</div>'+
           '<span class="p-st '+(live?'on':'no')+'">'+(ST[p.status]||p.status)+'</span></div>'+
           cnt + '<div class="p-meta">'+meta+'</div></div>';
       }).join('');
