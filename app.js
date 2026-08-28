@@ -731,7 +731,15 @@
     };
 
     // --- Выбор нескольких ТЦ у позиции каталога (билет / товар / услуга) ---
+    // ВАЖНО: не перетирать чужие ветки. installPasses() добавляет к saveLocSel
+    // свои виды ('passtype' и 'newpass') — раньше это присваивание стирало их,
+    // и выбор ТЦ у абонемента уходил PUT'ом в /catalog/products/<id>: настройка
+    // не сохранялась, а у билета с тем же id могли смениться ТЦ.
+    var _saveLocSelCat = window.saveLocSel;
     window.saveLocSel = function (kind, id, ids) {
+      if (kind !== 'service' && kind !== 'product') {
+        return _saveLocSelCat ? _saveLocSelCat.apply(this, arguments) : undefined;
+      }
       var path = kind === 'service' ? '/catalog/services/' : '/catalog/products/';
       var arr = kind === 'service' ? SERVICES : TARIFFS;
       var it = arr.find(function (x) { return x.id === id; });
