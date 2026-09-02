@@ -8,7 +8,14 @@ cd "$(dirname "$0")"
 BRANCH=main
 
 echo "==> 1/5 Забираю свежий код ($BRANCH)..."
-git fetch origin "$BRANCH"
+# Репозиторий публичный: тянем анонимно и не даём git спрашивать логин —
+# протухшие сохранённые доступы на сервере ломали fetch ошибкой
+# «could not read Username for 'https://github.com'».
+export GIT_TERMINAL_PROMPT=0
+git -c credential.helper= fetch origin "$BRANCH" || {
+  echo "   Повтор через HTTP/1.1 (сетевой сбой)..."
+  git -c credential.helper= -c http.version=HTTP/1.1 fetch origin "$BRANCH"
+}
 git reset --hard "origin/$BRANCH"
 
 echo "==> 2/5 Пересобираю образ и перезапускаю контейнеры..."
