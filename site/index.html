@@ -286,6 +286,7 @@ footer{background:var(--grape-deep);color:#EFC9A6;padding:50px 0 32px}
           <div class="dd">
             <a href="#party"><span class="dot" style="background:var(--coral)"></span>Дни рождения</a>
             <a href="#party"><span class="dot" style="background:var(--sky)"></span>Выпускные и квесты</a>
+            <a href="#quiz"><span class="dot" style="background:var(--sunshine)"></span>Собрать праздник (квиз)</a>
             <a href="#" onclick="openModal();return false"><span class="dot" style="background:var(--mint)"></span>Забронировать праздник</a>
           </div>
         </li>
@@ -412,7 +413,7 @@ footer{background:var(--grape-deep);color:#EFC9A6;padding:50px 0 32px}
       <div>
         <p><b>Детский день рождения в ЧайЛэнд</b> — это лучшее место, где можно провести день рождения ребёнка, выпускной или семейный праздник. Организация проходит быстро и просто: персональный банкетный менеджер выполнит все задачи — от бронирования до сопровождения гостей.</p>
         <p>В вашем распоряжении банкетная комната в тематике любимых мультгероев и свободный доступ к аттракционам на весь день — с 10:00 до 22:00. Приходите заранее или оставайтесь после мероприятия.</p>
-        <p style="margin-top:22px"><button class="btn btn-coral" onclick="openModal()">Заказать праздник</button></p>
+        <p style="margin-top:22px;display:flex;gap:12px;flex-wrap:wrap"><button class="btn btn-coral" onclick="openModal()">Заказать праздник</button><a class="btn btn-line" href="#quiz">🧩 Собрать праздник онлайн</a></p>
       </div>
       <figure class="party-video" onclick="openVideo()">
         <div class="pl"></div>
@@ -435,6 +436,69 @@ footer{background:var(--grape-deep);color:#EFC9A6;padding:50px 0 32px}
         <p>*При оплате праздника от определённой суммы. Подробности — у банкетного менеджера.</p>
       </div>
       <button class="btn btn-coral" onclick="openModal()">Забронировать</button>
+    </div>
+  </div>
+</section>
+
+<!-- ================= КВИЗ: СОБЕРИ ПРАЗДНИК ================= -->
+<section class="section" id="quiz" style="background:var(--bg-soft)">
+<style>
+#quiz .qz-card{background:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow);padding:38px;max-width:920px;margin:0 auto}
+#quiz .qz-top{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:6px}
+#quiz .qz-step-lbl{font-family:var(--display);font-weight:700;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--coral-dark)}
+#quiz .qz-total{font-family:var(--display);font-weight:700;color:var(--grape);font-size:.95rem}
+#quiz .qz-total small{color:var(--muted);font-family:var(--body);font-weight:500;font-size:.72rem;display:block;text-align:right}
+#quiz .qz-bar{height:8px;background:var(--bg-soft);border-radius:99px;overflow:hidden;margin-bottom:26px}
+#quiz .qz-bar span{display:block;height:100%;background:linear-gradient(90deg,var(--sunshine),var(--coral));border-radius:99px;transition:width .25s}
+#quiz h3.qz-q{color:var(--grape);font-size:1.25rem;margin-bottom:18px}
+#quiz .qz-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+#quiz .qz-opt{position:relative;text-align:left;background:#fff;border:2.5px solid var(--line);border-radius:var(--r-md);padding:18px 20px;cursor:pointer;font-family:var(--body);transition:border-color .15s,transform .15s}
+#quiz .qz-opt:hover{transform:translateY(-3px);border-color:var(--sunshine)}
+#quiz .qz-opt.on{border-color:var(--coral);background:#FFF7F2}
+#quiz .qz-opt .t{font-family:var(--display);font-weight:700;color:var(--grape);font-size:1rem}
+#quiz .qz-opt .s{color:var(--muted);font-size:.84rem;margin-top:4px}
+#quiz .qz-opt .p{font-family:var(--display);font-weight:700;color:var(--coral-dark);margin-top:8px}
+#quiz .qz-opt .hit{position:absolute;top:-11px;right:14px;background:var(--sunshine);color:var(--grape);font-family:var(--display);font-weight:700;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;border-radius:99px;padding:4px 12px}
+#quiz .qz-opt ul{list-style:none;margin-top:10px;display:grid;gap:5px}
+#quiz .qz-opt ul li{font-size:.8rem;color:var(--grape-deep);padding-left:18px;position:relative}
+#quiz .qz-opt ul li::before{content:'✦';position:absolute;left:0;color:var(--coral);font-size:.7rem}
+#quiz .qz-svc{display:flex;align-items:center;gap:12px;border:2px solid var(--line);border-radius:14px;padding:13px 16px;cursor:pointer;background:#fff}
+#quiz .qz-svc.on{border-color:var(--mint);background:#F2FBEF}
+#quiz .qz-svc input{width:19px;height:19px;accent-color:var(--mint);flex:none}
+#quiz .qz-svc .n{flex:1;font-size:.92rem;color:var(--grape-deep)}
+#quiz .qz-svc .pr{font-family:var(--display);font-weight:700;font-size:.85rem;color:var(--grape);white-space:nowrap}
+#quiz .qz-gr{font-family:var(--display);font-weight:700;font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:18px 0 10px}
+#quiz .qz-gr:first-child{margin-top:0}
+#quiz .qz-nav{display:flex;justify-content:space-between;gap:12px;margin-top:28px}
+#quiz .qz-hint{color:var(--muted);font-size:.85rem;margin-top:14px}
+#quiz .qz-sum{background:var(--bg-soft);border-radius:var(--r-md);padding:20px 22px;margin-bottom:20px;display:grid;gap:7px}
+#quiz .qz-sum div{display:flex;justify-content:space-between;gap:16px;font-size:.9rem}
+#quiz .qz-sum .k{color:var(--muted)}
+#quiz .qz-sum .tot{border-top:2px dashed var(--line);padding-top:10px;margin-top:5px;font-family:var(--display);font-weight:700;color:var(--grape)}
+#quiz form{display:grid;gap:14px}
+#quiz .qz-ok{text-align:center;padding:30px 10px}
+#quiz .qz-ok b{font-family:var(--display);color:var(--grape);font-size:1.2rem}
+@media(max-width:640px){#quiz .qz-card{padding:26px 18px}}
+</style>
+  <div class="wrap">
+    <div class="sec-head">
+      <div>
+        <span class="chip">Конструктор праздника</span>
+        <h2 class="sec-title">Собери свой праздник <em>за минуту</em></h2>
+      </div>
+      <p class="sec-sub">Ответьте на несколько вопросов — подберём пакет, комнату и дополнительные услуги, посчитаем примерную стоимость и передадим заявку банкетному менеджеру.</p>
+    </div>
+    <div class="qz-card">
+      <div class="qz-top">
+        <span class="qz-step-lbl" id="qzStepLbl">Шаг 1 из 6</span>
+        <span class="qz-total" id="qzTotal" hidden></span>
+      </div>
+      <div class="qz-bar"><span id="qzBarFill" style="width:17%"></span></div>
+      <div id="qzBody"></div>
+      <div class="qz-nav" id="qzNav">
+        <button class="btn btn-line" id="qzBack" onclick="qzBack()" style="visibility:hidden">← Назад</button>
+        <button class="btn btn-coral" id="qzNext" onclick="qzNext()">Далее →</button>
+      </div>
     </div>
   </div>
 </section>
@@ -547,7 +611,7 @@ footer{background:var(--grape-deep);color:#EFC9A6;padding:50px 0 32px}
         <h2>Подпишись на рассылку и получай новости</h2>
         <p>Информация о мероприятиях, эксклюзивные бонусы и скидки. Писать будем нечасто, зато содержательно и интересно.</p>
       </div>
-      <form class="sub-right" onsubmit="return fakeSubmit(this)">
+      <form class="sub-right" onsubmit="fakeSubmit(this);return false">
         <div class="field">
           <label for="subEmail">Email *</label>
           <input id="subEmail" type="email" required placeholder="name@mail.ru">
@@ -623,7 +687,8 @@ footer{background:var(--grape-deep);color:#EFC9A6;padding:50px 0 32px}
     <div id="modalForm">
       <h3 id="modalTitle">Оформить заявку</h3>
       <p id="modalPark">Менеджер перезвонит, ответит на вопросы и поможет с билетами или бронированием праздника.</p>
-      <form onsubmit="return fakeSubmit(this,true)">
+      <!-- fakeSubmit — async: вернуть надо false сразу, а не Promise, иначе форма уйдёт нативно и перезагрузит страницу -->
+      <form onsubmit="fakeSubmit(this,true);return false">
         <div class="field"><label for="fName">Имя</label><input id="fName" type="text" placeholder="Как к вам обращаться"></div>
         <div class="field"><label for="fPhone">Телефон *</label><input id="fPhone" type="tel" required placeholder="+7 (___) ___-__-__"></div>
         <div class="field"><label for="fPark">Парк</label>
@@ -724,6 +789,195 @@ async function fakeSubmit(form,isModal){
   }
   return false;
 }
+
+/* ================= КВИЗ «СОБЕРИ ПРАЗДНИК» ================= */
+/* Пакеты — из официального прайса ЧайЛэнд. Комнаты и доп-услуги приходят из
+   каталога парка (/api/public/party) и фильтруются по выбранному ТЦ. */
+const QZ_PKGS=[
+  {id:'otmechay',name:'Отмечай',price:9900,inc:6,kids:'5 детей + именинник',
+   feats:['Красочная комната — 2,5 часа','День развлечений без ограничений','Взрослым вход бесплатно']},
+  {id:'neskuchay',name:'Не скучай',price:14900,inc:6,kids:'5 детей + именинник',hit:'Хит',
+   feats:['Красочная комната — 2,5 часа','Квест-шоу или шоу на выбор','Аниматор — любой персонаж (1 час)','Вынос торта имениннику','Взрослым вход бесплатно']},
+  {id:'neobychayny',name:'Необычайный',price:19900,inc:6,kids:'5 детей + именинник',
+   feats:['Красочная комната — 2,5 часа','Квест-шоу или шоу на выбор','День развлечений без ограничений','Взрослым вход бесплатно']},
+  {id:'premium',name:'Премиум',price:25900,inc:10,kids:'9 детей + именинник',
+   feats:['Красочная комната — 3 часа','Квест-шоу — 45 мин','Бумажная дискотека — 15 мин','Шар-сюрприз','Аквагрим всем детям (10 человек)','Радужный торт от ЧайЛэнд (до 3 кг)','Сервировка праздничного стола','Взрослым вход бесплатно']},
+  {id:'vip',name:'VIP',price:41900,inc:10,kids:'9 детей + именинник',
+   feats:['Красочная комната — 4 часа','Квест-шоу — 45 мин','Бумажная дискотека — 15 мин','Шар-сюрприз','Аквагрим всем детям (10 человек)','Радужный торт от ЧайЛэнд (до 3 кг)','Сервировка праздничного стола','Взрослым вход бесплатно']},
+];
+const QZ_PARKS_FALLBACK=[{id:null,name:'ТРЦ Выходной'},{id:null,name:'ТЦ Светофор'}];
+const qzFmt=n=>Number(n).toLocaleString('ru-RU')+' ₽';
+/* Доплата за дополнительного ребёнка — по дню недели (праздники — как выходные) */
+const qzKidPrice=d=>{const w=new Date(d+'T12:00:00').getDay();return (w===0||w===6)?1390:(w===5?1090:990)};
+const qzDayName=d=>['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'][new Date(d+'T12:00:00').getDay()];
+
+let QZ={step:1,data:null,park:null,pkg:null,room:null,date:'',kidsN:0,extras:{},sent:false};
+fetch('/api/public/party').then(r=>r.ok?r.json():null).then(d=>{QZ.data=d;if(QZ.step===1)qzRender();}).catch(()=>{});
+
+function qzParks(){
+  const locs=(QZ.data&&QZ.data.locations&&QZ.data.locations.length)?QZ.data.locations:QZ_PARKS_FALLBACK;
+  return locs;
+}
+/* Позиция каталога доступна в парке: пустой список ТЦ = во всех */
+function qzInLoc(item){
+  if(!QZ.park||QZ.park.id==null)return true;
+  const ids=(item.location_ids||[]).map(String);
+  if(ids.length)return ids.includes(String(QZ.park.id));
+  if(item.location_id!=null)return String(item.location_id)===String(QZ.park.id);
+  return true;
+}
+function qzRooms(){return QZ.data?QZ.data.rooms.filter(r=>!r.location_id||!QZ.park||QZ.park.id==null||String(r.location_id)===String(QZ.park.id)):[]}
+function qzSvcGroups(){
+  if(!QZ.data)return[];
+  const gids=QZ.data.groups.map(g=>String(g.id));
+  const out=[];
+  QZ.data.groups.forEach(g=>{
+    const list=QZ.data.services.filter(s=>String(s.group_id)===String(g.id)&&qzInLoc(s));
+    if(list.length)out.push({name:g.name,list});
+  });
+  const rest=QZ.data.services.filter(s=>(s.group_id==null||!gids.includes(String(s.group_id)))&&qzInLoc(s));
+  if(rest.length)out.push({name:out.length?'Прочее':'Услуги',list:rest});
+  return out;
+}
+function qzExtrasSum(){return Object.values(QZ.extras).reduce((a,s)=>a+Number(s.price||0),0)}
+function qzTotal(){
+  if(!QZ.pkg)return 0;
+  let t=QZ.pkg.price+qzExtrasSum();
+  if(QZ.date&&QZ.kidsN>QZ.pkg.inc)t+=(QZ.kidsN-QZ.pkg.inc)*qzKidPrice(QZ.date);
+  return t;
+}
+function qzHead(){
+  document.getElementById('qzStepLbl').textContent='Шаг '+QZ.step+' из 6';
+  document.getElementById('qzBarFill').style.width=Math.round(QZ.step/6*100)+'%';
+  const tot=document.getElementById('qzTotal');
+  if(QZ.pkg&&!QZ.sent){tot.hidden=false;tot.innerHTML=qzFmt(qzTotal())+'<small>примерный итог</small>';}
+  else tot.hidden=true;
+  document.getElementById('qzBack').style.visibility=(QZ.step>1&&!QZ.sent)?'visible':'hidden';
+  document.getElementById('qzNav').style.display=QZ.sent?'none':'flex';
+  document.getElementById('qzNext').textContent=QZ.step===5?'Далее →':(QZ.step===6?'':'Далее →');
+  document.getElementById('qzNext').style.display=QZ.step===6?'none':'inline-flex';
+}
+function qzRender(){
+  qzHead();
+  const b=document.getElementById('qzBody');
+  if(QZ.sent){
+    b.innerHTML='<div class="qz-ok"><b>🎉 Заявка отправлена!</b><p style="color:var(--muted);margin-top:10px">Банкетный менеджер перезвонит, уточнит детали и забронирует комнату.</p></div>';
+    return;
+  }
+  if(QZ.step===1){
+    b.innerHTML='<h3 class="qz-q">Где празднуем?</h3><div class="qz-opts">'+
+      qzParks().map((p,i)=>`<button type="button" class="qz-opt ${QZ.park&&QZ.park.name===p.name?'on':''}" onclick="qzPickPark(${i})">
+        <div class="t">🏰 ${p.name}</div><div class="s">г. Люберцы · парк развлечений ЧайЛэнд</div></button>`).join('')+'</div>';
+  }
+  if(QZ.step===2){
+    b.innerHTML='<h3 class="qz-q">Выберите пакет праздника</h3><div class="qz-opts">'+
+      QZ_PKGS.map((p,i)=>`<button type="button" class="qz-opt ${QZ.pkg&&QZ.pkg.id===p.id?'on':''}" onclick="qzPickPkg(${i})">
+        ${p.hit?'<span class="hit">'+p.hit+'</span>':''}
+        <div class="t">${p.name}</div><div class="s">${p.kids}</div>
+        <ul>${p.feats.map(f=>'<li>'+f+'</li>').join('')}</ul>
+        <div class="p">${qzFmt(p.price)}</div></button>`).join('')+'</div>'+
+      '<p class="qz-hint">Дополнительный ребёнок: пн–чт 990 ₽ · пятница 1090 ₽ · выходные и праздники 1390 ₽.</p>';
+  }
+  if(QZ.step===3){
+    const rooms=qzRooms();
+    b.innerHTML='<h3 class="qz-q">Какая комната нравится?</h3><div class="qz-opts">'+
+      rooms.map(r=>`<button type="button" class="qz-opt ${QZ.room&&QZ.room.id===r.id?'on':''}" onclick="qzPickRoom(${r.id})">
+        <div class="t">🚪 ${r.name}</div>${r.capacity?'<div class="s">до '+r.capacity+' гостей</div>':''}</button>`).join('')+
+      `<button type="button" class="qz-opt ${QZ.room&&QZ.room.id===0?'on':''}" onclick="qzPickRoom(0)">
+        <div class="t">🎲 Посоветуйте комнату</div><div class="s">менеджер подберёт свободную под дату и количество гостей</div></button></div>`;
+  }
+  if(QZ.step===4){
+    b.innerHTML='<h3 class="qz-q">Когда праздник и сколько детей?</h3>'+
+      '<div class="qz-opts" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">'+
+      `<div class="field"><label for="qzDate">Дата праздника *</label><input id="qzDate" type="date" min="${(d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'))(new Date())}" value="${QZ.date}" onchange="qzSetDate(this.value)"></div>`+
+      `<div class="field"><label for="qzKids">Детей всего (с именинником)</label><input id="qzKids" type="number" min="1" max="60" value="${QZ.kidsN||(QZ.pkg?QZ.pkg.inc:6)}" onchange="qzSetKids(this.value)"></div></div>`+
+      '<p class="qz-hint" id="qzKidsHint"></p>';
+    qzKidsHint();
+  }
+  if(QZ.step===5){
+    const groups=qzSvcGroups();
+    b.innerHTML='<h3 class="qz-q">Дополнительные услуги <span style="font-size:.75rem;color:var(--muted);font-family:var(--body);font-weight:500">— можно пропустить</span></h3>'+
+      (groups.length?groups.map(g=>'<div class="qz-gr">'+g.name+'</div><div style="display:grid;gap:9px">'+
+        g.list.map(s=>`<label class="qz-svc ${QZ.extras[s.id]?'on':''}"><input type="checkbox" ${QZ.extras[s.id]?'checked':''} onchange="qzToggleSvc(${s.id},'${String(s.name).replace(/'/g,'’')}',${Number(s.price)||0},this.checked)">
+          <span class="n">${s.name}${s.options?' <span style="color:var(--muted);font-size:.78rem">('+String(s.options).split('|').join(' / ')+')</span>':''}</span>
+          <span class="pr">${qzFmt(s.price)}</span></label>`).join('')+'</div>').join('')
+      :'<p class="qz-hint">Аниматоры, шоу-программы, аквагрим, торты и другое — банкетный менеджер предложит варианты при звонке.</p>');
+  }
+  if(QZ.step===6){
+    const extra=QZ.date&&QZ.pkg&&QZ.kidsN>QZ.pkg.inc?(QZ.kidsN-QZ.pkg.inc):0;
+    const exSum=extra?extra*qzKidPrice(QZ.date):0;
+    const exList=Object.values(QZ.extras);
+    b.innerHTML='<h3 class="qz-q">Ваш праздник готов — осталось забронировать!</h3>'+
+      '<div class="qz-sum">'+
+      `<div><span class="k">Парк</span><b>${QZ.park?QZ.park.name:'—'}</b></div>`+
+      `<div><span class="k">Пакет «${QZ.pkg.name}» (${QZ.pkg.kids})</span><b>${qzFmt(QZ.pkg.price)}</b></div>`+
+      `<div><span class="k">Комната</span><b>${QZ.room&&QZ.room.id!==0?QZ.room.name:'подберёт менеджер'}</b></div>`+
+      `<div><span class="k">Дата</span><b>${QZ.date.split('-').reverse().join('.')} (${qzDayName(QZ.date)})</b></div>`+
+      (extra?`<div><span class="k">Доп. дети: ${extra} × ${qzFmt(qzKidPrice(QZ.date))}</span><b>${qzFmt(exSum)}</b></div>`:'')+
+      exList.map(s=>`<div><span class="k">${s.name}</span><b>${qzFmt(s.price)}</b></div>`).join('')+
+      `<div class="tot"><span>Примерный итог</span><b>${qzFmt(qzTotal())}</b></div></div>`+
+      '<form onsubmit="qzSubmit(this);return false">'+
+      '<div class="field"><label for="qzName">Имя</label><input id="qzName" type="text" placeholder="Как к вам обращаться"></div>'+
+      '<div class="field"><label for="qzPhone">Телефон *</label><input id="qzPhone" type="tel" required placeholder="+7 (___) ___-__-__"></div>'+
+      '<input type="text" name="company" tabindex="-1" autocomplete="off" style="position:absolute;left:-5000px" aria-hidden="true">'+
+      '<button class="btn btn-coral" type="submit">Забронировать праздник</button>'+
+      '<p class="consent">Итог предварительный — точную сумму подтвердит банкетный менеджер. Нажимая на кнопку, вы даёте согласие на обработку персональных данных.</p></form>';
+  }
+}
+function qzPickPark(i){QZ.park=qzParks()[i];QZ.room=null;QZ.extras={};qzGo(2)}
+function qzPickPkg(i){QZ.pkg=QZ_PKGS[i];if(!QZ.kidsN||QZ.kidsN<QZ.pkg.inc)QZ.kidsN=QZ.pkg.inc;qzGo(3)}
+function qzPickRoom(id){QZ.room=id===0?{id:0,name:''}:qzRooms().find(r=>r.id===id);qzGo(4)}
+function qzSetDate(v){QZ.date=v;qzKidsHint();qzHead()}
+function qzSetKids(v){QZ.kidsN=Math.max(1,Math.min(60,Math.round(+v)||1));qzKidsHint();qzHead()}
+function qzKidsHint(){
+  const h=document.getElementById('qzKidsHint');if(!h||!QZ.pkg)return;
+  const extra=QZ.kidsN>QZ.pkg.inc?QZ.kidsN-QZ.pkg.inc:0;
+  h.textContent='В пакет входит: '+QZ.pkg.kids.toLowerCase()+'.'+(extra?(QZ.date
+    ?' Дополнительно '+extra+' × '+qzFmt(qzKidPrice(QZ.date))+' ('+qzDayName(QZ.date)+').'
+    :' Дополнительные дети: пн–чт 990 ₽, пт 1090 ₽, выходные 1390 ₽.'):'');
+}
+function qzToggleSvc(id,name,price,on){if(on)QZ.extras[id]={name,price};else delete QZ.extras[id];
+  event.target.closest('.qz-svc').classList.toggle('on',on);qzHead()}
+function qzGo(step){QZ.step=step;qzRender();document.getElementById('quiz').scrollIntoView({behavior:'smooth',block:'start'})}
+function qzBack(){if(QZ.step>1)qzGo(QZ.step-1)}
+function qzNext(){
+  if(QZ.step===1&&!QZ.park)return alert('Выберите парк');
+  if(QZ.step===2&&!QZ.pkg)return alert('Выберите пакет праздника');
+  if(QZ.step===3&&!QZ.room)return alert('Выберите комнату или «Посоветуйте комнату»');
+  if(QZ.step===4){
+    QZ.date=document.getElementById('qzDate').value;
+    qzSetKids(document.getElementById('qzKids').value);
+    if(!QZ.date)return alert('Укажите дату праздника');
+  }
+  qzGo(QZ.step+1);
+}
+async function qzSubmit(form){
+  const btn=form.querySelector('button[type="submit"]');
+  const name=document.getElementById('qzName').value.trim();
+  const phone=document.getElementById('qzPhone').value.trim();
+  const hp=form.querySelector('[name="company"]').value;
+  const extra=QZ.kidsN>QZ.pkg.inc?QZ.kidsN-QZ.pkg.inc:0;
+  const note=['Квиз праздника.',
+    'Парк: '+(QZ.park?QZ.park.name:'—')+'.',
+    'Пакет: «'+QZ.pkg.name+'» ('+QZ.pkg.kids+') — '+qzFmt(QZ.pkg.price)+'.',
+    'Комната: '+(QZ.room&&QZ.room.id!==0?QZ.room.name:'подобрать')+'.',
+    'Дата: '+QZ.date.split('-').reverse().join('.')+' ('+qzDayName(QZ.date)+').',
+    'Детей: '+QZ.kidsN+(extra?' (доп. '+extra+' × '+qzFmt(qzKidPrice(QZ.date))+')':'')+'.',
+    Object.values(QZ.extras).length?'Доп. услуги: '+Object.values(QZ.extras).map(s=>s.name+' ('+qzFmt(s.price)+')').join(', ')+'.':'',
+    'Примерный итог: '+qzFmt(qzTotal())+'.'].filter(Boolean).join(' ');
+  btn.disabled=true;btn.textContent='Отправляем…';
+  try{
+    const res=await fetch('/api/public/leads',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,phone,company:hp,source:'Сайт (квиз праздника)',note})});
+    if(!res.ok)throw new Error('fail');
+    QZ.sent=true;qzRender();
+  }catch(e){
+    btn.disabled=false;btn.textContent='Забронировать праздник';
+    alert('Не удалось отправить заявку. Позвоните нам: +7 (968) 001-64-56');
+  }
+  return false;
+}
+qzRender();
 </script>
 </body>
 </html>
