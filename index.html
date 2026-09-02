@@ -1020,6 +1020,30 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 </div>
 </div>
 
+<!-- Редактирование данных сотрудника (Настройки → Сотрудники, владелец) -->
+<div class="pay-overlay" id="staffEditOverlay" onclick="if(event.target===this)staffEditClose()">
+  <div class="pay-modal" style="max-width:420px">
+    <div style="font-size:17px;font-weight:800;margin-bottom:14px">✏️ Сотрудник</div>
+    <div class="frm" style="grid-template-columns:1fr 1fr">
+      <div style="grid-column:1/-1"><label>ФИО</label><input id="seName"></div>
+      <div><label>Телефон</label><input id="sePhone" placeholder="+7 ___ ___-__-__"></div>
+      <div><label>Логин</label><input id="seLogin" autocomplete="off"></div>
+      <div><label>Роль</label><select id="seRole">
+        <option value="cashier">Кассир</option>
+        <option value="admin">Администратор</option>
+        <option value="owner">Владелец</option>
+      </select></div>
+      <div style="align-self:end"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:9px 0">
+        <input type="checkbox" id="seActive" style="width:auto"> активен</label></div>
+    </div>
+    <div class="muted" style="font-size:11.5px;margin-top:8px">Пароль меняется кнопкой «Пароль» в списке. Смена логина не разлогинит сотрудника, но входить он будет уже с новым.</div>
+    <div style="display:flex;gap:9px;margin-top:16px">
+      <button class="btn btn-ghost" onclick="staffEditClose()">Отмена</button>
+      <button class="btn btn-green" style="margin-left:auto" onclick="staffEditSave()">Сохранить</button>
+    </div>
+  </div>
+</div>
+
 <!-- Напоминание кассиру: предложить сопутствующий товар перед оплатой -->
 <div class="pay-overlay" id="upsOverlay" onclick="if(event.target===this)upsSkip()">
   <div class="pay-modal" style="max-width:520px">
@@ -1387,11 +1411,16 @@ function openShift(){
   $('shiftDot').classList.add('on'); $('shiftLbl').textContent='Смена: '+shift.cashier+' · размен '+fmt(shift.cashStart);
   renderSales(); toast('Смена открыта. Размен: '+fmt(shift.cashStart));
 }
+// Наличная часть чека. У серверных продаж нал и карта хранятся раздельно
+// (s.cash) — иначе при смешанной оплате карта считалась бы наличными.
+const cashOf = s => s.cash != null ? +s.cash : (s.method==='cash' ? +s.paid : 0);
 function expectedCash(){
-  // Наличные физически пришли по всем cash-продажам (в т.ч. позже возвращённым)
-  const cashIn = sales.filter(s=>s.method==='cash'&&(s.status==='done'||s.status==='refunded')).reduce((a,s)=>a+s.paid,0);
-  // Возвраты, выданные наличными, уменьшают кассу
-  const cashRefunds = sales.filter(s=>s.status==='refunded'&&s.refundMethod==='cash').reduce((a,s)=>a+s.paid,0);
+  // Наличные физически пришли по всем продажам (в т.ч. позже возвращённым)
+  const cashIn = sales.filter(s=>s.status==='done'||s.status==='refunded').reduce((a,s)=>a+cashOf(s),0);
+  // Возвраты уменьшают кассу на наличную часть: сервер возвращает деньги тем
+  // же способом, каким платили; в демо способ выбирает кассир (refundMethod).
+  const cashRefunds = sales.filter(s=>s.status==='refunded')
+    .reduce((a,s)=>a + (s.refundMethod ? (s.refundMethod==='cash'?+s.paid:0) : cashOf(s)), 0);
   return (shift?shift.cashStart:0) + cashIn - expenses.reduce((a,e)=>a+e.amt,0) - cashRefunds;
 }
 function closeShift(){
@@ -1789,7 +1818,14 @@ function partySvcGroups(){
   return out;
 }
 function renderPartyForm(){
-  $('pbRoom').innerHTML = ROOMS.map(r=>`<option value="${r.id}">${r.name}${r.cap?' · '+r.cap+' мест':''}</option>`).join('');
+  // Комнаты своего ТЦ; выбранную комнату сохраняем при перерисовке — фоновое
+  // обновление данных перерисовывает форму, и выбор кассира сбрасывался на
+  // первую комнату списка (в бронь попадала не та комната).
+  const rSel = $('pbRoom'); const rCur = rSel.value;
+  const d = (typeof deviceLoc==='function') ? deviceLoc() : null;
+  const roomsHere = ROOMS.filter(r=>!r.loc || !d || String(r.loc)===String(d));
+  rSel.innerHTML = roomsHere.map(r=>`<option value="${r.id}">${r.name}${r.cap?' · '+r.cap+' мест':''}</option>`).join('');
+  if(rCur && roomsHere.some(r=>String(r.id)===String(rCur))) rSel.value = rCur;
   const svcCard = (s)=>{
     const opts = s.options ? s.options.split('|') : [];
     return `<div class="svc ${pbSel[s.id]?'on':''}" onclick="toggleSvc(${s.id},event)">
@@ -1908,7 +1944,7 @@ function renderBookingCard(){
     </div>
 
     <div class="cc-sec"><h4>💰 Оплата <span class="muted" style="font-weight:500;font-size:12px">оплачено ${fmt(b.prepaid)}${b.total?' из '+fmt(b.total):''}</span></h4>
-      ${(b.payments||[]).map(p=>`<div class="cl"><span class="nm">${(p.at||'').slice(0,10).split('-').reverse().join('.')} ${(p.at||'').slice(11,16)} · ${p.method==='card'?'картой':'наличными'} · ${p.fiscal?'<span style="color:var(--green);font-weight:600">чек пробит</span>':'<span class="muted">без фискализации</span>'}${p.by_name?' · '+p.by_name:''}</span><span style="font-weight:700;color:var(--green)">+${fmt(+p.amount)}</span></div>`).join('')
+      ${(b.payments||[]).map((p,i)=>`<div class="cl"><span class="nm">${(p.at||'').slice(0,10).split('-').reverse().join('.')} ${(p.at||'').slice(11,16)} · ${p.method==='card'?'картой':'наличными'} · ${p.fiscal?'<span style="color:var(--green);font-weight:600">чек пробит</span>':'<span class="muted">без фискализации</span>'}${p.by_name?' · '+p.by_name:''}${p.edited_at?' · <span class="muted" title="Сумма изменена'+(p.edited_by?': '+p.edited_by:'')+'">исправлено</span>':''}</span><span style="font-weight:700;color:var(--green)">+${fmt(+p.amount)}</span>${(role==='owner'||role==='admin')?`<button title="Изменить сумму оплаты" onclick="bkPayEdit(${b.id},${i},${+p.amount})">✏️</button>`:''}</div>`).join('')
         || '<div class="muted" style="font-size:12.5px;padding:4px 0">Оплат ещё не было</div>'}
       ${b.status!=='cancelled'?`
       <div style="display:flex;gap:8px;align-items:end;margin-top:10px;flex-wrap:wrap">
@@ -1978,6 +2014,14 @@ function bkPay(id){
   if(b.status!=='done') b.status = (b.total>0 && b.prepaid>=b.total) ? 'paid' : 'prepaid';
   renderBookings(); renderBookingCard();
   toast('Оплата '+fmt(amt)+' принята'+(fiscal?' · чек (демо)':' · без фискализации'));
+}
+function bkPayEdit(id,idx,cur){
+  const b=bkFind(id); if(!b||!b.payments[idx]) return;
+  const v=prompt('Новая сумма оплаты, ₽:', cur); if(v==null) return;
+  const a=Math.round((+v)*100)/100; if(!a||a<=0) return toast('Укажите сумму больше нуля', true);
+  b.prepaid += a - (+b.payments[idx].amount||0);
+  b.payments[idx].amount = a;
+  renderBookings(); renderBookingCard(); toast('Сумма оплаты изменена');
 }
 function bkDelete(id){
   const b=bkFind(id); if(!b) return;
@@ -2370,8 +2414,10 @@ function renderClientCard(){
 function renderReport(){
   const done=sales.filter(s=>s.status==='done');
   const rev=done.reduce((a,s)=>a+s.total,0);
-  const cash=done.filter(s=>s.method==='cash').reduce((a,s)=>a+s.paid,0);
-  const card=done.filter(s=>s.method==='card').reduce((a,s)=>a+s.paid,0);
+  // Нал и карта — по своим частям чека: смешанная оплата (нал+карта) раньше
+  // не попадала ни в одну из строк отчёта.
+  const cash=done.reduce((a,s)=>a+(s.cash!=null?+s.cash:(s.method==='cash'?s.paid:0)),0);
+  const card=done.reduce((a,s)=>a+(s.card!=null?+s.card:(s.method==='card'?s.paid:0)),0);
   const online=done.filter(s=>s.method==='online').reduce((a,s)=>a+s.paid,0);
   const bs=done.reduce((a,s)=>a+s.bonus,0), be=done.reduce((a,s)=>a+s.earned,0);
   const expSum=expenses.reduce((a,e)=>a+e.amt,0);

@@ -12,6 +12,11 @@ import { createClient } from '../services/clients.js';
 
 export const clientAppRouter = Router();
 
+// Всё, что клиент вводит сам (имя, почта, имена детей), показывается в
+// админке — HTML-теги срезаем, чтобы из приложения нельзя было занести
+// скрипт в панель сотрудника (stored XSS).
+const noTags = (v) => (v == null ? null : String(v).replace(/[<>]/g, '').trim());
+
 // --- Телефон: приводим к каноничному виду и к «только цифры» для поиска ---
 function phoneDigits(s) {
   let d = String(s || '').replace(/\D/g, '');
@@ -68,7 +73,7 @@ clientAppRouter.post(
     const b = req.body || {};
     const digits = phoneDigits(b.phone);
     const password = String(b.password || '');
-    const full_name = String(b.full_name || '').trim();
+    const full_name = noTags(b.full_name) || '';
     const referrer_code = String(b.referrer_code || '').trim();
 
     if (!validPhone(digits)) return res.status(400).json({ error: 'Укажите корректный номер телефона' });
@@ -143,13 +148,14 @@ clientAppRouter.get(
 clientAppRouter.put(
   '/me',
   ah(async (req, res) => {
-    const { full_name, email } = req.body || {};
+    const full_name = noTags((req.body || {}).full_name);
+    const email = noTags((req.body || {}).email);
     const c = await q1(
       `UPDATE clients SET
          full_name = COALESCE(NULLIF(trim($2),''), full_name),
          email     = COALESCE($3, email)
        WHERE id=$1 RETURNING *`,
-      [req.client.id, full_name == null ? null : String(full_name), email == null ? null : String(email).trim()]
+      [req.client.id, full_name, email]
     );
     res.json(publicClient(c));
   })
@@ -194,10 +200,11 @@ clientAppRouter.post(
   '/kids',
   ah(async (req, res) => {
     const { name, birth_date } = req.body || {};
-    if (!name || !String(name).trim()) return res.status(400).json({ error: 'Укажите имя ребёнка' });
+    const kidName = noTags(name);
+    if (!kidName) return res.status(400).json({ error: 'Укажите имя ребёнка' });
     const row = await q1(
       'INSERT INTO client_kids (client_id, name, birth_date) VALUES ($1,$2,$3) RETURNING id, name, birth_date',
-      [req.client.id, String(name).trim(), birth_date || null]
+      [req.client.id, kidName, birth_date || null]
     );
     res.json(row);
   })
@@ -205,7 +212,8 @@ clientAppRouter.post(
 clientAppRouter.put(
   '/kids/:id',
   ah(async (req, res) => {
-    const { name, birth_date } = req.body || {};
+    const { birth_date } = req.body || {};
+    const name = noTags((req.body || {}).name);
     const row = await q1(
       `UPDATE client_kids SET name=COALESCE(NULLIF(trim($3),''),name), birth_date=COALESCE($4,birth_date)
         WHERE id=$1 AND client_id=$2 RETURNING id, name, birth_date`,

@@ -1,18 +1,26 @@
 import { Router } from 'express';
 import { q, q1 } from '../db.js';
-import { requireAuth, requirePerm } from '../auth.js';
+import { requireAuth, requirePerm, hasPerm } from '../auth.js';
 import { ah, audit } from '../util.js';
 
 export const settingsRouter = Router();
 settingsRouter.use(requireAuth);
 
-// GET /api/settings — общие настройки (доступно всем авторизованным для чтения кэшбэка и т.п.)
+// GET /api/settings — общие настройки (доступно всем авторизованным для чтения
+// кэшбэка и т.п.). Секреты (пароли ОФД, токен СКУД) отдаются только тем, у
+// кого есть право «settings»: кассиру для работы они не нужны, а утечка
+// токена СКУД позволила бы подделывать отметки прихода.
+const SECRET_KEYS = ['taxcom_password', 'taxcom_login', 'taxcom_inn', 'skud_device_token'];
 settingsRouter.get(
   '/',
   ah(async (req, res) => {
     const rows = await q('SELECT key, value FROM settings');
+    const canSecrets = hasPerm(req.user.perms, 'settings');
     const out = {};
-    for (const r of rows) out[r.key] = r.value;
+    for (const r of rows) {
+      if (!canSecrets && SECRET_KEYS.includes(r.key)) continue;
+      out[r.key] = r.value;
+    }
     res.json(out);
   })
 );

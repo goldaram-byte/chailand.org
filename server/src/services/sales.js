@@ -73,6 +73,18 @@ export async function createSale(user, body) {
 
   if (!Array.isArray(items) || items.length === 0) throw new ApiError(400, 'Чек пуст');
 
+  // Деньги не бывают отрицательными: минусовая цена или «оплата» ломала бы
+  // выручку и позволяла бы накрутить бонусы. Возврат — отдельная операция.
+  for (const it of items) {
+    const price = Number(it.price), qty = Number(it.qty || 1);
+    if (!Number.isFinite(price) || price < 0) throw new ApiError(400, 'Некорректная цена позиции');
+    if (!Number.isFinite(qty) || qty <= 0 || qty > 1000) throw new ApiError(400, 'Некорректное количество');
+  }
+  for (const [label, v] of [['наличными', cash_amount], ['картой', card_amount], ['бонусами', bonus_used]]) {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) throw new ApiError(400, 'Некорректная сумма оплаты ' + label);
+  }
+
   if (client_uuid) {
     const dup = await q1('SELECT id FROM sales WHERE client_uuid=$1', [client_uuid]);
     if (dup) return { ...(await loadSale(dup.id)), idempotent: true };

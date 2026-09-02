@@ -48,20 +48,51 @@ usersRouter.post(
   })
 );
 
-// PUT /api/users/:id
+// PUT /api/users/:id — правка данных сотрудника: ФИО, телефон, логин, роль,
+// статус, пароль. Защита от самоблокировки: нельзя отключить самого себя или
+// сменить себе роль, и нельзя лишить систему последнего активного владельца.
 usersRouter.put(
   '/:id',
   ah(async (req, res) => {
-    const { full_name, phone, role_code, is_active, password } = req.body || {};
+    const { full_name, phone, role_code, is_active, password, login } = req.body || {};
+    const id = Number(req.params.id);
+    const target = await q1('SELECT id, login, role_code, is_active FROM users WHERE id=$1', [id]);
+    if (!target) return res.status(404).json({ error: 'Сотрудник не найден' });
+
+    if (id === Number(req.user.id)) {
+      if (is_active === false) return res.status(400).json({ error: 'Нельзя отключить самого себя' });
+      if (role_code && role_code !== target.role_code) {
+        return res.status(400).json({ error: 'Свою роль менять нельзя — попросите другого владельца' });
+      }
+    }
+    // Последний активный владелец: не понижаем и не отключаем, иначе в
+    // панель больше никто не войдёт с полными правами.
+    const losesOwner = target.role_code === 'owner' && target.is_active
+      && ((role_code && role_code !== 'owner') || is_active === false);
+    if (losesOwner) {
+      const owners = await q1(
+        `SELECT count(*)::int AS c FROM users WHERE role_code='owner' AND is_active AND id<>$1`, [id]);
+      if (!owners.c) return res.status(400).json({ error: 'Это последний владелец — сначала назначьте владельцем кого-то ещё' });
+    }
+    let newLogin = null;
+    if (login != null && String(login).trim() && String(login).trim() !== target.login) {
+      newLogin = String(login).trim();
+      const busy = await q1('SELECT id FROM users WHERE lower(login)=lower($1) AND id<>$2', [newLogin, id]);
+      if (busy) return res.status(409).json({ error: 'Логин уже занят' });
+    }
+    if (role_code) {
+      const role = await q1('SELECT code FROM roles WHERE code=$1', [role_code]);
+      if (!role) return res.status(400).json({ error: 'Неизвестная роль' });
+    }
     const row = await q1(
       `UPDATE users SET
          full_name=COALESCE($2,full_name), phone=COALESCE($3,phone),
          role_code=COALESCE($4,role_code), is_active=COALESCE($5,is_active),
-         pass_hash=COALESCE($6,pass_hash), updated_at=now()
-       WHERE id=$1 RETURNING id, full_name, login, role_code, is_active`,
-      [req.params.id, full_name, phone, role_code, is_active, password ? hashPassword(password) : null]
+         pass_hash=COALESCE($6,pass_hash), login=COALESCE($7,login), updated_at=now()
+       WHERE id=$1 RETURNING id, full_name, phone, login, role_code, is_active`,
+      [id, full_name, phone, role_code, is_active, password ? hashPassword(password) : null, newLogin]
     );
-    await audit(req, 'user.update', { entity: 'user', entityId: req.params.id });
+    await audit(req, 'user.update', { entity: 'user', entityId: id });
     res.json(row);
   })
 );
