@@ -16,7 +16,9 @@ const leadLimiter = rateLimit({
   message: { error: 'Слишком много заявок. Попробуйте позже или позвоните нам.' },
 });
 
-const str = (v, max) => (v == null ? '' : String(v)).trim().slice(0, max);
+// Публичные поля попадают в админку — HTML-теги срезаем, чтобы заявка с
+// сайта не могла подсунуть скрипт в воронку (stored XSS).
+const str = (v, max) => (v == null ? '' : String(v)).replace(/[<>]/g, '').trim().slice(0, max);
 
 // POST /api/public/leads — заявка с сайта → воронка
 publicRouter.post(

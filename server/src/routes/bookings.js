@@ -7,7 +7,7 @@
 //     сумма попадает в смену/выручку кассира;
 //   • «без фискализации» (fiscal=false) — просто отметка об оплате в журнале.
 import { Router } from 'express';
-import { q, q1 } from '../db.js';
+import { q, q1, tx } from '../db.js';
 import { requireAuth, requirePerm } from '../auth.js';
 import { ah, audit } from '../util.js';
 import { createSale, bookingCashbackPercent } from '../services/sales.js';
@@ -181,6 +181,77 @@ bookingsRouter.post(
     );
     await audit(req, 'booking.pay', { entity: 'booking', entityId: b.id, meta: { amount: a, method, fiscal: !!fiscal, sale_id: saleId } });
     res.json({ ...row, sale_id: saleId });
+  })
+);
+
+// PATCH /api/bookings/:id/payments/:idx — изменить сумму уже внесённой оплаты.
+// Только владелец/администратор: правка денег — не кассирская операция.
+// Оплата «по кассе» тянет за собой продажу: пересчитываются её сумма и
+// кэшбэк клиента; фискализированный чек (реальный, не эмуляция) менять
+// нельзя — его аннулируют возвратом.
+bookingsRouter.patch(
+  '/:id/payments/:idx',
+  ah(async (req, res) => {
+    if (!['owner', 'admin'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Менять суммы оплат может только владелец или администратор' });
+    }
+    const a = Math.round(Number((req.body || {}).amount) * 100) / 100;
+    if (!a || a <= 0) return res.status(400).json({ error: 'Укажите сумму больше нуля' });
+
+    const b = await q1('SELECT * FROM bookings WHERE id=$1', [req.params.id]);
+    if (!b) return res.status(404).json({ error: 'Бронирование не найдено' });
+    const payments = Array.isArray(b.payments) ? b.payments : [];
+    const idx = Number(req.params.idx);
+    const p = payments[idx];
+    if (!p) return res.status(404).json({ error: 'Оплата не найдена' });
+    const old = Math.round(Number(p.amount) * 100) / 100;
+    if (a === old) return res.json(b);
+
+    await tx(async ({ q: cq, q1: cq1 }) => {
+      if (p.sale_id) {
+        const sale = await cq1('SELECT * FROM sales WHERE id=$1 FOR UPDATE', [p.sale_id]);
+        if (sale) {
+          if (sale.is_return || sale.status === 'returned') {
+            throw Object.assign(new Error('По этой оплате уже оформлен возврат — сумму не изменить'), { status: 409 });
+          }
+          const fd = await cq1(
+            `SELECT id FROM fiscal_docs WHERE sale_id=$1 AND status='registered' AND driver IS NOT NULL AND driver <> 'emulation' LIMIT 1`,
+            [sale.id]
+          );
+          if (fd) {
+            throw Object.assign(new Error('Чек уже фискализирован — сумму не изменить. Оформите возврат и примите оплату заново.'), { status: 409 });
+          }
+          // Пересчитать продажу и кэшбэк клиента на разницу
+          const wasEarned = Number(sale.bonus_earned) || 0;
+          const pct = sale.total > 0 ? wasEarned / Number(sale.total) : 0;
+          const newEarned = Math.floor(a * pct);
+          await cq(
+            `UPDATE sales SET total=$2,
+                    cash_amount = CASE WHEN cash_amount > 0 THEN $2 ELSE cash_amount END,
+                    card_amount = CASE WHEN card_amount > 0 THEN $2 ELSE card_amount END,
+                    bonus_earned=$3
+              WHERE id=$1`,
+            [sale.id, a, newEarned]
+          );
+          await cq(`UPDATE sale_items SET price=$2, sum=$2 WHERE sale_id=$1`, [sale.id, a]);
+          if (sale.client_id && newEarned !== wasEarned) {
+            const diff = newEarned - wasEarned;
+            await cq('UPDATE loyalty_transactions SET points=$2 WHERE sale_id=$1 AND points=$3', [sale.id, newEarned, wasEarned]);
+            await cq('UPDATE clients SET bonus = bonus + $2 WHERE id=$1', [sale.client_id, diff]);
+          }
+        }
+      }
+      payments[idx] = { ...p, amount: a, edited_at: new Date().toISOString(), edited_by: req.user.name || null };
+      const prepay = payments.reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
+      const total = Number(b.total);
+      const status = ['done', 'cancelled'].includes(b.status)
+        ? b.status
+        : (total > 0 && prepay >= total ? 'paid' : (prepay > 0 ? 'prepaid' : 'new'));
+      await cq(`UPDATE bookings SET prepay=$2, payments=$3::jsonb, status=$4 WHERE id=$1`,
+        [b.id, prepay, JSON.stringify(payments), status]);
+    });
+    await audit(req, 'booking.pay.edit', { entity: 'booking', entityId: b.id, meta: { idx, from: old, to: a, sale_id: p.sale_id || null } });
+    res.json(await q1('SELECT * FROM bookings WHERE id=$1', [b.id]));
   })
 );
 

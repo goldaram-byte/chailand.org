@@ -104,6 +104,7 @@
       total: Number(s.total),
       method: mapMethod(s.method),
       paid: Number(s.cash_amount) + Number(s.card_amount),
+      cash: Number(s.cash_amount), card: Number(s.card_amount),
       bonus: Number(s.bonus_used), earned: Number(s.bonus_earned),
       fd: s.fd_number ? 'ФД №' + String(s.fd_number).padStart(6, '0')
         : (s.fiscal && s.fiscal.fd_number ? 'ФД №' + String(s.fiscal.fd_number).padStart(6, '0') : '—'),
@@ -411,16 +412,19 @@
 
   function installStaff() {
     // Показать список сотрудников в настройках → «Сотрудники» (только владелец)
+    var STAFF_LIST = [];
     window.staffRender = function () {
       if (!SERVER) return;
       api('/users').then(function (list) {
+        STAFF_LIST = list || [];
         var tb = document.getElementById('setStaff');
         if (!tb) return;
         tb.innerHTML = (list || []).map(function (u) {
-          return '<tr><td>' + u.full_name + '</td><td><b>' + u.login + '</b></td>' +
+          return '<tr><td>' + u.full_name + (u.phone ? '<br><small class="muted">' + u.phone + '</small>' : '') + '</td><td><b>' + u.login + '</b></td>' +
             '<td>' + (ROLE_RU[u.role_code] || u.role_code) + '</td>' +
             '<td>' + (u.is_active ? '<span style="color:var(--green);font-weight:700">активен</span>' : '<span class="muted">отключён</span>') + '</td>' +
-            '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="staffPass(' + u.id + ')">Пароль</button> ' +
+            '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" title="Редактировать данные" onclick="staffEdit(' + u.id + ')">✏️</button> ' +
+            '<button class="btn btn-ghost btn-sm" onclick="staffPass(' + u.id + ')">Пароль</button> ' +
             '<button class="btn btn-ghost btn-sm" onclick="staffToggle(' + u.id + ',' + (u.is_active ? 'false' : 'true') + ')">' + (u.is_active ? 'Отключить' : 'Включить') + '</button>' +
             // удалять сотрудников может только владелец, и не самого себя
             ((ME && ME.role === 'owner' && u.id !== ME.id)
@@ -464,6 +468,53 @@
       if (!p) return;
       api('/users/' + id, { method: 'PUT', body: { password: p } })
         .then(function () { if (typeof toast === 'function') toast('Пароль изменён'); })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+
+    // Редактирование данных сотрудника: ФИО, телефон, логин, роль, статус
+    var STAFF_EDIT_ID = null;
+    window.staffEdit = function (id) {
+      var u = STAFF_LIST.find(function (x) { return x.id === id; }); if (!u) return;
+      STAFF_EDIT_ID = id;
+      document.getElementById('seName').value = u.full_name || '';
+      document.getElementById('sePhone').value = u.phone || '';
+      document.getElementById('seLogin').value = u.login || '';
+      document.getElementById('seRole').value = u.role_code || 'cashier';
+      document.getElementById('seActive').checked = !!u.is_active;
+      // свою роль и статус менять нельзя (защита от самоблокировки) — гасим поля
+      var self = ME && ME.id === id;
+      document.getElementById('seRole').disabled = self;
+      document.getElementById('seActive').disabled = self;
+      document.getElementById('staffEditOverlay').classList.add('open');
+    };
+    window.staffEditClose = function () {
+      STAFF_EDIT_ID = null;
+      document.getElementById('staffEditOverlay').classList.remove('open');
+    };
+    window.staffEditSave = function () {
+      if (!STAFF_EDIT_ID) return;
+      var name = document.getElementById('seName').value.trim();
+      var login = document.getElementById('seLogin').value.trim();
+      if (!name) { if (typeof toast === 'function') toast('Укажите ФИО', true); return; }
+      if (!login) { if (typeof toast === 'function') toast('Укажите логин', true); return; }
+      var body = {
+        full_name: name,
+        phone: document.getElementById('sePhone').value.trim() || null,
+        login: login,
+      };
+      var self = ME && ME.id === STAFF_EDIT_ID;
+      if (!self) {
+        body.role_code = document.getElementById('seRole').value;
+        body.is_active = document.getElementById('seActive').checked;
+      }
+      api('/users/' + STAFF_EDIT_ID, { method: 'PUT', body: body })
+        .then(function (u) {
+          // если владелец правит сам себя — обновить имя в шапке
+          if (self && u && u.full_name) { ME.name = u.full_name; if (window.CURRENT_USER) window.CURRENT_USER.name = u.full_name; }
+          window.staffEditClose();
+          window.staffRender();
+          if (typeof toast === 'function') toast('Данные сотрудника сохранены');
+        })
         .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
     };
 
@@ -2003,6 +2054,20 @@
       api('/bookings/' + id + '/pay', { method: 'POST', body: { amount: amt, method: method, fiscal: fiscal } })
         .then(function () {
           if (typeof toast === 'function') toast('Оплата ' + fmtNum(amt) + ' принята' + (fiscal ? ' · чек пробит по кассе' : ' · без фискализации'));
+          return window.loadBookings();
+        })
+        .then(function () { hydrateAll().catch(function () {}); }) // обновить продажи/выручку
+        .catch(bkErr);
+    };
+    // Изменить сумму уже внесённой оплаты (владелец/админ). Оплата «по кассе»
+    // пересчитает и связанную продажу с кэшбэком — этим занимается сервер.
+    window.bkPayEdit = function (id, idx, cur) {
+      var v = prompt('Новая сумма оплаты, ₽:', cur); if (v == null) return;
+      var a = Math.round((+String(v).replace(',', '.')) * 100) / 100;
+      if (!a || a <= 0) { if (typeof toast === 'function') toast('Укажите сумму больше нуля', true); return; }
+      api('/bookings/' + id + '/payments/' + idx, { method: 'PATCH', body: { amount: a } })
+        .then(function () {
+          if (typeof toast === 'function') toast('Сумма оплаты изменена: ' + fmtNum(a));
           return window.loadBookings();
         })
         .then(function () { hydrateAll().catch(function () {}); }) // обновить продажи/выручку
