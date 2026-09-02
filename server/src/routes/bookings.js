@@ -97,6 +97,32 @@ bookingsRouter.put(
       return res.status(403).json({ error: 'Менять продавца может только владелец' });
     }
     const svcProvided = Object.prototype.hasOwnProperty.call(req.body || {}, 'services');
+    // Перенос праздника (комната/дата/время): проверяем, что окно свободно —
+    // иначе два праздника оказались бы в одной комнате в одно время.
+    if (room_id || date || time || time_to) {
+      const cur = await q1('SELECT * FROM bookings WHERE id=$1', [req.params.id]);
+      if (!cur) return res.status(404).json({ error: 'Бронирование не найдено' });
+      const nRoom = room_id || cur.room_id;
+      const nDate = date || String(cur.date).slice(0, 10);
+      const nFrom = time || cur.time;
+      const nTo = time_to || cur.time_to;
+      if (nRoom && nFrom && nTo) {
+        const clash = await q1(
+          `SELECT b.id, b.client_name, b.time, b.time_to FROM bookings b
+            WHERE b.id <> $1 AND b.room_id = $2 AND b.date = $3::date
+              AND b.status <> 'cancelled'
+              AND b.time IS NOT NULL AND b.time_to IS NOT NULL
+              AND NOT (b.time_to <= $4 OR b.time >= $5)
+            LIMIT 1`,
+          [req.params.id, nRoom, nDate, nFrom, nTo]
+        );
+        if (clash) {
+          return res.status(409).json({
+            error: 'Комната занята в это время (' + clash.time + '–' + clash.time_to + ', ' + clash.client_name + ')',
+          });
+        }
+      }
+    }
     const row = await q1(
       `UPDATE bookings SET
          status=COALESCE($2,status), total=COALESCE($3,total), comment=COALESCE($4,comment),
