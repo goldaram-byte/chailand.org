@@ -720,7 +720,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
     <div class="card">
       <h3>👥 База клиентов</h3>
       <div class="muted" style="font-size:12.5px;margin-bottom:12px">📱 База клиентов общая с мобильным приложением — карты, бонусы и покупки синхронизируются.</div>
-      <div class="tbl-wrap"><table><thead><tr><th>Имя</th><th>Телефон</th><th>Карта</th><th>Бонусы</th><th>Покупок</th><th>Абонемент</th><th>Приложение</th></tr></thead>
+      <div class="tbl-wrap"><table><thead><tr><th>Имя</th><th>Телефон</th><th>Карта</th><th>Бонусы</th><th>Покупок</th><th>Детей</th><th>Абонемент</th><th>Приложение</th></tr></thead>
       <tbody id="cliTbl"></tbody></table></div>
     </div>
   </div>
@@ -2290,6 +2290,7 @@ function renderClients(){
     return `<tr style="cursor:pointer" onclick="openClientCard(${c.id})" title="Открыть карточку клиента">
     <td>${c.name} ${soon?'<span title="Скоро день рождения ребёнка">🎂</span>':''}</td>
     <td>${c.phone}</td><td><b style="color:var(--orange)">${c.card}</b></td><td>${c.bonus}</td><td>${c.buys}</td>
+    <td>${(kn=>kn>0?'👶 '+kn:'<span class="muted">—</span>')(c.kidsCount!=null?c.kidsCount:(c.kids||[]).length)}</td>
     <td>${c.passes?`<span class="pass-badge" title="Действующих абонементов: ${c.passes}">🎟 ${c.passes>1?c.passes+' шт.':'есть'}</span>`:'<span class="muted">—</span>'}</td>
     <td>${c.app?'<span class="app-badge">✓ есть</span>':'<span class="muted">—</span>'}</td></tr>`;
   }).join('');

@@ -1110,6 +1110,7 @@
       id: c.id, name: c.full_name, phone: c.phone || '', card: c.card_no || '',
       bonus: Number(c.bonus), buys: Number(c.buys || 0), app: !!c.app_installed,
       history: null, kids: null, kidBdayIn: c.kid_bday_in,
+      kidsCount: Number(c.kids_count || 0),
       passes: Number(c.active_passes || 0),
       email: c.email || '', note: c.note || '',
     };
