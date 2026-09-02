@@ -1920,6 +1920,14 @@ function renderBookingCard(){
     <div style="font-size:11px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Статус</div>
     <div class="stage-chips">${BK_STATUSES.map(([code,label])=>`<button class="${(b.status===code||(code==='prepaid'&&b.status==='confirmed'))?'act':''}" onclick="bkSetStatus(${b.id},'${code}')">${label}</button>`).join('')}</div>
 
+    <div class="cc-sec"><h4>🚪 Комната</h4>
+      <select onchange="bkSetRoom(${b.id},this.value)" style="min-width:220px">
+        ${ROOMS.filter(r=>!r.loc || !b.loc || String(r.loc)===String(b.loc) || String(r.id)===String(b.roomId))
+          .map(r=>`<option value="${r.id}" ${String(b.roomId)===String(r.id)?'selected':''}>${r.name}${r.cap?' · '+r.cap+' мест':''}</option>`).join('')}
+      </select>
+      <div class="muted" style="font-size:11.5px;margin-top:6px">Праздник можно перенести в другую комнату — занятость на это время проверится автоматически.</div>
+    </div>
+
     <div class="cc-sec"><h4>🎂 Именинник</h4>
       <div style="display:flex;gap:9px;flex-wrap:wrap;align-items:end">
         <div style="flex:1;min-width:170px"><label style="font-size:10.5px;color:var(--dim);font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Имя ребёнка</label>
@@ -1978,6 +1986,16 @@ function renderBookingCard(){
 function bkSetStatus(id,st){ const b=bkFind(id); if(!b) return; b.status=st; renderBookings(); renderBookingCard(); }
 function bkSetTotal(id,v){ const b=bkFind(id); if(!b) return; b.total=+v||0; renderBookings(); renderBookingCard(); }
 function bkSetComment(id,v){ const b=bkFind(id); if(!b) return; b.comment=v; }
+function bkSetRoom(id,v){
+  const b=bkFind(id); if(!b) return;
+  const r=ROOMS.find(x=>String(x.id)===String(v)); if(!r) return;
+  const clash = bookings.find(x=>x.id!==id && String(x.roomId)===String(r.id) && x.date===b.date
+    && x.status!=='cancelled' && !(x.to<=b.from || x.from>=b.to));
+  if(clash){ renderBookingCard(); return toast('Комната занята в это время ('+clash.from+'–'+clash.to+')', true); }
+  b.roomId=r.id; b.room=r.name;
+  renderBookings(); renderBookingCard(); if(typeof renderJournal==='function') renderJournal();
+  toast('Праздник перенесён в «'+r.name+'»');
+}
 // Именинник: имя и возраст читаем сразу из обоих полей — их правят по очереди
 function bkKidRead(){
   const name = ($('bkKidName')||{}).value || '';
@@ -2049,7 +2067,7 @@ function jrShift(d){
   const dt=new Date(inp.value+'T12:00:00');
   if(jrView==='month') dt.setMonth(dt.getMonth()+d);
   else dt.setDate(dt.getDate() + d*(jrView==='week'?7:1));
-  inp.value=dt.toISOString().slice(0,10);
+  inp.value=ymdLocal(dt);
   renderJournal();
 }
 function jrToday(){ $('jrDate').value=today; renderJournal(); }
@@ -2169,7 +2187,7 @@ function closeNewBooking(){ document.getElementById('bkNewOverlay').classList.re
 const JR_WD=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 function jrWeekDates(date){
   const d=new Date(date+'T12:00:00'); const wd=(d.getDay()+6)%7; d.setDate(d.getDate()-wd);
-  const a=[]; for(let i=0;i<7;i++){ const x=new Date(d); x.setDate(d.getDate()+i); a.push(x.toISOString().slice(0,10)); }
+  const a=[]; for(let i=0;i<7;i++){ const x=new Date(d); x.setDate(d.getDate()+i); a.push(ymdLocal(x)); }
   return a;
 }
 function jrRenderWeek(date, rooms, all){
@@ -2213,7 +2231,7 @@ function jrRenderMonth(date, all){
   const head=`<div style="font-weight:800;font-size:15px;margin-bottom:8px">${['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'][m]} ${y}</div>
     <div class="jr-month">${JR_WD.map(w=>`<div class="mo-head">${w}</div>`).join('')}`;
   const body=cells.map(x=>{
-    const ds=x.toISOString().slice(0,10);
+    const ds=ymdLocal(x);
     const other=x.getMonth()!==m;
     const list=all.filter(b=>b.date===ds).sort(sortT);
     const shown=list.slice(0,3);
@@ -2322,6 +2340,9 @@ function ageOf(birth){
 function ruAge(n){ const n10=n%10,n100=n%100; if(n10===1&&n100!==11)return n+' год'; if(n10>=2&&n10<=4&&(n100<10||n100>=20))return n+' года'; return n+' лет'; }
 function ruDays(n){ const n10=n%10,n100=n%100; if(n10===1&&n100!==11)return n+' день'; if(n10>=2&&n10<=4&&(n100<10||n100>=20))return n+' дня'; return n+' дней'; }
 const dmy = s => s.split('-').reverse().join('.');
+// Дата «как на стене», без UTC: toISOString() сдвигал бы день назад для
+// поясов восточнее Гринвича (Москва +3) — кнопка «20 сентября» открывала 19-е.
+const ymdLocal = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 
 let cardClientId = null;
 function openClientCard(id){ cardClientId=id; renderClientCard(); $('clientOverlay').classList.add('open'); }
@@ -2724,7 +2745,7 @@ function renderLeadCard(){
 const CASHIERS = ['Арам Халатян','Елена','Ольга'];
 let SALES_DATA = [];
 let dashState = { period:'30' };
-function shiftDate(str,n){ const d=new Date(str+'T00:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function shiftDate(str,n){ const d=new Date(str+'T12:00:00'); d.setDate(d.getDate()+n); return ymdLocal(d); }
 function genDashData(){
   const pool = TARIFFS.filter(t=>t.price>0).map(t=>({name:t.name, price:t.price, group:t.group}));
   const byGroup = {}; pool.forEach(p=>{ (byGroup[p.group]=byGroup[p.group]||[]).push(p); });
@@ -2829,7 +2850,7 @@ function initFold(){
 }
 
 /* ================= СТАРТ ================= */
-const today = new Date().toISOString().slice(0,10);
+const today = ymdLocal(new Date());
 $('posDate').value = today; $('pbDate').value = today;
 genDashData();
 setRole('owner');

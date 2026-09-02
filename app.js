@@ -2025,6 +2025,21 @@
     window.bkSetStatus = function (id, st) { if (!SERVER) return; bkPatch(id, { status: st }); };
     window.bkSetTotal = function (id, v) { if (!SERVER) return; bkPatch(id, { total: +v || 0 }); };
     window.bkSetComment = function (id, v) { if (!SERVER) return; bkPatch(id, { comment: v }); };
+    // Перенос праздника в другую комнату; занятость проверяет сервер (409)
+    window.bkSetRoom = function (id, v) {
+      if (!SERVER) return;
+      api('/bookings/' + id, { method: 'PUT', body: { room_id: +v } })
+        .then(function () {
+          var r = (typeof ROOMS !== 'undefined') && ROOMS.find(function (x) { return String(x.id) === String(v); });
+          if (typeof toast === 'function') toast('Праздник перенесён в «' + (r ? r.name : 'другую комнату') + '»');
+          return window.loadBookings();
+        })
+        .catch(function (e) {
+          bkErr(e);
+          // вернуть селект к фактической комнате
+          if (typeof renderBookingCard === 'function') renderBookingCard();
+        });
+    };
     // Именинник: имя и возраст уходят вместе — их правят по очереди в одном блоке
     window.bkSetKid = function (id) {
       if (!SERVER) return _bkSetKid ? _bkSetKid.apply(this, arguments) : undefined;
