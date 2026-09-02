@@ -138,7 +138,9 @@ export async function createSale(user, body) {
           : 'cash');
 
   let acq = null;
-  if (Number(card_amount) > 0) {
+  // Перевод (method='transfer') — безнал мимо терминала: деньги уже пришли на
+  // счёт, эквайринг запускать нельзя, иначе спишем с клиента второй раз.
+  if (Number(card_amount) > 0 && payMethod !== 'transfer') {
     acq = await acquiringPay({ amount: Number(card_amount), orderId: client_uuid || Date.now() });
     if (!acq.approved) throw new ApiError(402, 'Оплата картой отклонена терминалом');
   }
@@ -267,7 +269,9 @@ export async function createReturn(user, body) {
   const parentItems = await q('SELECT * FROM sale_items WHERE sale_id=$1', [parent.id]);
 
   let acq = null;
-  if (Number(parent.card_amount) > 0) {
+  // Оплата переводом шла мимо терминала — и возврат делается переводом же,
+  // без команды эквайрингу (терминал про эти деньги ничего не знает).
+  if (Number(parent.card_amount) > 0 && parent.method !== 'transfer') {
     acq = await acquiringRefund({ amount: Number(parent.card_amount), orderId: parent.id });
   }
 

@@ -48,7 +48,7 @@
     try { return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }); }
     catch (e) { return ''; }
   }
-  function mapMethod(m) { return m === 'cash' ? 'cash' : (m === 'bonus' ? 'online' : 'card'); }
+  function mapMethod(m) { return m === 'cash' ? 'cash' : (m === 'bonus' ? 'online' : (m === 'transfer' ? 'transfer' : 'card')); }
   function uuid() {
     if (crypto && crypto.randomUUID) return crypto.randomUUID();
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
@@ -2296,7 +2296,7 @@
       var buy = (PASS_CACHE[passId] || {});
       var head = 'Куплен ' + pDate(buy.created_at) +
         (buy.price != null ? ' · ' + fmtNum(Number(buy.price)) : '') +
-        (buy.pay_method ? ' · ' + ({ cash: 'наличные', card: 'карта', online: 'онлайн' }[buy.pay_method] || buy.pay_method) : ' · без чека') +
+        (buy.pay_method ? ' · ' + ({ cash: 'наличные', card: 'карта', online: 'онлайн', transfer: 'перевод' }[buy.pay_method] || buy.pay_method) : ' · без чека') +
         (buy.sold_by_name ? ' · продал(а) ' + pEsc(buy.sold_by_name) : '') +
         (buy.location_name ? ' · ' + pEsc(buy.location_name) : '');
       api('/passes/' + passId + '/visits').then(function (list) {
@@ -2732,8 +2732,8 @@
             '<div class="dbar"><span style="width:' + Math.round(it.qty / maxQty * 100) + '%"></span></div></td>' +
             '<td><b>' + it.qty + '</b></td><td>' + fmtNum(it.amt) + '</td><td>' + (it.qty / totalQty * 100).toFixed(1) + '%</td></tr>';
         }).join('') : '<tr><td colspan="4" class="muted">Нет данных за выбранный период</td></tr>');
-        var totRev = r.revenue || 1, ML = { cash: 'Наличные', card: 'Безнал', online: 'Онлайн' };
-        setText('dashMethods', ['cash', 'card', 'online'].map(function (k) {
+        var totRev = r.revenue || 1, ML = { cash: 'Наличные', card: 'Безнал', transfer: 'Перевод', online: 'Онлайн' };
+        setText('dashMethods', ['cash', 'card', 'transfer', 'online'].map(function (k) {
           var v = r.byMethod[k] || 0, pct = Math.round(v / totRev * 100);
           return '<div class="mrow"><div class="mrow-top"><span>' + ML[k] + '</span><b>' + fmtNum(v) + ' · ' + pct + '%</b></div>' +
             '<div class="dbar ' + k + '"><span style="width:' + pct + '%"></span></div></div>';

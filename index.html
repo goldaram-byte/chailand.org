@@ -220,7 +220,7 @@ tr:hover td{background:#fafbfd}
 .tag.confirmed,.tag.done2,.tag.paid{background:#ecfdf5;color:var(--green)}
 .tag.done{background:#f1f5f9;color:var(--dim)}
 .tag.cancelled,.tag.refunded{background:#fef2f2;color:var(--red)}
-.tag.m-cash{background:#f0fdf4;color:var(--green)} .tag.m-card{background:#eff6ff;color:var(--blue)} .tag.m-online{background:#faf5ff;color:#7c3aed}
+.tag.m-cash{background:#f0fdf4;color:var(--green)} .tag.m-card{background:#eff6ff;color:var(--blue)} .tag.m-online{background:#faf5ff;color:#7c3aed} .tag.m-transfer{background:#f0fdfa;color:#0d9488}
 
 .frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:12px}
 .frm label{font-size:10.5px;color:var(--dim);font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px}
@@ -309,6 +309,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 .dbar.cash span{background:linear-gradient(90deg,#34d399,var(--green))}
 .dbar.card span{background:linear-gradient(90deg,#60a5fa,var(--blue))}
 .dbar.online span{background:linear-gradient(90deg,#c084fc,#7c3aed)}
+.dbar.transfer span{background:linear-gradient(90deg,#2dd4bf,#0d9488)}
 .mrow{margin-bottom:15px}
 .mrow-top{display:flex;justify-content:space-between;font-size:13.5px;font-weight:600;margin-bottom:3px}
 .mrow .dbar{height:12px}
@@ -571,7 +572,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
           <select id="dashPosition" onchange="renderDash()"><option value="all">Все позиции</option></select></div>
         <div class="dash-sel"><label>Оплата</label>
           <select id="dashMethod" onchange="renderDash()">
-            <option value="all">Все</option><option value="cash">Наличные</option><option value="card">Безнал</option><option value="online">Онлайн</option>
+            <option value="all">Все</option><option value="cash">Наличные</option><option value="card">Безнал</option><option value="transfer">Перевод</option><option value="online">Онлайн</option>
           </select></div>
         <div class="dash-sel"><label>Кассир</label>
           <select id="dashCashier" onchange="renderDash()"><option value="all">Все кассиры</option></select></div>
@@ -1758,7 +1759,7 @@ function confirmRefund(){
 }
 function finishRefund(){ $('refundOverlay').classList.remove('open'); REFUND=null; }
 
-const M_RU = {cash:'наличные', card:'безналичные', online:'онлайн'};
+const M_RU = {cash:'наличные', card:'безналичные', online:'онлайн', transfer:'перевод'};
 // Удалять ошибочные оплаты может только владелец или администратор,
 // и только пока чек не фискализирован (пробитый чек аннулируется возвратом).
 function canDeleteSale(s){
@@ -1952,14 +1953,14 @@ function renderBookingCard(){
     </div>
 
     <div class="cc-sec"><h4>💰 Оплата <span class="muted" style="font-weight:500;font-size:12px">оплачено ${fmt(b.prepaid)}${b.total?' из '+fmt(b.total):''}</span></h4>
-      ${(b.payments||[]).map((p,i)=>`<div class="cl"><span class="nm">${(p.at||'').slice(0,10).split('-').reverse().join('.')} ${(p.at||'').slice(11,16)} · ${p.method==='card'?'картой':'наличными'} · ${p.fiscal?'<span style="color:var(--green);font-weight:600">чек пробит</span>':'<span class="muted">без фискализации</span>'}${p.by_name?' · '+p.by_name:''}${p.edited_at?' · <span class="muted" title="Сумма изменена'+(p.edited_by?': '+p.edited_by:'')+'">исправлено</span>':''}</span><span style="font-weight:700;color:var(--green)">+${fmt(+p.amount)}</span>${(role==='owner'||role==='admin')?`<button title="Изменить сумму оплаты" onclick="bkPayEdit(${b.id},${i},${+p.amount})">✏️</button>`:''}</div>`).join('')
+      ${(b.payments||[]).map((p,i)=>`<div class="cl"><span class="nm">${(p.at||'').slice(0,10).split('-').reverse().join('.')} ${(p.at||'').slice(11,16)} · ${p.method==='card'?'картой':p.method==='transfer'?'переводом':'наличными'} · ${p.fiscal?'<span style="color:var(--green);font-weight:600">чек пробит</span>':'<span class="muted">без фискализации</span>'}${p.by_name?' · '+p.by_name:''}${p.edited_at?' · <span class="muted" title="Сумма изменена'+(p.edited_by?': '+p.edited_by:'')+'">исправлено</span>':''}</span><span style="font-weight:700;color:var(--green)">+${fmt(+p.amount)}</span>${(role==='owner'||role==='admin')?`<button title="Изменить сумму оплаты" onclick="bkPayEdit(${b.id},${i},${+p.amount})">✏️</button>`:''}</div>`).join('')
         || '<div class="muted" style="font-size:12.5px;padding:4px 0">Оплат ещё не было</div>'}
       ${b.status!=='cancelled'?`
       <div style="display:flex;gap:8px;align-items:end;margin-top:10px;flex-wrap:wrap">
         <div><label style="font-size:10.5px;color:var(--dim);font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Сумма, ₽</label>
           <input type="number" id="bkPayAmount" min="0" value="${rest||''}" placeholder="0" style="width:110px"></div>
         <div><label style="font-size:10.5px;color:var(--dim);font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Способ</label>
-          <select id="bkPayMethod"><option value="cash">Наличные</option><option value="card">Карта</option></select></div>
+          <select id="bkPayMethod"><option value="cash">Наличные</option><option value="card">Карта</option><option value="transfer">Перевод</option></select></div>
         <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;padding-bottom:10px">
           <input type="checkbox" id="bkPayFiscal" checked style="width:auto"> пробить чек (по кассе)</label>
         <button class="btn btn-green" onclick="bkPay(${b.id})">Принять оплату</button>
@@ -2795,7 +2796,7 @@ function renderDash(){
   const g=$('dashGroup').value, m=$('dashMethod').value, cshr=$('dashCashier').value;
   const rows = SALES_DATA.filter(s=> s.date>=from && s.date<=to
     && (g==='all'||s.group===+g) && (m==='all'||s.method===m) && (cshr==='all'||s.cashier===cshr));
-  let revenue=0, qtySold=0; const byItem={}, byMethod={cash:0,card:0,online:0};
+  let revenue=0, qtySold=0; const byItem={}, byMethod={cash:0,card:0,online:0,transfer:0};
   rows.forEach(s=>{
     let recTotal=0;
     s.items.forEach(i=>{ const amt=i.qty*i.price; recTotal+=amt; qtySold+=i.qty;
@@ -2817,8 +2818,8 @@ function renderDash(){
       <td><b>${it.qty}</b></td><td>${fmt(it.amt)}</td><td>${(it.qty/totalQty*100).toFixed(1)}%</td></tr>`).join('')
     : '<tr><td colspan="4" class="muted">Нет данных за выбранный период</td></tr>';
   // Разбивка выручки по способам оплаты
-  const totRev = revenue||1, ML={cash:'Наличные',card:'Безнал',online:'Онлайн'};
-  $('dashMethods').innerHTML = ['cash','card','online'].map(k=>{
+  const totRev = revenue||1, ML={cash:'Наличные',card:'Безнал',transfer:'Перевод',online:'Онлайн'};
+  $('dashMethods').innerHTML = ['cash','card','transfer','online'].map(k=>{
     const v=byMethod[k], pct=Math.round(v/totRev*100);
     return `<div class="mrow"><div class="mrow-top"><span>${ML[k]}</span><b>${fmt(v)} · ${pct}%</b></div>
       <div class="dbar ${k}"><span style="width:${pct}%"></span></div></div>`;

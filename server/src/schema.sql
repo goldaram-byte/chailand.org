@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS sales (
   card_amount    numeric(12,2) NOT NULL DEFAULT 0,
   bonus_used     numeric(12,2) NOT NULL DEFAULT 0,
   bonus_earned   numeric(12,2) NOT NULL DEFAULT 0,
-  method         text NOT NULL DEFAULT 'cash',  -- cash | card | mixed | bonus
+  method         text NOT NULL DEFAULT 'cash',  -- cash | card | mixed | bonus | transfer (безнал мимо эквайринга)
   status         text NOT NULL DEFAULT 'done',  -- done | returned | partial_return
   is_return      boolean NOT NULL DEFAULT false,
   parent_sale_id bigint REFERENCES sales(id),
@@ -338,6 +338,8 @@ CREATE INDEX IF NOT EXISTS idx_schedule_date ON work_schedule(work_date);
 -- ---------------------------------------------------------------------------
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS pass_hash text;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS email     text;
+-- Разовый бонус за добавление ребёнка в приложении: когда начислен (NULL = ещё нет)
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS kid_bonus_at timestamptz;
 -- Быстрый вход по телефону: сравниваем только цифры номера
 CREATE INDEX IF NOT EXISTS idx_clients_phone_digits
   ON clients ((regexp_replace(phone, '\D', '', 'g')));

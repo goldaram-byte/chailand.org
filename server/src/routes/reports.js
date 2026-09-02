@@ -226,11 +226,12 @@ reportsRouter.get(
       q(`SELECT s.method, COALESCE(SUM(i.sum),0) AS amt ${base} GROUP BY s.method`, params),
       q(`SELECT i.name, SUM(i.qty) AS qty, SUM(i.sum) AS amt ${base} GROUP BY i.name ORDER BY qty DESC LIMIT 50`, params),
     ]);
-    const byMethod = { cash: 0, card: 0, online: 0 };
+    const byMethod = { cash: 0, card: 0, online: 0, transfer: 0 };
     for (const m of methods) {
       const amt = Number(m.amt);
       if (m.method === 'cash') byMethod.cash += amt;
       else if (m.method === 'online' || m.method === 'bonus') byMethod.online += amt;
+      else if (m.method === 'transfer') byMethod.transfer += amt;
       else byMethod.card += amt; // card, mixed
     }
     const revenue = Number(kpi.revenue);

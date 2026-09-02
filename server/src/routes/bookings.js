@@ -144,7 +144,7 @@ bookingsRouter.put(
 );
 
 // POST /api/bookings/:id/pay — принять оплату по бронированию.
-//   { amount, method: 'cash'|'card', fiscal: true|false }
+//   { amount, method: 'cash'|'card'|'transfer', fiscal: true|false }
 //   fiscal=true  → проводится по кассе: создаётся продажа (чек в ОФД, выручка смены);
 //   fiscal=false → без фискализации: только отметка об оплате в журнале.
 bookingsRouter.post(
@@ -153,7 +153,7 @@ bookingsRouter.post(
     const { amount, method = 'cash', fiscal = true } = req.body || {};
     const a = Math.round(Number(amount) * 100) / 100;
     if (!a || a <= 0) return res.status(400).json({ error: 'Укажите сумму оплаты' });
-    if (!['cash', 'card'].includes(method)) return res.status(400).json({ error: 'Способ оплаты: наличные или карта' });
+    if (!['cash', 'card', 'transfer'].includes(method)) return res.status(400).json({ error: 'Способ оплаты: наличные, карта или перевод' });
     const b = await q1('SELECT * FROM bookings WHERE id=$1', [req.params.id]);
     if (!b) return res.status(404).json({ error: 'Бронирование не найдено' });
     if (b.status === 'cancelled') return res.status(409).json({ error: 'Бронирование отменено' });
@@ -180,10 +180,13 @@ bookingsRouter.post(
     if (fiscal) {
       // Провести по кассе: обычная продажа → фискальный чек + выручка кассира.
       // Кэшбэк за праздник считается по своей настройке.
+      // Перевод — безналичные деньги мимо эквайринга: в чеке это card_amount,
+      // но продажа помечается method='transfer', чтобы терминал не запускался.
       const sale = await createSale(req.user, {
         items: [{ name: 'Праздник №' + b.id + ' · ' + b.client_name, qty: 1, price: a }],
         cash_amount: method === 'cash' ? a : 0,
-        card_amount: method === 'card' ? a : 0,
+        card_amount: method === 'cash' ? 0 : a,
+        method: method === 'transfer' ? 'transfer' : undefined,
         client_id: clientId,
         cashback_percent: await bookingCashbackPercent(),
         location_id: b.location_id || null,

@@ -5,7 +5,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import QRCode from 'qrcode';
-import { q, q1 } from '../db.js';
+import { q, q1, tx } from '../db.js';
 import { ah } from '../util.js';
 import { hashPassword, checkPassword, signClientToken, requireClient } from '../auth.js';
 import { createClient } from '../services/clients.js';
@@ -196,17 +196,34 @@ clientAppRouter.get(
     res.json(await q('SELECT id, name, birth_date FROM client_kids WHERE client_id=$1 ORDER BY birth_date NULLS LAST, id', [req.client.id]));
   })
 );
+// За первого добавленного ребёнка клиент получает разовый бонус.
+// Отметка kid_bonus_at на карте клиента: начисляется строго один раз,
+// удаление и повторное добавление детей ничего не даёт.
+const KID_ADD_BONUS = 100;
 clientAppRouter.post(
   '/kids',
   ah(async (req, res) => {
     const { name, birth_date } = req.body || {};
     const kidName = noTags(name);
     if (!kidName) return res.status(400).json({ error: 'Укажите имя ребёнка' });
-    const row = await q1(
-      'INSERT INTO client_kids (client_id, name, birth_date) VALUES ($1,$2,$3) RETURNING id, name, birth_date',
-      [req.client.id, kidName, birth_date || null]
-    );
-    res.json(row);
+    const result = await tx(async ({ q: cq, q1: cq1 }) => {
+      const row = await cq1(
+        'INSERT INTO client_kids (client_id, name, birth_date) VALUES ($1,$2,$3) RETURNING id, name, birth_date',
+        [req.client.id, kidName, birth_date || null]
+      );
+      // WHERE kid_bonus_at IS NULL делает начисление атомарно-однократным
+      const awarded = await cq1(
+        'UPDATE clients SET bonus = bonus + $2, kid_bonus_at = now() WHERE id=$1 AND kid_bonus_at IS NULL RETURNING id',
+        [req.client.id, KID_ADD_BONUS]
+      );
+      if (awarded) {
+        await cq('INSERT INTO loyalty_transactions (client_id, points, reason) VALUES ($1,$2,$3)', [
+          req.client.id, KID_ADD_BONUS, 'Бонус за добавление ребёнка в приложении',
+        ]);
+      }
+      return { ...row, bonus_awarded: awarded ? KID_ADD_BONUS : 0 };
+    });
+    res.json(result);
   })
 );
 clientAppRouter.put(

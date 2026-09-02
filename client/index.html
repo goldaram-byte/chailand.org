@@ -586,8 +586,12 @@
     var name = $('kName').value.trim();
     if (!name){ toast('Имя ребёнка', true); return; }
     api('/kids', { method:'POST', body:{ name:name, birth_date:$('kDate').value||null } })
-      .then(function(){ $('kName').value=''; $('kDate').value=''; return loadMe(); })
-      .then(function(){ renderKids(ME.kids||[]); toast('Добавлено'); })
+      .then(function(r){ $('kName').value=''; $('kDate').value=''; window._kidBonus = r && r.bonus_awarded; return loadMe(); })
+      .then(function(){
+        renderKids(ME.kids||[]);
+        toast(window._kidBonus ? '🎁 +'+window._kidBonus+' бонусов за ребёнка!' : 'Добавлено');
+        window._kidBonus = 0;
+      })
       .catch(function(e){ toast(e.message, true); });
   };
   window.delKid = function(id){
