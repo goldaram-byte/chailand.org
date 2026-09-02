@@ -45,6 +45,30 @@ publicRouter.post(
   })
 );
 
+// GET /api/public/party — данные для квиза бронирования праздника на сайте:
+// парки, комнаты и праздничные доп-услуги из каталога (только активные).
+// Сайт фильтрует комнаты и услуги по выбранному ТЦ так же, как форма
+// бронирования в админке: пустой location_ids/location_id = во всех парках.
+publicRouter.get(
+  '/party',
+  ah(async (req, res) => {
+    const [locations, rooms, groups, services] = await Promise.all([
+      q(`SELECT id, name FROM locations WHERE active ORDER BY sort, id`),
+      q(`SELECT id, name, capacity, location_id FROM rooms WHERE is_active ORDER BY id`),
+      q(`SELECT id, name, sort FROM product_groups WHERE kind='party' ORDER BY sort, id`),
+      q(`SELECT id, name, price, options, group_id, location_id, location_ids
+           FROM services WHERE is_active ORDER BY name`),
+    ]);
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json({
+      locations,
+      rooms,
+      groups,
+      services: services.map((s) => ({ ...s, price: Number(s.price) })),
+    });
+  })
+);
+
 // GET /api/public/news — опубликованные новости парка (для сайта и приложения)
 publicRouter.get(
   '/news',
