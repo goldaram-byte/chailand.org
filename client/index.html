@@ -578,8 +578,7 @@
     if (!kids.length){ el.innerHTML = '<div class="empty" style="padding:10px">Детей пока нет</div>'; return; }
     el.innerHTML = kids.map(function(k){
       return '<div class="kid"><div><div class="r-t">'+esc(k.name)+'</div>'+
-        (k.birth_date?'<div class="r-s">'+dmy(k.birth_date)+'</div>':'')+'</div>'+
-        '<button class="x" onclick="delKid('+k.id+')">✕</button></div>';
+        (k.birth_date?'<div class="r-s">'+dmy(k.birth_date)+'</div>':'')+'</div></div>';
     }).join('');
   }
   window.addKid = function(){
@@ -593,10 +592,6 @@
         window._kidBonus = 0;
       })
       .catch(function(e){ toast(e.message, true); });
-  };
-  window.delKid = function(id){
-    api('/kids/'+id, { method:'DELETE' }).then(function(){ return loadMe(); })
-      .then(function(){ renderKids(ME.kids||[]); }).catch(function(e){ toast(e.message, true); });
   };
   window.changePw = function(){
     var o=$('pwOld').value, n=$('pwNew').value;

@@ -1,6 +1,6 @@
 // Service worker личного кабинета «Чайлэнд».
 // Кэшируем оболочку приложения, чтобы карта открывалась и без сети.
-const CACHE = 'gab-lk-v8';
+const CACHE = 'gab-lk-v9';
 const ASSETS = ['/lk/', '/lk/index.html', '/lk/manifest.webmanifest', '/logo.png', '/lk/driftland.svg', '/lk/driftland-mark.svg'];
 
 self.addEventListener('install', (e) => {

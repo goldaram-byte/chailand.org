@@ -240,11 +240,12 @@ clientAppRouter.put(
     res.json(row);
   })
 );
+// Удаление детей отключено: записи о детях остаются в базе (история ДР,
+// разовый бонус). Ошибку в имени или дате клиент исправляет через PUT.
 clientAppRouter.delete(
   '/kids/:id',
   ah(async (req, res) => {
-    await q('DELETE FROM client_kids WHERE id=$1 AND client_id=$2', [req.params.id, req.client.id]);
-    res.json({ ok: true });
+    res.status(403).json({ error: 'Удаление недоступно. Имя и дату рождения можно исправить, остальное — на кассе парка.' });
   })
 );
 
