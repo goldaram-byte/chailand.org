@@ -169,11 +169,12 @@ clientsRouter.post(
   })
 );
 
+// Удаление детей отключено: записи остаются в базе (история ДР, разовый
+// бонус за добавление ребёнка не должен «переиспользоваться»).
 clientsRouter.delete(
   '/:id/kids/:kidId',
   ah(async (req, res) => {
-    await q('DELETE FROM client_kids WHERE id=$1 AND client_id=$2', [req.params.kidId, req.params.id]);
-    res.json({ ok: true });
+    res.status(403).json({ error: 'Удаление детей из базы отключено' });
   })
 );
 
