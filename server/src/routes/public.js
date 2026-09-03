@@ -45,6 +45,19 @@ publicRouter.post(
   })
 );
 
+// Сайт chailand.org — только про ЧайЛэнд: парки другого бренда (ДрифтЛэнд)
+// и их комнаты в квизе не показываем.
+const OTHER_BRAND = /дрифт/i;
+// Пакеты праздника выбираются на 2-м шаге квиза. Те же пакеты заведены в
+// каталоге как услуги — в списке «дополнительных услуг» они были бы вторым,
+// сбивающим с толку выбором, поэтому отсеиваем их по названию папки и позиции.
+const PACKAGE_NAMES = new Set(['отмечай', 'не скучай', 'необычайный', 'премиум', 'vip']);
+const normName = (v) => String(v || '').toLowerCase().replace(/[«»"'`]/g, '').replace(/\s+/g, ' ').trim();
+const isPackageName = (v) => {
+  const n = normName(v);
+  return PACKAGE_NAMES.has(n) || /^пакет/.test(n);
+};
+
 // GET /api/public/party — данные для квиза бронирования праздника на сайте:
 // парки, комнаты и праздничные доп-услуги из каталога (только активные).
 // Сайт фильтрует комнаты и услуги по выбранному ТЦ так же, как форма
@@ -59,12 +72,33 @@ publicRouter.get(
       q(`SELECT id, name, price, options, group_id, location_id, location_ids
            FROM services WHERE is_active ORDER BY name`),
     ]);
+    // Парки ЧайЛэнд и всё, что к ним привязано
+    const locs = locations.filter((l) => !OTHER_BRAND.test(l.name || ''));
+    const okLoc = new Set(locs.map((l) => String(l.id)));
+    const inSite = (item) => {
+      const ids = (item.location_ids || []).map(String);
+      if (ids.length) return ids.some((id) => okLoc.has(id));
+      if (item.location_id != null) return okLoc.has(String(item.location_id));
+      return true; // без привязки — во всех парках
+    };
+    const pkgGroups = new Set(
+      groups.filter((g) => /пакет/i.test(g.name || '') || isPackageName(g.name)).map((g) => String(g.id))
+    );
+
     res.set('Cache-Control', 'public, max-age=300');
     res.json({
-      locations,
-      rooms,
-      groups,
-      services: services.map((s) => ({ ...s, price: Number(s.price) })),
+      locations: locs,
+      rooms: rooms.filter((r) => inSite(r) && !OTHER_BRAND.test(r.name || '')),
+      groups: groups.filter((g) => !pkgGroups.has(String(g.id))),
+      services: services
+        .filter(
+          (s) =>
+            inSite(s) &&
+            !pkgGroups.has(String(s.group_id)) &&
+            !isPackageName(s.name) &&
+            !OTHER_BRAND.test(s.name || '')
+        )
+        .map((s) => ({ ...s, price: Number(s.price) })),
     });
   })
 );
