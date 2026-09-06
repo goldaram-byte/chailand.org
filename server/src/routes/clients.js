@@ -7,6 +7,39 @@ import { createClient } from '../services/clients.js';
 export const clientsRouter = Router();
 clientsRouter.use(requireAuth, requirePerm('clients'));
 
+// Гость говорит номер карты как придётся: «три», «000003», «№ 3», а телефон
+// диктует то с +7, то с 8, со скобками и пробелами. Поэтому сравниваем не
+// строки как есть, а только цифры: карту — без ведущих нулей, телефон —
+// по вхождению цифр. Имя ищем по части слова.
+const DIGITS = (col) => `regexp_replace(${col}, '[^0-9]', '', 'g')`;
+// 8 916… и +7 916… — один и тот же номер: приводим к виду с 7 и сравниваем
+// по последним 10 цифрам.
+export function phoneTail(raw) {
+  let d = String(raw || '').replace(/\D/g, '');
+  if (d.length === 11 && d[0] === '8') d = '7' + d.slice(1);
+  return d.length >= 10 ? d.slice(-10) : '';
+}
+function searchClause(raw, add) {
+  const text = String(raw || '').trim();
+  const digits = text.replace(/\D/g, '');
+  const conds = [];
+  // имя: от двух символов, иначе одна цифра «3» вытащит пол-базы
+  if (text.length >= 2) conds.push(`c.full_name ILIKE ${add(`%${text}%`)}`);
+  // старые карты с буквами
+  if (/[a-zа-яё]/i.test(text)) conds.push(`c.card_no ILIKE ${add(`%${text}%`)}`);
+  if (digits) {
+    const exact = add(digits.replace(/^0+/, ''));
+    conds.push(`ltrim(${DIGITS('c.card_no')}, '0') = ${exact}`); // карта: 3 = 000003
+  }
+  const tail = phoneTail(text);
+  if (tail) conds.push(`right(${DIGITS('c.phone')}, 10) = ${add(tail)}`);
+  if (digits.length >= 3) {
+    const part = add(`%${digits}%`);
+    conds.push(`${DIGITS('c.phone')} LIKE ${part}`, `${DIGITS('c.card_no')} LIKE ${part}`);
+  }
+  return conds.length ? '(' + conds.join(' OR ') + ')' : 'true';
+}
+
 // GET /api/clients — поиск + фильтры
 //   search   — по имени/телефону/карте
 //   app      — 1|0 установлено ли приложение
@@ -23,8 +56,7 @@ clientsRouter.get(
     const add = (v) => { p.push(v); return '$' + p.length; };
 
     if (search && search.trim()) {
-      const ph = add(`%${search.trim()}%`);
-      where.push(`(c.full_name ILIKE ${ph} OR c.phone ILIKE ${ph} OR c.card_no ILIKE ${ph})`);
+      where.push(searchClause(search, add));
     }
     if (app === '1' || app === '0') where.push(`c.app_installed = ${add(app === '1')}`);
     if (min_bonus) where.push(`c.bonus >= ${add(Number(min_bonus))}`);
@@ -59,6 +91,41 @@ clientsRouter.get(
       p
     );
     res.json(rows);
+  })
+);
+
+// GET /api/clients/lookup?q= — быстрый поиск карты на кассе: по номеру карты,
+// телефону или имени, по всей базе (а не по последним загруженным клиентам).
+// Сверху точное совпадение карты, затем телефон, затем остальные — кассир
+// видит нужного первым и не заводит дубль вручную.
+clientsRouter.get(
+  '/lookup',
+  ah(async (req, res) => {
+    const raw = String(req.query.q || '').trim();
+    if (raw.length < 1) return res.json([]);
+    const p = [];
+    const add = (v) => { p.push(v); return '$' + p.length; };
+    const clause = searchClause(raw, add);
+    const digits = raw.replace(/\D/g, '');
+    const dg = add(digits.replace(/^0+/, ''));
+    const tail = add(phoneTail(raw));
+    const rows = await q(
+      `SELECT c.id, c.full_name, c.phone, c.card_no, c.bonus,
+              COALESCE(pa.n,0)::int AS active_passes
+         FROM clients c
+         LEFT JOIN (SELECT client_id, count(*) AS n FROM passes
+                     WHERE status='active' AND valid_to >= current_date GROUP BY client_id) pa
+                ON pa.client_id = c.id
+        WHERE ${clause}
+        ORDER BY CASE
+                   WHEN ${dg} <> '' AND ltrim(${DIGITS('c.card_no')}, '0') = ${dg} THEN 0
+                   WHEN ${tail} <> '' AND right(${DIGITS('c.phone')}, 10) = ${tail} THEN 1
+                   ELSE 2
+                 END, c.full_name
+        LIMIT 10`,
+      p
+    );
+    res.json(rows.map((r) => ({ ...r, bonus: Number(r.bonus) })));
   })
 );
 
