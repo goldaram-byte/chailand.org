@@ -41,7 +41,8 @@ app.use(cookieParser());
 // Ограничение попыток входа (защита от подбора пароля)
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30,
+  max: 15,                        // 15 неудачных попыток с одного адреса за 15 минут
+  skipSuccessfulRequests: true,   // свои входы лимит не тратят
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Слишком много попыток входа. Повторите позже.' },
@@ -58,6 +59,17 @@ app.use((req, res, next) => {
     if (req.method === 'OPTIONS') return res.sendStatus(204);
   }
   next();
+});
+
+// Админка и личный кабинет — не для поисковиков: их страницы не должны
+// находиться в Google/Яндексе (публичный сайт отдаёт Caddy отдельно, его
+// robots.txt лежит в site/ и этим правилом не затрагивается).
+app.use((req, res, next) => {
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  next();
+});
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain').send('User-agent: *\nDisallow: /\n');
 });
 
 app.get('/api/health', async (req, res) => {
@@ -91,11 +103,28 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/sync', syncRouter);
 
-// Статика: демо-панель (index.html лежит в корне репозитория, на уровень выше server/)
+// Статика панели (index.html лежит в корне репозитория, на уровень выше server/).
+// Раздаём ТОЛЬКО файлы самой панели: раньше здесь стоял express.static(webRoot),
+// который отдавал наружу весь каталог приложения — исходники сервера,
+// package.json, а при запуске из репозитория ещё и docker-compose.yml,
+// update.sh и папку .git со всей историей кода.
 const webRoot = resolve(__dirname, '..', '..');
 // Клиентское приложение (личный кабинет) — отдельный PWA под /lk
-app.use('/lk', express.static(resolve(webRoot, 'client'), { index: 'index.html', extensions: ['html'] }));
-app.use(express.static(webRoot, { index: 'index.html', extensions: ['html'] }));
+app.use('/lk', express.static(resolve(webRoot, 'client'), { index: 'index.html', extensions: ['html'], dotfiles: 'deny' }));
+
+// Сайт-лендинг — для локальной разработки и тестов: в бою его отдаёт Caddy
+// из site/, в образ панели он не попадает. Контент публичный по назначению.
+app.use('/site', express.static(resolve(webRoot, 'site'), { index: 'index.html', extensions: ['html'], dotfiles: 'deny' }));
+
+const ADMIN_FILES = {
+  '/': 'index.html',
+  '/index.html': 'index.html',
+  '/app.js': 'app.js',
+  '/logo.png': 'logo.png',
+};
+app.get(Object.keys(ADMIN_FILES), (req, res, next) => {
+  res.sendFile(resolve(webRoot, ADMIN_FILES[req.path]), (err) => (err ? next(err) : undefined));
+});
 
 // Обработчик ошибок
 // eslint-disable-next-line no-unused-vars
