@@ -62,9 +62,18 @@
   .loyalty .bonus{display:flex;align-items:baseline;gap:8px;margin-top:16px}
   .loyalty .bonus .n{font-size:40px;font-weight:800;line-height:1}
   .loyalty .bonus .u{font-size:14px;opacity:.9}
-  .qrbox{background:#fff;border-radius:16px;padding:12px;width:180px;height:180px;margin:14px auto 4px;display:flex;align-items:center;justify-content:center}
+  /* Сканеру на кассе нужен крупный код на белом: мелкий QR с бликами экрана
+     он ловит через раз. Тап по коду разворачивает его во весь экран. */
+  .qrbox{background:#fff;border-radius:16px;padding:16px;width:min(260px,80vw);height:min(260px,80vw);
+    margin:14px auto 4px;display:flex;align-items:center;justify-content:center;cursor:pointer}
   .qrbox svg{width:100%;height:100%}
   .qrhint{text-align:center;color:var(--muted);font-size:12.5px;margin-top:2px}
+  .qrfull{position:fixed;inset:0;z-index:200;background:#fff;display:none;flex-direction:column;
+    align-items:center;justify-content:center;gap:18px;padding:20px}
+  .qrfull.open{display:flex}
+  .qrfull svg{width:min(88vw,88vh);height:auto}
+  .qrfull .qf-card{font-family:ui-monospace,Menlo,monospace;letter-spacing:3px;font-size:22px;color:#111;font-weight:700}
+  .qrfull .qf-tip{color:#666;font-size:13px;text-align:center}
 
   /* Buttons */
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 16px;border:0;border-radius:14px;font-size:16px;font-weight:700;cursor:pointer;transition:transform .06s ease, filter .15s}
@@ -240,8 +249,8 @@
       </div>
       <div class="panel">
         <h2>🎫 Карта клиента</h2>
-        <div class="qrbox" id="qrbox"><div class="spin"></div></div>
-        <div class="qrhint">Покажите QR на кассе, чтобы начислить и списать бонусы</div>
+        <div class="qrbox" id="qrbox" onclick="qrFull()"><div class="spin"></div></div>
+        <div class="qrhint">Покажите QR на кассе, чтобы начислить и списать бонусы.<br>Нажмите на код — он развернётся на весь экран, так сканер читает быстрее.</div>
       </div>
       <div class="panel" id="passPanel" hidden>
         <h2>🎟 Мои абонементы</h2>
@@ -461,6 +470,23 @@
       $('cBonus').textContent = fmt(m.bonus);
     }).catch(function(e){ toast(e.message, true); });
   }
+
+  // Во весь экран: белый фон, крупный код и номер карты — если сканер не берёт
+  // код с экрана, кассир наберёт номер руками.
+  window.qrFull = function(){
+    var box = $('qrbox'); if (!box || !box.querySelector('svg')) return;
+    var f = document.getElementById('qrFullBox');
+    if (!f) {
+      f = document.createElement('div');
+      f.id = 'qrFullBox'; f.className = 'qrfull';
+      f.onclick = function(){ f.classList.remove('open'); };
+      document.body.appendChild(f);
+    }
+    f.innerHTML = box.querySelector('svg').outerHTML +
+      '<div class="qf-card">' + ((ME && ME.card_no) || '') + '</div>' +
+      '<div class="qf-tip">Поднесите к сканеру · нажмите, чтобы закрыть<br>Если экран тёмный — прибавьте яркость</div>';
+    f.classList.add('open');
+  };
 
   function loadQR(){
     var box = $('qrbox');

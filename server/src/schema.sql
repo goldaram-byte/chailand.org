@@ -593,3 +593,43 @@ CREATE TABLE IF NOT EXISTS staff_chat_reads (
   last_read_id bigint NOT NULL DEFAULT 0,
   PRIMARY KEY (user_id, peer_key)
 );
+
+-- ---------------------------------------------------------------------------
+-- Один телефон — одна карта клиента
+-- ---------------------------------------------------------------------------
+-- Раньше номер сравнивался как строка, поэтому «+7 916 111-22-33», «8916…» и
+-- «+79161112233» были тремя разными клиентами. Приводим номера к единому виду
+-- (+7XXXXXXXXXX) там, где это никого не затирает: строки, чей канонический вид
+-- уже занят другой картой, оставляем как есть — их объединяет владелец вручную
+-- в разделе «Клиенты» (кнопка «Дубли по телефону»), чтобы не потерять бонусы.
+UPDATE clients c
+   SET phone = '+7' || right(regexp_replace(c.phone, '[^0-9]', '', 'g'), 10)
+ WHERE c.phone IS NOT NULL
+   AND c.phone <> ''
+   AND length(regexp_replace(c.phone, '[^0-9]', '', 'g')) IN (10, 11)
+   AND (length(regexp_replace(c.phone, '[^0-9]', '', 'g')) = 10
+        OR left(regexp_replace(c.phone, '[^0-9]', '', 'g'), 1) IN ('7', '8'))
+   AND c.phone <> '+7' || right(regexp_replace(c.phone, '[^0-9]', '', 'g'), 10)
+   AND NOT EXISTS (
+     SELECT 1 FROM clients o
+      WHERE o.id <> c.id
+        AND o.phone = '+7' || right(regexp_replace(c.phone, '[^0-9]', '', 'g'), 10)
+   );
+
+-- Уникальность по цифрам номера — включаем, как только дублей не останется.
+-- Пока они есть, миграция молча пропускает индекс (падать на старте нельзя),
+-- а дубли не даёт плодить сам сервер: заведение и правка сверяют номер.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+      FROM (SELECT right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) AS k
+              FROM clients WHERE phone IS NOT NULL AND phone <> '') t
+     WHERE t.k <> ''
+     GROUP BY t.k HAVING count(*) > 1
+  ) THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_clients_phone_digits
+      ON clients ((right(regexp_replace(phone, '[^0-9]', '', 'g'), 10)))
+      WHERE phone IS NOT NULL AND phone <> '';
+  END IF;
+END $$;
