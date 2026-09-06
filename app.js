@@ -2426,7 +2426,87 @@
     }
   }
 
+  /* ------------- Поиск карты клиента на кассе (по всей базе) -------------- */
+  // Раньше касса искала только среди последних загруженных клиентов и только
+  // по точному номеру карты: постоянный гость «не находился», и кассир заводил
+  // его вручную вторым разом. Теперь ищем на сервере — по карте, телефону или
+  // имени, по всей базе; при обрыве связи откатываемся к локальному поиску.
+  var CARD_FOUND = [];
+  function cardEsc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function cardBox() { return document.getElementById('cardFound'); }
+  function cardAttach(c) {
+    checkClient = { id: c.id, name: c.full_name || c.name, card: c.card_no || c.card,
+                    bonus: Number(c.bonus) || 0, phone: c.phone || '' };
+    // держим клиента и в общем списке: карточка и абонементы ищут его там
+    if (!clients.some(function (x) { return x.id === checkClient.id; })) {
+      clients.unshift({ id: checkClient.id, name: checkClient.name, phone: checkClient.phone,
+                        card: checkClient.card, bonus: checkClient.bonus, buys: 0, app: false,
+                        history: null, kids: null, passes: Number(c.active_passes || 0),
+                        kidsCount: 0, email: '', note: '' });
+    }
+    if (typeof renderClientSlot === 'function') renderClientSlot();
+    if (typeof toast === 'function') toast('💳 ' + checkClient.name + ' · ' + checkClient.bonus + ' бонусов');
+  }
+  window.cardPick = function (id) {
+    var c = CARD_FOUND.filter(function (x) { return String(x.id) === String(id); })[0];
+    if (c) cardAttach(c);
+  };
+  function cardShow(list) {
+    CARD_FOUND = list;
+    var box = cardBox();
+    if (!box) return;
+    box.innerHTML = list.map(function (c) {
+      var sub = [c.phone, 'карта ' + c.card_no, Number(c.bonus) + ' бонусов']
+        .concat(Number(c.active_passes) ? ['🎫 абонемент'] : []).filter(Boolean).join(' · ');
+      return '<button type="button" onclick="cardPick(' + c.id + ')">' +
+        '<span><span class="cf-name">' + cardEsc(c.full_name) + '</span><br>' +
+        '<span class="cf-sub">' + cardEsc(sub) + '</span></span><span>→</span></button>';
+    }).join('');
+  }
+  function installCardSearch() {
+    var _find = window.findCard;
+    window.findCard = function () {
+      var el = document.getElementById('cardInput');
+      var v = ((el && el.value) || '').trim();
+      var box = cardBox();
+      if (box) box.innerHTML = '';
+      if (!v) { if (typeof toast === 'function') toast('Введите номер карты, телефон или имя', true); return; }
+      if (!SERVER) return _find ? _find.apply(this, arguments) : undefined;
+      // точное совпадение карты среди уже загруженных — мгновенно и без сети
+      var local = (typeof matchClientLocal === 'function') ? matchClientLocal(v) : [];
+      var digits = v.replace(/\D/g, '');
+      if (digits && local.length === 1 && String(local[0].card || '').replace(/\D/g, '').replace(/^0+/, '') === digits.replace(/^0+/, '')) {
+        checkClient = local[0];
+        if (typeof renderClientSlot === 'function') renderClientSlot();
+        if (typeof toast === 'function') toast('💳 ' + local[0].name + ' · ' + local[0].bonus + ' бонусов');
+        return;
+      }
+      if (box) box.innerHTML = '<div class="cf-empty">Ищем…</div>';
+      api('/clients/lookup?q=' + encodeURIComponent(v)).then(function (list) {
+        if (!list.length) {
+          if (box) box.innerHTML = '<div class="cf-empty">Клиент не найден. Проверьте номер карты или телефон — или заведите карту в разделе «Клиенты».</div>';
+          return;
+        }
+        if (list.length === 1) { if (box) box.innerHTML = ''; return cardAttach(list[0]); }
+        cardShow(list);
+      }).catch(function () {
+        // нет связи — ищем среди загруженных, чтобы касса не встала
+        if (local.length === 1) return (checkClient = local[0], renderClientSlot());
+        if (box) box.innerHTML = '<div class="cf-empty">Нет связи с сервером. ' +
+          (local.length ? 'Показаны совпадения из последней загрузки.' : 'Найти клиента сейчас нельзя — проведите продажу без карты.') + '</div>';
+        if (local.length) cardShow(local.map(function (c) {
+          return { id: c.id, full_name: c.name, phone: c.phone, card_no: c.card, bonus: c.bonus, active_passes: c.passes };
+        }));
+      });
+    };
+  }
+
   function installHooks() {
+    installCardSearch();
     installStaff();
     installPasses();
     installExtras();

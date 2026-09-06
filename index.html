@@ -118,6 +118,13 @@ aside nav{flex:1;padding:12px 10px;overflow-y:auto;display:flex;flex-direction:c
   border-radius:10px;padding:8px 12px;font-weight:600;font-size:13px;margin-bottom:10px;color:#065f46}
 .client-box{display:flex;gap:8px;margin-bottom:10px}
 .client-box input{flex:1}
+.card-found{display:grid;gap:6px;margin-bottom:10px}
+.card-found button{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;
+  background:#fff;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;cursor:pointer;font-size:13px}
+.card-found button:hover{border-color:var(--green);background:#f0fdf4}
+.card-found .cf-name{font-weight:700}
+.card-found .cf-sub{color:var(--dim);font-size:12px}
+.card-found .cf-empty{color:var(--dim);font-size:12.5px;padding:2px}
 
 /* ===== экран оплаты ===== */
 /* --- чат сотрудников --- */
@@ -1538,10 +1545,26 @@ function renderCheck(){
 }
 function clearCheck(){ check=[]; checkClient=null; upsShown=false; renderClientSlot(); renderCheck(); }
 
+// Гость называет карту как придётся («3» вместо «000003»), телефон диктует то
+// с +7, то с 8 — сравниваем только цифры, имя ищем по части слова. Сначала
+// точное совпадение карты, потом телефон, потом имя.
+function matchClientLocal(v){
+  const digits = String(v).replace(/\D/g,''), text = String(v).trim().toLowerCase();
+  const dg = x => String(x||'').replace(/\D/g,'');
+  const nz = x => dg(x).replace(/^0+/,'');
+  if(digits){
+    const exact = clients.filter(x=>nz(x.card) === digits.replace(/^0+/,''));
+    if(exact.length) return exact;
+  }
+  const byPhone = digits.length>=3 ? clients.filter(x=>dg(x.phone).includes(digits)) : [];
+  const byName  = text ? clients.filter(x=>String(x.name||'').toLowerCase().includes(text)) : [];
+  return byPhone.concat(byName.filter(x=>byPhone.indexOf(x)<0));
+}
 function findCard(){
-  const v = $('cardInput').value.trim().toUpperCase();
-  const c = clients.find(x=>x.card.toUpperCase()===v);
-  if(!c) return toast('Карта не найдена. Попробуйте 000001 или 000002', true);
+  const v = $('cardInput').value.trim();
+  if(!v) return toast('Введите номер карты, телефон или имя', true);
+  const c = matchClientLocal(v)[0];
+  if(!c) return toast('Клиент не найден. Проверьте номер карты или телефон', true);
   checkClient=c; renderClientSlot();
   toast('Карта считана: '+c.name+' · '+c.bonus+' бонусов');
 }
@@ -1554,7 +1577,8 @@ function renderClientSlot(){
   $('clientSlot').innerHTML = checkClient
     ? `<div class="client-tag"><span>💳 ${checkClient.name} · ${checkClient.card} · ${checkClient.bonus} бонусов</span><button onclick="dropClient()" style="font-size:15px;color:#065f46">✕</button></div>
        <div id="clientPasses"></div>`
-    : `<div class="client-box"><input id="cardInput" placeholder="📷 Сканируйте карту клиента (000001)" onkeydown="if(event.key==='Enter')findCard()"><button class="btn btn-ghost" onclick="findCard()">Найти</button></div>`;
+    : `<div class="client-box"><input id="cardInput" placeholder="📷 Карта, телефон или имя" onkeydown="if(event.key==='Enter')findCard()"><button class="btn btn-ghost" onclick="findCard()">Найти</button></div>
+       <div id="cardFound" class="card-found"></div>`;
   if(checkClient && typeof loadClientPasses==='function') loadClientPasses(checkClient.id, 'clientPasses');
 }
 
