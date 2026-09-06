@@ -2467,7 +2467,81 @@
         '<span class="cf-sub">' + cardEsc(sub) + '</span></span><span>→</span></button>';
     }).join('');
   }
+  // Сканер QR/штрих-кодов для кассы — это «клавиатура»: он молниеносно печатает
+  // содержимое кода и жмёт Enter. Если курсор стоял не в поле поиска, символы
+  // улетали в никуда — со стороны кассира это выглядит как «сканер не читает».
+  // Ловим быструю серию символов на любой странице и сами ищем карту.
+  function scanNormalize(code) {
+    var v = String(code || '').trim();
+    if (/^https?:\/\//i.test(v)) {              // в коде ссылка — берём из неё номер
+      var m = v.match(/[?&](card|code|id)=([^&]+)/i);
+      v = m ? m[2] : v.split('?')[0].replace(/\/+$/, '').split('/').pop();
+    }
+    return v.replace(/[^0-9A-Za-zА-Яа-яЁё]/g, '');
+  }
+  window.scanCard = function (code) {
+    var v = scanNormalize(code);
+    if (!v) return;
+    if (typeof go === 'function' && typeof curPage !== 'undefined' && curPage !== 'pos') go('pos');
+    var el = document.getElementById('cardInput');
+    if (el) { el.value = v; return window.findCard(); }
+    // клиент уже в чеке — значит сканируют следующего, заменяем
+    api('/clients/lookup?q=' + encodeURIComponent(v)).then(function (list) {
+      if (list.length) cardAttach(list[0]);
+      else if (typeof toast === 'function') toast('Карта не найдена: ' + v, true);
+    }).catch(function () {});
+  };
+  function installScanWedge() {
+    var buf = '', t0 = 0, last = 0;
+    document.addEventListener('keydown', function (e) {
+      var now = Date.now();
+      if (now - last > 120) { buf = ''; t0 = now; }   // пауза — начало новой серии
+      last = now;
+      if (e.key && e.key.length === 1) { buf += e.key; return; }
+      if (e.key !== 'Enter' && e.key !== 'Tab') return;
+      var code = buf.trim(); buf = '';
+      if (code.length < 4 || now - t0 > 700) return;  // руками так быстро не набрать
+      var el = document.activeElement || {};
+      var tag = (el.tagName || '').toLowerCase();
+      // курсор в поле — там свой обработчик, не мешаем
+      if (tag === 'input' || tag === 'textarea' || el.isContentEditable) return;
+      e.preventDefault();
+      window.scanCard(code);
+    }, true);
+  }
+
   function installCardSearch() {
+    installScanWedge();
+    // Курсор сам встаёт в поиск карты на кассе — тогда скан попадает куда надо
+    var _slot = window.renderClientSlot;
+    if (typeof _slot === 'function') {
+      window.renderClientSlot = function () {
+        var r = _slot.apply(this, arguments);
+        try {
+          var inp = document.getElementById('cardInput');
+          var fine = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
+          if (inp && fine && !checkClient && document.activeElement === document.body &&
+              typeof curPage !== 'undefined' && curPage === 'pos') inp.focus();
+        } catch (err) { /* фокус — не повод падать */ }
+        return r;
+      };
+    }
+    // ...и при переходе в раздел кассы
+    var _go = window.go;
+    if (typeof _go === 'function') {
+      window.go = function (page) {
+        var r = _go.apply(this, arguments);
+        if (page === 'pos') setTimeout(function () {
+          try {
+            var inp = document.getElementById('cardInput');
+            var fine = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
+            if (inp && fine && !checkClient) inp.focus();
+          } catch (err) { /* фокус — не повод падать */ }
+        }, 0);
+        return r;
+      };
+    }
+
     var _find = window.findCard;
     window.findCard = function () {
       var el = document.getElementById('cardInput');
@@ -2504,6 +2578,75 @@
       });
     };
   }
+
+  /* ------------- Дубли карт по одному телефону: поиск и слияние ----------- */
+  // Пока номер сравнивался как строка, на одного гостя заводилось несколько
+  // карт. Здесь владелец/администратор объединяет их в одну: покупки, бонусы,
+  // абонементы, дети и брони переезжают на выбранную карту.
+  function installDupes() {
+    if (!SERVER) return;
+    if (!ME || ['owner', 'admin'].indexOf(ME.role) < 0) return;
+    var tbl = document.getElementById('cliTbl');
+    var card = tbl && tbl.closest ? tbl.closest('.card') : null;
+    if (!card || document.getElementById('dupBtn')) return;
+    var btn = document.createElement('button');
+    btn.id = 'dupBtn';
+    btn.className = 'btn btn-ghost btn-sm';
+    btn.textContent = '🔗 Дубли по телефону';
+    btn.onclick = window.dupLoad;
+    var panel = document.createElement('div');
+    panel.id = 'dupPanel';
+    panel.className = 'dup-panel';
+    var anchor = card.querySelector('.tbl-wrap');
+    var bar = document.getElementById('cliFilter');
+    if (bar) bar.appendChild(btn); else card.insertBefore(btn, anchor);
+    card.insertBefore(panel, anchor);
+    // сразу показываем, сколько дублей — иначе про них просто забудут
+    api('/clients/duplicates').then(function (groups) {
+      if (groups && groups.length) btn.textContent = '🔗 Дубли по телефону (' + groups.length + ')';
+    }).catch(function () {});
+  }
+  window.dupLoad = function () {
+    var panel = document.getElementById('dupPanel');
+    if (!panel) return;
+    panel.innerHTML = '<div class="dup-note">Ищем дубли…</div>';
+    api('/clients/duplicates').then(function (groups) {
+      if (!groups.length) {
+        panel.innerHTML = '<div class="dup-note">Дублей нет: на каждый телефон одна карта.</div>';
+        var b = document.getElementById('dupBtn'); if (b) b.textContent = '🔗 Дубли по телефону';
+        return;
+      }
+      panel.innerHTML = groups.map(function (g) {
+        return '<div class="dup-group"><h4>📞 ' + cardEsc(g.phone) + ' — карт: ' + g.clients.length + '</h4>' +
+          g.clients.map(function (c) {
+            var sub = ['карта ' + c.card_no, c.bonus + ' бонусов', 'покупок: ' + c.buys]
+              .concat(c.app_installed ? ['приложение'] : []).join(' · ');
+            return '<div class="dup-row"><span class="dr-name">' + cardEsc(c.full_name) + '</span>' +
+              '<span class="dr-sub">' + cardEsc(sub) + '</span>' +
+              '<button class="btn btn-green btn-sm" onclick="dupMerge(' + c.id + ',[' +
+              g.clients.filter(function (o) { return o.id !== c.id; }).map(function (o) { return o.id; }).join(',') +
+              '])">Оставить эту</button></div>';
+          }).join('') +
+          '<div class="dup-note">Выберите карту, которая останется: бонусы, покупки, абонементы и дети с остальных карт перейдут на неё.</div></div>';
+      }).join('');
+    }).catch(function (e) { panel.innerHTML = '<div class="dup-note">Не удалось загрузить: ' + cardEsc(e.message) + '</div>'; });
+  };
+  window.dupMerge = function (keepId, fromIds) {
+    if (!fromIds || !fromIds.length) return;
+    if (!confirm('Объединить ' + (fromIds.length + 1) + ' карты в одну?\n\nБонусы, покупки, абонементы и дети перейдут на выбранную карту, остальные карты будут удалены. Отменить объединение нельзя.')) return;
+    var chain = Promise.resolve();
+    fromIds.forEach(function (id) {
+      chain = chain.then(function () { return api('/clients/' + keepId + '/merge', { method: 'POST', body: { from_id: id } }); });
+    });
+    chain.then(function () {
+      if (typeof toast === 'function') toast('Карты объединены');
+      return api('/clients');
+    }).then(function (cl) {
+      clients = cl.map(mapCli);
+      if (typeof renderClients === 'function') renderClients();
+      window.dupLoad();
+    }).catch(function (e) { if (typeof toast === 'function') toast(e.message, true); });
+  };
 
   function installHooks() {
     installCardSearch();
@@ -2724,6 +2867,44 @@
       });
       var rf = document.getElementById('ncRef'); if (rf) rf.value = '';
     });
+
+    // Один телефон — одна карта: перед заведением проверяем, нет ли уже такого
+    // гостя. Раньше «+7 916…» и «8916…» считались разными людьми, и на одного
+    // человека заводилось несколько карт с разными бонусами.
+    var _addClient = window.addClient;
+    window.addClient = function () {
+      if (!SERVER || typeof _addClient !== 'function') return _addClient && _addClient.apply(this, arguments);
+      var nEl = document.getElementById('ncName'), pEl = document.getElementById('ncPhone');
+      var name = ((nEl && nEl.value) || '').trim(), phone = ((pEl && pEl.value) || '').trim();
+      if (!name || !phone) return _addClient.apply(this, arguments);
+      var self = this, args = arguments;
+      var tail = function (v) { var d = String(v || '').replace(/\D/g, ''); return d.length >= 10 ? d.slice(-10) : d; };
+      api('/clients/lookup?q=' + encodeURIComponent(phone)).then(function (list) {
+        var hit = (list || []).filter(function (c) { return tail(c.phone) === tail(phone); })[0];
+        if (!hit) return _addClient.apply(self, args);
+        if (typeof toast === 'function') toast('Такой телефон уже в базе: ' + hit.full_name + ' · карта ' + hit.card_no, true);
+        if (nEl) nEl.value = ''; if (pEl) pEl.value = '';
+        if (!clients.some(function (x) { return x.id === hit.id; })) {
+          clients.unshift({ id: hit.id, name: hit.full_name, phone: hit.phone, card: hit.card_no,
+                            bonus: Number(hit.bonus) || 0, buys: 0, app: false, history: null, kids: null,
+                            passes: Number(hit.active_passes || 0), kidsCount: 0, email: '', note: '' });
+          if (typeof renderClients === 'function') renderClients();
+        }
+        if (typeof openClientCard === 'function') openClientCard(hit.id);
+      }).catch(function () { _addClient.apply(self, args); });
+    };
+
+    // Кнопка дублей живёт в шапке списка клиентов — она появляется вместе с
+    // фильтром, поэтому вешаемся на отрисовку списка, а не на загрузку панели.
+    var _rcDup = window.renderClients;
+    if (typeof _rcDup === 'function') {
+      window.renderClients = function () {
+        var r = _rcDup.apply(this, arguments);
+        installDupes();
+        return r;
+      };
+    }
+    installDupes();
 
     // Новый лид
     wrap('addLead', function () {

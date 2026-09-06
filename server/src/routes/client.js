@@ -333,7 +333,10 @@ clientAppRouter.get(
   ah(async (req, res) => {
     const c = await q1('SELECT card_no, referral_code FROM clients WHERE id=$1', [req.client.id]);
     const payload = c && c.card_no ? c.card_no : c && c.referral_code ? c.referral_code : String(req.client.id);
-    const svg = await QRCode.toString(payload, { type: 'svg', margin: 1, width: 260, errorCorrectionLevel: 'M' });
+    // Сканеру на кассе нужен белый «воздух» вокруг кода (зона покоя — 4 модуля,
+    // раньше был 1) и запас на блики экрана телефона: коррекция ошибок H.
+    // Внутри всего 6 цифр, поэтому код остаётся крупным и читается быстро.
+    const svg = await QRCode.toString(payload, { type: 'svg', margin: 4, width: 512, errorCorrectionLevel: 'H' });
     res.type('image/svg+xml').set('Cache-Control', 'no-store').send(svg);
   })
 );

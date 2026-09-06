@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { q, q1, tx } from '../db.js';
 import { requireAuth, requirePerm } from '../auth.js';
 import { ah, audit } from '../util.js';
-import { createClient } from '../services/clients.js';
+import { createClient, phoneCanonical, findByPhoneDigits } from '../services/clients.js';
 
 export const clientsRouter = Router();
 clientsRouter.use(requireAuth, requirePerm('clients'));
@@ -30,6 +30,7 @@ function searchClause(raw, add) {
   if (digits) {
     const exact = add(digits.replace(/^0+/, ''));
     conds.push(`ltrim(${DIGITS('c.card_no')}, '0') = ${exact}`); // карта: 3 = 000003
+    conds.push(`c.referral_code = ${add(digits)}`); // код из приложения (9XXXXX)
   }
   const tail = phoneTail(text);
   if (tail) conds.push(`right(${DIGITS('c.phone')}, 10) = ${add(tail)}`);
@@ -129,6 +130,92 @@ clientsRouter.get(
   })
 );
 
+// GET /api/clients/duplicates — карты, заведённые на один и тот же телефон.
+// Такие пары накопились, пока номер сравнивался как строка: «+7 916…» и
+// «8916…» считались разными людьми. Группы отдаём, чтобы владелец объединил.
+clientsRouter.get(
+  '/duplicates',
+  ah(async (req, res) => {
+    const rows = await q(
+      `WITH k AS (
+         SELECT c.id, c.full_name, c.phone, c.card_no, c.bonus, c.app_installed, c.created_at,
+                right(regexp_replace(c.phone, '[^0-9]', '', 'g'), 10) AS key
+           FROM clients c
+          WHERE c.phone IS NOT NULL AND c.phone <> ''
+       ),
+       dup AS (SELECT key FROM k WHERE key <> '' GROUP BY key HAVING count(*) > 1)
+       SELECT k.*, COALESCE(s.buys, 0)::int AS buys
+         FROM k JOIN dup ON dup.key = k.key
+         LEFT JOIN (SELECT client_id, count(*) AS buys FROM sales
+                     WHERE is_return = false AND client_id IS NOT NULL GROUP BY client_id) s
+                ON s.client_id = k.id
+        ORDER BY k.key, k.created_at`
+    );
+    const groups = [];
+    const byKey = {};
+    for (const r of rows) {
+      if (!byKey[r.key]) { byKey[r.key] = { phone: r.phone, clients: [] }; groups.push(byKey[r.key]); }
+      byKey[r.key].clients.push({
+        id: r.id, full_name: r.full_name, phone: r.phone, card_no: r.card_no,
+        bonus: Number(r.bonus), buys: r.buys, app_installed: r.app_installed, created_at: r.created_at,
+      });
+    }
+    res.json(groups);
+  })
+);
+
+// POST /api/clients/:id/merge { from_id } — объединить дубль в эту карту.
+// Только владелец/администратор: операция переносит деньги (бонусы) и историю.
+// Всё, что было у дубля — покупки, бонусные операции, абонементы, дети, брони
+// и заявки — переезжает на выбранную карту, дубль удаляется.
+clientsRouter.post(
+  '/:id/merge',
+  ah(async (req, res) => {
+    if (!['owner', 'admin'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Объединять карты может только владелец или администратор' });
+    }
+    const keepId = String(req.params.id);
+    const fromId = String((req.body || {}).from_id || '');
+    if (!fromId) return res.status(400).json({ error: 'Укажите карту, которую объединяем' });
+    if (fromId === keepId) return res.status(400).json({ error: 'Это одна и та же карта' });
+
+    const keep = await q1('SELECT * FROM clients WHERE id=$1', [keepId]);
+    const from = await q1('SELECT * FROM clients WHERE id=$1', [fromId]);
+    if (!keep || !from) return res.status(404).json({ error: 'Клиент не найден' });
+
+    const merged = await tx(async ({ q: cq, q1: cq1 }) => {
+      for (const t of ['sales', 'loyalty_transactions', 'client_kids', 'passes', 'bookings', 'leads']) {
+        await cq(`UPDATE ${t} SET client_id=$1 WHERE client_id=$2`, [keepId, fromId]);
+      }
+      await cq('UPDATE clients SET referred_by=$1 WHERE referred_by=$2', [keepId, fromId]);
+      const row = await cq1(
+        `UPDATE clients SET
+           bonus = bonus + $2,
+           app_installed = app_installed OR $3,
+           pass_hash = COALESCE(pass_hash, $4),
+           email = COALESCE(email, $5),
+           phone = COALESCE(phone, $6),
+           note = NULLIF(concat_ws(' · ', NULLIF(note,''), NULLIF($7,'')), '')
+         WHERE id=$1 RETURNING *`,
+        [keepId, Number(from.bonus) || 0, !!from.app_installed, from.pass_hash, from.email, from.phone, from.note]
+      );
+      // Бонусы дубля перенесены на эту карту — оставляем след в истории
+      if (Number(from.bonus) > 0) {
+        await cq('INSERT INTO loyalty_transactions (client_id, points, reason) VALUES ($1,$2,$3)', [
+          keepId, 0, `Объединение карт: перенесено ${Number(from.bonus)} бонусов с карты ${from.card_no}`,
+        ]);
+      }
+      await cq('DELETE FROM clients WHERE id=$1', [fromId]);
+      return row;
+    });
+    await audit(req, 'client.merge', {
+      entity: 'client', entityId: keep.id,
+      meta: { from_id: from.id, from_card: from.card_no, from_bonus: Number(from.bonus) },
+    });
+    res.json(merged);
+  })
+);
+
 // GET /api/clients/:id — карточка с детьми, историей покупок и бонусами
 clientsRouter.get(
   '/:id',
@@ -167,7 +254,22 @@ clientsRouter.get(
 clientsRouter.post(
   '/',
   ah(async (req, res) => {
-    const { client, referrer } = await createClient(req.body || {});
+    let created;
+    try {
+      created = await createClient(req.body || {});
+    } catch (e) {
+      // Такой телефон уже в базе — возвращаем найденного клиента, чтобы касса
+      // открыла его карту, а не завела вторую на того же человека
+      if (e.status === 409 && e.existing) {
+        return res.status(409).json({
+          error: e.message,
+          client: { id: e.existing.id, full_name: e.existing.full_name, phone: e.existing.phone,
+                    card_no: e.existing.card_no, bonus: Number(e.existing.bonus) },
+        });
+      }
+      throw e;
+    }
+    const { client, referrer } = created;
     await audit(req, 'client.create', { entity: 'client', entityId: client.id, meta: { referrer: referrer?.id } });
     res.json(client);
   })
@@ -181,10 +283,18 @@ clientsRouter.put(
     if (full_name != null && !String(full_name).trim()) {
       return res.status(400).json({ error: 'Имя клиента не может быть пустым' });
     }
-    // Телефон уникален по базе — не даём случайно склеить двух клиентов
+    // Один телефон — одна карта. Сравниваем по цифрам: «8916…» и «+7 916…» —
+    // это один и тот же номер, хоть строки и разные.
+    let phoneNorm = null;
     if (phone != null && String(phone).trim()) {
-      const dup = await q1('SELECT id FROM clients WHERE phone=$2 AND id<>$1 LIMIT 1', [req.params.id, String(phone).trim()]);
-      if (dup) return res.status(409).json({ error: 'Этот телефон уже записан за другим клиентом' });
+      phoneNorm = phoneCanonical(phone);
+      const dup = await findByPhoneDigits(phoneNorm, req.params.id);
+      if (dup) {
+        return res.status(409).json({
+          error: `Этот телефон уже записан за клиентом ${dup.full_name} (карта ${dup.card_no})`,
+          client: { id: dup.id, full_name: dup.full_name, card_no: dup.card_no },
+        });
+      }
     }
     const row = await q1(
       `UPDATE clients SET
@@ -194,7 +304,7 @@ clientsRouter.put(
          note = COALESCE($5, note),
          email = COALESCE($6, email)
        WHERE id=$1 RETURNING *`,
-      [req.params.id, full_name == null ? null : String(full_name), phone == null ? null : String(phone),
+      [req.params.id, full_name == null ? null : String(full_name), phoneNorm,
        app_installed, note, email == null ? null : String(email).trim()]
     );
     if (!row) return res.status(404).json({ error: 'Клиент не найден' });

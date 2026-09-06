@@ -14,7 +14,10 @@ syncRouter.use(requireAuth, requirePerm('pos'));
 const HANDLERS = {
   sale: (user, payload) => createSale(user, payload),
   return: (user, payload) => createReturn(user, payload),
-  client: (user, payload) => createClient(payload).then((r) => r.client),
+  // Клиент, заведённый без сети: если такой телефон уже в базе, привязываемся
+  // к существующей карте, иначе очередь встала бы на этой операции навсегда.
+  client: (user, payload) =>
+    createClient({ ...payload, onDuplicatePhone: 'attach' }).then((r) => r.client),
 };
 
 /**

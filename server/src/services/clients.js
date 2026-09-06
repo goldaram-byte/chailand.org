@@ -11,6 +11,34 @@ export async function nextCardNo() {
   return String(n).padStart(6, '0');
 }
 
+// Телефон храним в одном виде: +7XXXXXXXXXX. Иначе один и тот же гость
+// заводится дважды: «+7 916 111-22-33», «89161112233» и «+79161112233» —
+// три разные строки, но один человек и три карты с разными бонусами.
+export function phoneCanonical(raw) {
+  let d = String(raw || '').replace(/\D/g, '');
+  if (!d) return null;
+  if (d.length === 11 && d[0] === '8') d = '7' + d.slice(1);
+  if (d.length === 10) d = '7' + d;
+  return '+' + d;
+}
+// Ключ для сравнения номеров — последние 10 цифр (код страны диктуют по-разному)
+export function phoneKey(raw) {
+  const d = String(raw || '').replace(/\D/g, '');
+  return d.length >= 10 ? d.slice(-10) : '';
+}
+// Клиент с таким же номером (в любом написании)
+export async function findByPhoneDigits(raw, exceptId = null) {
+  const key = phoneKey(raw);
+  if (!key) return null;
+  return q1(
+    `SELECT * FROM clients
+      WHERE right(regexp_replace(phone, '[^0-9]', '', 'g'), 10) = $1
+        AND ($2::bigint IS NULL OR id <> $2)
+      ORDER BY id LIMIT 1`,
+    [key, exceptId]
+  );
+}
+
 // Реферальный код — тоже только цифры. Начинается с 9, чтобы никогда не
 // совпасть с номером карты (карты нумеруются с 000001).
 export function referralCodeFor(id) {
@@ -35,11 +63,27 @@ export async function getReferralSettings() {
  * Завести клиента. Возвращает созданную запись (с card_no и referral_code).
  * Идемпотентность офлайн-очереди обеспечивается на уровне sync_ops (client_uuid).
  */
-export async function createClient({ full_name, phone, app_installed = false, note, kids = [], referrer_code }) {
+export async function createClient({ full_name, phone, app_installed = false, note, kids = [], referrer_code,
+                                     onDuplicatePhone = 'error' }) {
   if (!full_name) {
     const err = new Error('Укажите имя клиента');
     err.status = 400;
     throw err;
+  }
+  // Один телефон — одна карта. Если гость уже в базе, новую карту не заводим:
+  // касса откроет существующую (иначе теряются бонусы и история покупок).
+  const phoneNorm = phoneCanonical(phone);
+  if (phoneNorm) {
+    const dup = await findByPhoneDigits(phoneNorm);
+    if (dup) {
+      if (onDuplicatePhone === 'attach') return { client: dup, referrer: null, existing: true };
+      const err = new Error(
+        `Клиент с таким телефоном уже есть: ${dup.full_name} (карта ${dup.card_no}). Откройте его карту вместо новой.`
+      );
+      err.status = 409;
+      err.existing = dup;
+      throw err;
+    }
   }
   const card_no = await nextCardNo();
 
@@ -53,7 +97,7 @@ export async function createClient({ full_name, phone, app_installed = false, no
     const c = await cq1(
       `INSERT INTO clients (full_name, phone, card_no, app_installed, note, referred_by)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [full_name, phone || null, card_no, app_installed, note || null, referrer ? referrer.id : null]
+      [full_name, phoneNorm, card_no, app_installed, note || null, referrer ? referrer.id : null]
     );
     // личный реферальный код
     const code = referralCodeFor(c.id);
