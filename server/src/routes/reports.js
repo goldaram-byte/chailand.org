@@ -63,6 +63,76 @@ reportsRouter.get(
   })
 );
 
+// GET /api/reports/kpi-cashiers?month=YYYY-MM[&location_id=]
+// KPI кассиров за месяц: праздники (брони, где сотрудник — продавец),
+// абонементы (позиции чека с видом абонемента) и вода (товары с галочкой
+// «Вода (KPI)»). Планы на месяц — в настройках (kpi_goals). Кассир видит
+// только свою строку, владелец и администратор — всех.
+reportsRouter.get(
+  '/kpi-cashiers',
+  ah(async (req, res) => {
+    const m = String(req.query.month || '').match(/^(\d{4})-(\d{2})$/);
+    const now = new Date();
+    const y = m ? Number(m[1]) : now.getFullYear();
+    const mo = m ? Number(m[2]) : now.getMonth() + 1;
+    const from = `${y}-${String(mo).padStart(2, '0')}-01`;
+    const to = mo === 12 ? `${y + 1}-01-01` : `${y}-${String(mo + 1).padStart(2, '0')}-01`;
+    const params = [from, to];
+    let locSale = '', locBook = '', locPass = '';
+    if (req.query.location_id && req.query.location_id !== 'all') {
+      params.push(Number(req.query.location_id));
+      locSale = ` AND s.location_id = $3`;
+      locBook = ` AND b.location_id = $3`;
+      locPass = ` AND p.location_id = $3`;
+    }
+    const onlyMe = !['owner', 'admin'].includes(req.user.role);
+    const rows = await q(
+      `SELECT u.id, u.full_name, u.role_code,
+              COALESCE(bk.n, 0)::int AS bookings, COALESCE(bk.sum, 0) AS bookings_sum,
+              COALESCE(ps.n, 0)::int AS passes,   COALESCE(ps.sum, 0) AS passes_sum,
+              COALESCE(wt.n, 0)::int AS water,    COALESCE(wt.sum, 0) AS water_sum,
+              COALESCE(ch.n, 0)::int AS checks,   COALESCE(ch.sum, 0) AS revenue
+         FROM users u
+         LEFT JOIN (SELECT b.seller_id AS uid, count(*) AS n, SUM(b.total) AS sum
+                      FROM bookings b
+                     WHERE b.status <> 'cancelled' AND b.created_at >= $1 AND b.created_at < $2${locBook}
+                     GROUP BY b.seller_id) bk ON bk.uid = u.id
+         -- абонементы считаем по выданным (таблица passes): так учитываются и
+         -- продажа кнопкой «Абонемент», и абонемент позицией в обычном чеке
+         LEFT JOIN (SELECT p.sold_by AS uid, count(*) AS n, COALESCE(SUM(pt.price), 0) AS sum
+                      FROM passes p LEFT JOIN pass_types pt ON pt.id = p.pass_type_id
+                     WHERE p.status <> 'cancelled' AND p.created_at >= $1 AND p.created_at < $2${locPass}
+                     GROUP BY p.sold_by) ps ON ps.uid = u.id
+         LEFT JOIN (SELECT s.cashier_id AS uid, SUM(i.qty) AS n, SUM(i.sum) AS sum
+                      FROM sale_items i JOIN sales s ON s.id = i.sale_id
+                      JOIN products p ON p.id = i.product_id
+                     WHERE p.kpi_water AND NOT s.is_return
+                       AND s.created_at >= $1 AND s.created_at < $2${locSale}
+                     GROUP BY s.cashier_id) wt ON wt.uid = u.id
+         LEFT JOIN (SELECT s.cashier_id AS uid, count(*) AS n, SUM(s.total) AS sum
+                      FROM sales s
+                     WHERE NOT s.is_return AND s.created_at >= $1 AND s.created_at < $2${locSale}
+                     GROUP BY s.cashier_id) ch ON ch.uid = u.id
+        WHERE u.is_active ${onlyMe ? 'AND u.id = ' + Number(req.user.id) : ''}
+        ORDER BY (COALESCE(bk.n,0) + COALESCE(ps.n,0) + COALESCE(wt.n,0)) DESC, u.full_name`,
+      params
+    );
+    const g = await q1(`SELECT value FROM settings WHERE key='kpi_goals'`);
+    const goals = g?.value || {};
+    res.json({
+      month: `${y}-${String(mo).padStart(2, '0')}`,
+      goals: { bookings: Number(goals.bookings || 0), passes: Number(goals.passes || 0), water: Number(goals.water || 0) },
+      staff: rows.map((r) => ({
+        id: r.id, name: r.full_name, role: r.role_code,
+        bookings: r.bookings, bookings_sum: Number(r.bookings_sum),
+        passes: r.passes, passes_sum: Number(r.passes_sum),
+        water: r.water, water_sum: Number(r.water_sum),
+        checks: r.checks, revenue: Number(r.revenue),
+      })),
+    });
+  })
+);
+
 // Разобрать период: ?from=YYYY-MM-DD&to=YYYY-MM-DD или ?period=today|week|month
 function resolvePeriod(query) {
   if (query.from && query.to) return { from: query.from, to: query.to + ' 23:59:59' };

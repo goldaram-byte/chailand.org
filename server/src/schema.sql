@@ -638,3 +638,9 @@ END $$;
 -- видно, с кого спрашивать на планёрке.
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS owner_id bigint REFERENCES users(id);
 CREATE INDEX IF NOT EXISTS idx_leads_owner ON leads(owner_id);
+
+-- KPI кассиров: какие товары считаются «водой». Помечаем по названию только
+-- один раз — пока владелец не отметил ничего сам; дальше его выбор не трогаем.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS kpi_water boolean NOT NULL DEFAULT false;
+UPDATE products SET kpi_water = true
+ WHERE name ILIKE '%вод%' AND NOT EXISTS (SELECT 1 FROM products WHERE kpi_water);

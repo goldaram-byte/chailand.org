@@ -325,6 +325,8 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 .dbar.cash span{background:linear-gradient(90deg,#34d399,var(--green))}
 .dbar.card span{background:linear-gradient(90deg,#60a5fa,var(--blue))}
 .dbar.online span{background:linear-gradient(90deg,#c084fc,#7c3aed)}
+.dbar.ok span{background:linear-gradient(90deg,#34d399,var(--green))}
+.kpi-cell{min-width:150px}.kpi-cell b{font-size:16px}.kpi-cell .kp{color:var(--dim);font-size:11.5px}
 .dbar.transfer span{background:linear-gradient(90deg,#2dd4bf,#0d9488)}
 .mrow{margin-bottom:15px}
 .mrow-top{display:flex;justify-content:space-between;font-size:13.5px;font-weight:600;margin-bottom:3px}
@@ -805,6 +807,27 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
     </div>
   </div>
 
+  <!-- ============ KPI КАССИРОВ ============ -->
+  <div class="page" id="p-kpi">
+    <div class="card">
+      <h3>🎯 KPI кассиров</h3>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Три показателя, по которым считается работа кассира за месяц: забронированные праздники, проданные абонементы и вода. План — один на месяц для каждого сотрудника; полоса становится зелёной, когда план выполнен.</div>
+      <div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap;margin-bottom:12px">
+        <div><label style="font-size:10.5px;color:var(--dim);font-weight:700;display:block;margin-bottom:3px;text-transform:uppercase">Месяц</label>
+          <input type="month" id="kpiMonth" onchange="loadKpi()"></div>
+        <div id="kpiGoalsBox" class="frm" style="grid-template-columns:repeat(3,150px) auto;margin:0;flex:1" hidden>
+          <div><label>План: праздников</label><input type="number" id="kpiGoalBookings" min="0" placeholder="0"></div>
+          <div><label>План: абонементов</label><input type="number" id="kpiGoalPasses" min="0" placeholder="0"></div>
+          <div><label>План: воды, шт</label><input type="number" id="kpiGoalWater" min="0" placeholder="0"></div>
+          <div style="align-self:end"><button class="btn btn-green btn-sm" onclick="saveKpiGoals()">Сохранить план</button></div>
+        </div>
+      </div>
+      <div class="tbl-wrap"><table><thead><tr><th>Сотрудник</th><th>🎉 Праздники</th><th>🎫 Абонементы</th><th>💧 Вода</th><th>Чеков</th><th>Выручка</th></tr></thead>
+        <tbody id="kpiTbl"><tr><td colspan="6" class="muted">Доступно при работе с сервером</td></tr></tbody></table></div>
+      <div class="muted" style="font-size:12px;margin-top:10px">Праздник засчитывается тому, кто указан продавцом в брони (бронь создана в этом месяце и не отменена). Абонемент и вода — тому, кто пробил чек; возвраты не считаются. Какие товары считать водой — галочка «Вода (KPI)» в Настройках → Товары.</div>
+    </div>
+  </div>
+
   <!-- ============ НАСТРОЙКИ ============ -->
   <!-- ============ СКУД / ТАБЕЛЬ ============ -->
   <div class="page" id="p-skud">
@@ -895,7 +918,6 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
       <button onclick="setTab('acquiring',this)">Касса и эквайринг</button>
       <button onclick="setTab('loyalty',this)">Бонусы и праздничные дни</button>
       <button onclick="setTab('referral',this)">Реферальная</button>
-      <button onclick="setTab('kpi',this)">KPI кассиров</button>
       <button id="tabStaff" onclick="setTab('staff',this)" style="display:none">Сотрудники</button>
     </div>
     <div class="card set-pane" id="s-tariffs">
@@ -918,7 +940,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
         <div><label>ТЦ</label><select id="pdLoc"></select></div>
         <div style="align-self:end"><button class="btn btn-green" onclick="addProduct()">+ Добавить</button></div>
       </div>
-      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Группа</th><th>Цена, ₽</th><th>ТЦ</th><th title="Показывать кассиру в напоминании при оплате">Предлагать</th><th>Учёт</th><th>Остаток</th><th>Приход</th><th></th></tr></thead><tbody id="setProducts"></tbody></table></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Название</th><th>Группа</th><th>Цена, ₽</th><th>ТЦ</th><th title="Показывать кассиру в напоминании при оплате">Предлагать</th><th title="Считать продажи этого товара в KPI кассира как воду">Вода (KPI)</th><th>Учёт</th><th>Остаток</th><th>Приход</th><th></th></tr></thead><tbody id="setProducts"></tbody></table></div>
       <div style="margin-top:20px;border-top:1px solid var(--line);padding-top:16px">
         <h3 style="margin-bottom:8px">📦 Инвентаризация</h3>
         <div class="muted" style="font-size:12.5px;margin-bottom:12px">Пересчитайте товары и внесите фактические остатки. После применения учётный остаток станет равен фактическому, разница запишется в историю движений.</div>
@@ -1028,22 +1050,6 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
         <div><label>Бонус приглашённому, ⭐</label><input type="number" id="refReferee" min="0"></div>
       </div>
       <button class="btn btn-green" onclick="saveReferral()">Сохранить</button>
-    </div>
-    <div class="card set-pane" id="s-kpi" hidden>
-      <h3>🎯 KPI сотрудников кассы</h3>
-      <div class="muted" style="font-size:12.5px;margin-bottom:12px">Задайте цели за период — ниже показываются фактические результаты сотрудников (зелёным — цель достигнута).</div>
-      <div class="frm" style="grid-template-columns:repeat(3,1fr)">
-        <div><label>Цель по выручке, ₽</label><input type="number" id="kpiRevenue" min="0"></div>
-        <div><label>Цель по чекам, шт</label><input type="number" id="kpiChecks" min="0"></div>
-        <div><label>Цель по среднему чеку, ₽</label><input type="number" id="kpiAvg" min="0"></div>
-      </div>
-      <button class="btn btn-green" onclick="saveKpi()">Сохранить цели</button>
-      <div style="display:flex;gap:8px;margin:14px 0 6px">
-        <button class="btn btn-ghost btn-sm" onclick="loadKpi('today')">Сегодня</button>
-        <button class="btn btn-ghost btn-sm" onclick="loadKpi('7')">7 дней</button>
-        <button class="btn btn-ghost btn-sm" onclick="loadKpi('month')">Месяц</button>
-      </div>
-      <div class="tbl-wrap"><table><thead><tr><th>Сотрудник</th><th>Выручка</th><th>Чеки</th><th>Ср. чек</th><th>Возвраты</th></tr></thead><tbody id="kpiTable"></tbody></table></div>
     </div>
   </div>
 
@@ -1316,14 +1322,14 @@ let seq = 100, fdSeq = 1;
 
 /* ================= РОЛИ И НАВИГАЦИЯ ================= */
 const ROLES = {
-  owner:   {name:"Арам Халатян", role:"Владелец", ava:"АХ", main:["dash","pos","journal","clients","crm"], bottom:["report","skud","news","settings"]},
-  admin:   {name:"Елена",        role:"Администратор", ava:"Е",  main:["dash","pos","journal","clients","crm"], bottom:["report","skud","news"]},
-  cashier: {name:"Ольга",        role:"Кассир", ava:"О",  main:["pos","journal","crm","clients"], bottom:["report"]},
+  owner:   {name:"Арам Халатян", role:"Владелец", ava:"АХ", main:["dash","pos","journal","clients","crm","kpi"], bottom:["report","skud","news","settings"]},
+  admin:   {name:"Елена",        role:"Администратор", ava:"Е",  main:["dash","pos","journal","clients","crm","kpi"], bottom:["report","skud","news"]},
+  cashier: {name:"Ольга",        role:"Кассир", ava:"О",  main:["pos","journal","crm","clients","kpi"], bottom:["report"]},
 };
 const PAGES = {
   dash:{t:"Дашборд", ic:"📊"},
   pos:{t:"Касса", ic:"💳"}, journal:{t:"Журнал", ic:"📒"}, clients:{t:"Клиенты", ic:"👥"},
-  crm:{t:"Воронка", ic:"🧲"},
+  crm:{t:"Воронка", ic:"🧲"}, kpi:{t:"KPI", ic:"🎯"},
   report:{t:"Отчёты", ic:"📈"}, skud:{t:"Табель", ic:"🕐"}, news:{t:"Новости", ic:"📰"}, settings:{t:"Настройки", ic:"⚙️"},
 };
 let role = "owner", curPage = "dash";
@@ -2526,6 +2532,9 @@ function renderReport(){
 }
 
 /* ================= НАСТРОЙКИ ================= */
+// KPI кассиров — в app.js уходит на сервер; в демо только заглушка
+function loadKpi(){}
+function saveKpiGoals(){ toast('Доступно при работе с сервером', true); }
 function setTab(t, btn){
   document.querySelectorAll('.set-pane').forEach(x=>x.hidden=true);
   document.querySelectorAll('.set-tabs button').forEach(x=>x.classList.remove('act'));
