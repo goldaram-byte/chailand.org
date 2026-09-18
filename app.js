@@ -140,7 +140,7 @@
 
       GROUPS = cat.groups.map(function (g) { return { id: g.id, name: g.name, kind: g.kind || 'goods' }; });
       TARIFFS = cat.products.map(function (p) {
-        return { id: p.id, pid: p.id, name: p.name, day: p.day_kind || 'any', price: Number(p.price), doc: p.requires_document, group: p.group_id, loc: p.location_id || null, locs: (p.location_ids || []).map(Number), track: !!p.track_stock, stock: Number(p.stock || 0), upsell: !!p.upsell, ulocs: (p.upsell_location_ids || []).map(Number) };
+        return { id: p.id, pid: p.id, name: p.name, day: p.day_kind || 'any', price: Number(p.price), doc: p.requires_document, group: p.group_id, loc: p.location_id || null, locs: (p.location_ids || []).map(Number), track: !!p.track_stock, stock: Number(p.stock || 0), upsell: !!p.upsell, ulocs: (p.upsell_location_ids || []).map(Number), kpiWater: !!p.kpi_water };
       });
       SERVICES = cat.services.map(function (s) {
         return { id: s.id, name: s.name, price: Number(s.price), options: s.options || '',
@@ -793,32 +793,64 @@
       }).catch(function () {});
     }
 
-    // --- Настройки: KPI кассиров ---
-    window.saveKpi = function () {
-      var body = { kpi_targets: {
-        revenue: Number((document.getElementById('kpiRevenue') || {}).value || 0),
-        checks: Number((document.getElementById('kpiChecks') || {}).value || 0),
-        avg_check: Number((document.getElementById('kpiAvg') || {}).value || 0),
-      } };
-      api('/settings', { method: 'PUT', body: body })
-        .then(function () { if (typeof toast === 'function') toast('Цели KPI сохранены'); window.loadKpi('month'); })
+    // --- Раздел «KPI»: праздники, абонементы, вода — по кассирам за месяц ---
+    function kpiMonthVal() {
+      var el = document.getElementById('kpiMonth');
+      if (el && el.value) return el.value;
+      var d = new Date();
+      var v = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      if (el) el.value = v;
+      return v;
+    }
+    window.loadKpi = function () {
+      if (!SERVER) return;
+      var month = kpiMonthVal();
+      var box = document.getElementById('kpiGoalsBox');
+      if (box) box.hidden = !(ME && (ME.role === 'owner' || ME.role === 'admin'));
+      api('/reports/kpi-cashiers?month=' + month + (curLoc() ? '&location_id=' + curLoc() : '')).then(function (r) {
+        var g = r.goals || {};
+        ['Bookings', 'Passes', 'Water'].forEach(function (k) {
+          var el = document.getElementById('kpiGoal' + k);
+          if (el && document.activeElement !== el) el.value = g[k.toLowerCase()] || '';
+        });
+        function cell(val, goal, sum) {
+          var pct = goal ? Math.min(100, Math.round(val / goal * 100)) : 0;
+          var done = goal && val >= goal;
+          return '<td class="kpi-cell"><b' + (done ? ' style="color:var(--green)"' : '') + '>' + val + '</b>' +
+            (goal ? ' <span class="kp">/ ' + goal + ' · ' + pct + '%</span>' : '') +
+            (goal ? '<div class="dbar' + (done ? ' ok' : '') + '"><span style="width:' + pct + '%"></span></div>' : '') +
+            (sum ? '<div class="kp">' + fmtNum(sum) + '</div>' : '') + '</td>';
+        }
+        var tb = document.getElementById('kpiTbl'); if (!tb) return;
+        var staff = r.staff || [];
+        // сотрудников без единой продажи за месяц не показываем — кроме кассиров, у них план
+        var rows = staff.filter(function (x) { return x.role === 'cashier' || x.bookings || x.passes || x.water || x.checks; });
+        var tot = { bookings: 0, passes: 0, water: 0, checks: 0, revenue: 0, bookings_sum: 0, passes_sum: 0, water_sum: 0 };
+        tb.innerHTML = rows.map(function (x) {
+          Object.keys(tot).forEach(function (k) { tot[k] += Number(x[k] || 0); });
+          return '<tr><td><b>' + cardEsc(x.name) + '</b><div class="kp muted" style="font-size:11px">' + (ROLE_RU[x.role] || x.role) + '</div></td>' +
+            cell(x.bookings, g.bookings, x.bookings_sum) + cell(x.passes, g.passes, x.passes_sum) + cell(x.water, g.water, x.water_sum) +
+            '<td>' + x.checks + '</td><td>' + fmtNum(x.revenue) + '</td></tr>';
+        }).join('') || '<tr><td colspan="6" class="muted">За этот месяц продаж ещё нет</td></tr>';
+        if (rows.length > 1) {
+          tb.insertAdjacentHTML('beforeend', '<tr style="background:var(--bg);font-weight:700"><td>Итого</td>' +
+            '<td>' + tot.bookings + ' <span class="kp muted">' + fmtNum(tot.bookings_sum) + '</span></td>' +
+            '<td>' + tot.passes + ' <span class="kp muted">' + fmtNum(tot.passes_sum) + '</span></td>' +
+            '<td>' + tot.water + ' <span class="kp muted">' + fmtNum(tot.water_sum) + '</span></td>' +
+            '<td>' + tot.checks + '</td><td>' + fmtNum(tot.revenue) + '</td></tr>');
+        }
+      }).catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Не удалось загрузить KPI', true); });
+    };
+    window.saveKpiGoals = function () {
+      var v = function (id) { return Math.max(0, Math.round(Number((document.getElementById(id) || {}).value || 0))); };
+      api('/settings', { method: 'PUT', body: { kpi_goals: { bookings: v('kpiGoalBookings'), passes: v('kpiGoalPasses'), water: v('kpiGoalWater') } } })
+        .then(function () { if (typeof toast === 'function') toast('План на месяц сохранён'); window.loadKpi(); })
         .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
     };
-    window.loadKpi = function (period) {
-      if (!SERVER) return;
-      api('/reports/kpi?period=' + (period || 'month') + (curLoc() ? '&location_id=' + curLoc() : '')).then(function (r) {
-        var t = r.targets || {};
-        var rv = document.getElementById('kpiRevenue'); if (rv && !rv.value) rv.value = t.revenue || 0;
-        var ck = document.getElementById('kpiChecks'); if (ck && !ck.value) ck.value = t.checks || 0;
-        var av = document.getElementById('kpiAvg'); if (av && !av.value) av.value = t.avg_check || 0;
-        var tb = document.getElementById('kpiTable'); if (!tb) return;
-        function money(val, target) { var ok = target && val >= target; return '<td' + (ok ? ' style="color:var(--green);font-weight:700"' : '') + '>' + fmtNum(val) + (target ? ' <span class="muted" style="font-size:11px">/ ' + fmtNum(target) + '</span>' : '') + '</td>'; }
-        function num(val, target) { var ok = target && val >= target; return '<td' + (ok ? ' style="color:var(--green);font-weight:700"' : '') + '>' + val + (target ? ' <span class="muted" style="font-size:11px">/ ' + target + '</span>' : '') + '</td>'; }
-        tb.innerHTML = (r.staff || []).map(function (s) {
-          return '<tr><td>' + s.name + '</td>' + money(s.revenue, t.revenue) + num(s.checks, t.checks) + money(s.avg_check, t.avg_check) + '<td>' + s.returns + '</td></tr>';
-        }).join('') || '<tr><td colspan="5" class="muted">Нет данных</td></tr>';
-      }).catch(function () {});
-    };
+    var _goKpi = window.go;
+    if (typeof _goKpi === 'function') {
+      window.go = function (p) { var r = _goKpi.apply(this, arguments); if (p === 'kpi') window.loadKpi(); return r; };
+    }
 
     // --- Настройки → «Тарифы» (билеты): изменения сразу на сервер ---
     var T_FIELD = { name: 'name', group: 'group_id', day: 'day_kind', price: 'price', doc: 'requires_document', loc: 'location_id' };
@@ -1028,6 +1060,7 @@
                 (p.upsell && typeof locSelHtml === 'function'
                   ? ' ' + locSelHtml('upsell', p.id, (p.upsell_location_ids || []).map(Number))
                   : '') + '</td>' +
+              '<td style="text-align:center"><input type="checkbox" ' + (p.kpi_water ? 'checked' : '') + ' title="Считать продажи этого товара в KPI кассира как воду" onchange="toggleKpiWater(' + p.id + ',this.checked)"></td>' +
               '<td style="text-align:center"><input type="checkbox" ' + (p.track_stock ? 'checked' : '') + ' title="Вести учёт остатков" onchange="toggleTrackStock(' + p.id + ',this.checked)"></td>' +
               '<td>' + (p.track_stock ? '<b style="color:' + (st <= 0 ? 'var(--red)' : 'var(--green)') + '">' + st + '</b>' : '<span class="muted">—</span>') + '</td>' +
               '<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" onclick="stockReceipt(' + p.id + ')">+ Приход</button> ' +
@@ -1073,6 +1106,15 @@
         .then(function () {
           if (typeof renderProducts === 'function') renderProducts();
           if (typeof toast === 'function') toast(on ? 'Кассир будет предлагать этот товар при оплате' : 'Товар убран из предложений');
+        })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+    window.toggleKpiWater = function (id, on) {
+      api('/catalog/products/' + id, { method: 'PUT', body: { kpi_water: !!on } })
+        .then(function () { return hydrateAll(); })
+        .then(function () {
+          if (typeof renderProducts === 'function') renderProducts();
+          if (typeof toast === 'function') toast(on ? 'Товар считается в KPI как вода' : 'Товар убран из KPI');
         })
         .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
     };
@@ -1164,7 +1206,6 @@
         var r = _setTab.apply(this, arguments);
         if (name === 'staff' && window.staffRender) window.staffRender();
         if (name === 'referral') loadReferral();
-        if (name === 'kpi') window.loadKpi('month');
         if (name === 'products') window.renderProducts();
         if (name === 'passes' && window.renderPassTypes) window.renderPassTypes();
         // проценты списания бонусов по ТЦ — на вкладке «Бонусы»
