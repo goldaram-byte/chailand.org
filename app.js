@@ -541,7 +541,7 @@
     window.setLeadStage = function (id, stage) {
       var l = findLead(id); if (!l || l.stage === stage) return;
       if (typeof _setStage === 'function') _setStage(id, stage); else { l.stage = stage; rc(); }
-      if (SERVER) api('/crm/leads/' + id, { method: 'PUT', body: { status: STAGE_CODE[stage] || 'new' } }).catch(function () {});
+      if (SERVER) api('/crm/leads/' + id, { method: 'PUT', body: { status: STAGE_CODE[stage] || 'new' } }).then(refreshClients).catch(function () {});
     };
     window.moveLead = function (id, dir) {
       var l = findLead(id); if (!l) return;
@@ -603,7 +603,7 @@
         .then(function (lead) {
           var l = findLead(id);
           if (l) { l.owner_id = lead.owner_id || null; l.owner = lead.owner_name || null; }
-          rc();
+          rc(); refreshClients();
           if (typeof toast === 'function') {
             toast(lead.owner_name ? 'Заявку ведёт ' + lead.owner_name : 'Ответственный снят');
           }
@@ -650,6 +650,7 @@
           if (typeof closeClientCard === 'function') closeClientCard();
           if (typeof go === 'function') go('crm');
           return refreshLeads().then(function () {
+            refreshClients();
             if (typeof toast === 'function') toast('«' + lead.name + '» в воронке 🧲 — поставьте задачу и позвоните');
           });
         })
@@ -1184,7 +1185,18 @@
       kidsCount: Number(c.kids_count || 0),
       passes: Number(c.active_passes || 0),
       email: c.email || '', note: c.note || '',
+      // открытая заявка в воронке и кто её ведёт
+      lead: c.lead_id ? { id: c.lead_id, stage: stageRu(c.lead_status), owner: c.lead_owner || null } : null,
     };
+  }
+  // Освежить список клиентов (метки «в воронке») без полного hydrateAll
+  function refreshClients() {
+    if (!SERVER || !localStorage.getItem(TOKEN_KEY)) return Promise.resolve();
+    return api('/clients').then(function (cl) {
+      clients = cl.map(mapCli);
+      if (typeof renderClients === 'function') renderClients();
+      if (typeof cardClientId !== 'undefined' && cardClientId != null && typeof renderClientCard === 'function') renderClientCard();
+    }).catch(function () {});
   }
 
   function installTasks() {
