@@ -633,3 +633,8 @@ BEGIN
       WHERE phone IS NOT NULL AND phone <> '';
   END IF;
 END $$;
+
+-- Кто взял заявку в работу: заявка без ответственного «висит», а с именем
+-- видно, с кого спрашивать на планёрке.
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS owner_id bigint REFERENCES users(id);
+CREATE INDEX IF NOT EXISTS idx_leads_owner ON leads(owner_id);
