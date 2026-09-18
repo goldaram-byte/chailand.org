@@ -379,6 +379,8 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 .lead-mini .lnote-clip{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .lead-meta{display:flex;gap:8px;align-items:center;margin-top:7px}
 .lead-cli{display:inline-block;font-size:10.5px;font-weight:700;color:var(--green);background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:1px 7px;vertical-align:2px}
+.lead-own{display:inline-block;font-size:10.5px;font-weight:700;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:1px 7px}
+.lead-free{display:inline-block;font-size:10.5px;font-weight:700;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:1px 7px}
 .crm-col.dragover{outline:2px dashed var(--orange);outline-offset:-2px;background:#fff7ed}
 .stage-chips{display:flex;gap:6px;flex-wrap:wrap}
 .stage-chips button{padding:8px 13px;border-radius:20px;background:#fff;border:1px solid var(--line);font-weight:600;font-size:12.5px;color:var(--dim)}
@@ -752,7 +754,15 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
         <div><label>Заметка</label><input id="lnote" placeholder="что хочет клиент"></div>
         <div style="align-self:end"><button class="btn btn-orange" onclick="addLead()">Добавить лид</button></div>
       </div>
-      <div class="muted" style="font-size:12.5px">Ведите клиента по стадиям, ставьте задачи и переносите в базу клиентов при продаже.</div>
+      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px">
+        <div style="flex:1;min-width:220px">
+          <label>Или возьмите клиента из базы</label>
+          <input id="lcliSearch" placeholder="🔎 Телефон, карта или имя" onkeydown="if(event.key==='Enter')crmFindClient()">
+        </div>
+        <button class="btn btn-ghost" onclick="crmFindClient()">Найти в базе</button>
+      </div>
+      <div id="lcliFound" class="card-found" style="margin-top:8px"></div>
+      <div class="muted" style="font-size:12.5px">Ведите клиента по стадиям, ставьте задачи и переносите в базу клиентов при продаже. Постоянного гостя можно взять прямо из базы — телефон и карта подставятся сами.</div>
     </div>
     <div class="crm-board" id="crmBoard"></div>
   </div>
@@ -2429,6 +2439,7 @@ function renderClientCard(){
         <div style="font-size:18px;font-weight:800">${c.name}</div>
         <div class="muted" style="font-size:13px">${c.phone} · <b style="color:var(--orange)">${c.card}</b></div>
       </div>
+      <button class="btn btn-orange btn-sm" title="Добавить клиента в воронку продаж" onclick="clientToFunnel(${c.id})">🧲 В воронку</button>
       ${role!=='cashier'?`<button class="btn btn-red btn-sm" title="Удалить клиента из базы" onclick="delClient(${c.id})">🗑 Удалить</button>`:''}
       <button onclick="closeClientCard()" style="font-size:20px;color:var(--dim);padding:4px 10px">✕</button>
     </div>
@@ -2643,6 +2654,38 @@ function addLead(){
   $('lname').value=''; $('lphone').value=''; $('lsource').value=''; $('lnote').value='';
   renderCrm(); toast('Лид добавлен в воронку 🧲');
 }
+// Клиент из базы → заявка в воронке (в app.js уходит на сервер)
+function crmFindClient(){
+  const v = ($('lcliSearch').value||'').trim();
+  const box = $('lcliFound');
+  if(!v){ box.innerHTML=''; return toast('Введите телефон, карту или имя', true); }
+  const list = (typeof matchClientLocal==='function' ? matchClientLocal(v) : []).slice(0,10);
+  box.innerHTML = list.length ? list.map(c=>`<button type="button" onclick="clientToFunnel(${c.id})">
+    <span><span class="cf-name">${c.name}</span><br><span class="cf-sub">${c.phone||''} · карта ${c.card||''}</span></span><span>→</span></button>`).join('')
+    : '<div class="cf-empty">Клиент не найден. Проверьте телефон или заведите его в разделе «Клиенты».</div>';
+}
+function clientToFunnel(id){
+  const c = clients.find(x=>x.id===id); if(!c) return;
+  const open = leads.find(l=>l.client_id===c.id && l.stage!=='Купил' && l.stage!=='Отказ');
+  if(open) return toast('По этому клиенту уже есть заявка в воронке', true);
+  leads.push({id:leadSeq++, name:c.name, phone:c.phone, source:'Из базы клиентов',
+    stage:CRM_STAGES[0], note:'', tasks:[], notes:[], client_id:c.id, created:today});
+  const box=$('lcliFound'); if(box) box.innerHTML=''; const inp=$('lcliSearch'); if(inp) inp.value='';
+  if(typeof closeClientCard==='function') closeClientCard();
+  go('crm'); renderCrm(); toast('«'+c.name+'» добавлен в воронку 🧲');
+}
+// Кто взял заявку в работу (в app.js уходит на сервер)
+function setLeadOwner(id, userId){
+  const l=leads.find(x=>x.id===id); if(!l) return;
+  const u=(window.BK_USERS||[]).find(x=>String(x.id)===String(userId));
+  l.owner_id = u?u.id:null; l.owner = u?u.name:null;
+  renderCrm(); toast(u?('Заявку ведёт '+u.name):'Ответственный снят');
+}
+function takeLead(id){
+  const me=(window.CURRENT_USER&&window.CURRENT_USER.id)||null;
+  if(!me) return toast('Не удалось определить сотрудника', true);
+  setLeadOwner(id, me);
+}
 function moveLead(id,dir){
   const l=leads.find(x=>x.id===id); if(!l) return;
   const i=CRM_STAGES.indexOf(l.stage)+dir;
@@ -2720,7 +2763,7 @@ function renderCrm(){
           <div class="lp">${l.phone||''}</div>
           ${l.source?`<div><span class="lsrc">${l.source}</span></div>`:''}
           ${l.note?`<div class="lnote lnote-clip">${l.note}</div>`:''}
-          <div class="lead-meta">${openTasks?`<span class="ltdue">☑ задач: ${openTasks}</span>`:''}${(l.notes&&l.notes.length)?`<span class="muted" style="font-size:11px">✎ ${l.notes.length}</span>`:''}</div>
+          <div class="lead-meta">${l.owner?`<span class="lead-own" title="Заявку ведёт ${l.owner}">🙋 ${l.owner.split(' ')[0]}</span>`:'<span class="lead-free" title="Никто не взял заявку в работу">свободна</span>'}${openTasks?`<span class="ltdue">☑ задач: ${openTasks}</span>`:''}${(l.notes&&l.notes.length)?`<span class="muted" style="font-size:11px">✎ ${l.notes.length}</span>`:''}</div>
         </div>`;
       }).join('') || '<div class="muted crm-empty" style="font-size:12px;padding:6px 2px">перетащите заявку сюда</div>'}
     </div>`;
@@ -2747,6 +2790,14 @@ function renderLeadCard(){
     </div>
     <div style="font-size:11px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Этап воронки</div>
     <div class="stage-chips">${CRM_STAGES.map(st=>`<button class="${l.stage===st?'act':''}" onclick="setLeadStage(${l.id},'${st}')">${st}</button>`).join('')}</div>
+    <div style="font-size:11px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 7px">Кто ведёт заявку</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select onchange="setLeadOwner(${l.id}, this.value)" style="min-width:210px">
+        <option value="">— никто не взял —</option>
+        ${(window.BK_USERS||[]).map(u=>`<option value="${u.id}" ${String(l.owner_id)===String(u.id)?'selected':''}>${u.name}</option>`).join('')}
+      </select>
+      ${l.owner_id?'':`<button class="btn btn-orange btn-sm" onclick="takeLead(${l.id})">Взять в работу</button>`}
+    </div>
     ${l.note?`<div class="lnote" style="background:var(--bg);border-radius:10px;padding:10px 12px;margin-top:12px">${l.note}</div>`:''}
     <div class="cc-sec"><h4>☑ Задачи</h4>
       ${(l.tasks||[]).map((t,ti)=>`<label class="ltask ${t.done?'done':''}">

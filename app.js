@@ -200,6 +200,7 @@
       // клиента из приложения) НЕ повод её скрывать — иначе она не видна в доске.
       stage: stageRu(l.status), note: l.note || '', converted: !!l.client_id && l.status === 'won',
       client_id: l.client_id || null,
+      owner_id: l.owner_id || null, owner: l.owner_name || null,
       tasks: (l.tasks || []).map(function (t) { return { id: t.id, text: t.title, done: t.done, due: t.due_date || '' }; }),
       notes: (l.notes || []).map(function (n) { return { id: n.id, text: n.text }; }),
       created: (l.created_at || '').slice(0, 10),
@@ -527,6 +528,8 @@
   }
 
   function installExtras() {
+    // демо-реализации из index.html — на них откатываемся без сервера
+    var _crmFind = window.crmFindClient, _cliFunnel = window.clientToFunnel;
     var STAGES = ['Новый лид', 'В работе', 'Записан', 'Купил', 'Отказ'];
     var STAGE_CODE = { 'Новый лид': 'new', 'В работе': 'contact', 'Записан': 'booking', 'Купил': 'won', 'Отказ': 'lost' };
     var rc = function () { if (typeof renderCrm === 'function') renderCrm(); };
@@ -591,6 +594,74 @@
           .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
       } else { (l.notes = l.notes || []).push({ text: text.trim() }); if (el) el.value = ''; rc(); }
     };
+    // Кто взял заявку в работу. Сотрудника пишем на сервер: воронку смотрят
+    // с разных касс, и «взял» должно быть видно всем сразу.
+    var _setOwner = window.setLeadOwner, _take = window.takeLead;
+    window.setLeadOwner = function (id, userId) {
+      if (!SERVER) return _setOwner ? _setOwner.apply(this, arguments) : undefined;
+      api('/crm/leads/' + id + '/owner', { method: 'POST', body: { owner_id: userId || null } })
+        .then(function (lead) {
+          var l = findLead(id);
+          if (l) { l.owner_id = lead.owner_id || null; l.owner = lead.owner_name || null; }
+          rc();
+          if (typeof toast === 'function') {
+            toast(lead.owner_name ? 'Заявку ведёт ' + lead.owner_name : 'Ответственный снят');
+          }
+        })
+        .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
+    };
+    window.takeLead = function (id) {
+      if (!SERVER) return _take ? _take.apply(this, arguments) : undefined;
+      if (!ME || !ME.id) { if (typeof toast === 'function') toast('Не удалось определить сотрудника', true); return; }
+      window.setLeadOwner(id, ME.id);
+    };
+
+    // Клиент из базы → заявка в воронке. Ищем по всей базе (телефон, карта,
+    // имя), а не среди загруженных: постоянного гостя иначе не найти.
+    window.crmFindClient = function () {
+      var inp = document.getElementById('lcliSearch');
+      var box = document.getElementById('lcliFound');
+      var v = ((inp && inp.value) || '').trim();
+      if (box) box.innerHTML = '';
+      if (!v) { if (typeof toast === 'function') toast('Введите телефон, карту или имя', true); return; }
+      if (!SERVER) return _crmFind ? _crmFind.apply(this, arguments) : undefined;
+      if (box) box.innerHTML = '<div class="cf-empty">Ищем…</div>';
+      api('/clients/lookup?q=' + encodeURIComponent(v)).then(function (list) {
+        if (!list.length) {
+          if (box) box.innerHTML = '<div class="cf-empty">Клиент не найден. Проверьте телефон или заведите его в разделе «Клиенты».</div>';
+          return;
+        }
+        if (box) box.innerHTML = list.map(function (c) {
+          var sub = [c.phone, 'карта ' + c.card_no, Number(c.bonus) + ' бонусов'].filter(Boolean).join(' · ');
+          return '<button type="button" onclick="clientToFunnel(' + c.id + ')">' +
+            '<span><span class="cf-name">' + cardEsc(c.full_name) + '</span><br>' +
+            '<span class="cf-sub">' + cardEsc(sub) + '</span></span><span>→</span></button>';
+        }).join('');
+      }).catch(function (e) {
+        if (box) box.innerHTML = '<div class="cf-empty">' + cardEsc(e.message) + '</div>';
+      });
+    };
+    window.clientToFunnel = function (id) {
+      if (!SERVER) return _cliFunnel ? _cliFunnel.apply(this, arguments) : undefined;
+      api('/crm/leads/from-client', { method: 'POST', body: { client_id: id } })
+        .then(function (lead) {
+          var inp = document.getElementById('lcliSearch'); if (inp) inp.value = '';
+          var box = document.getElementById('lcliFound'); if (box) box.innerHTML = '';
+          if (typeof closeClientCard === 'function') closeClientCard();
+          if (typeof go === 'function') go('crm');
+          return refreshLeads().then(function () {
+            if (typeof toast === 'function') toast('«' + lead.name + '» в воронке 🧲 — поставьте задачу и позвоните');
+          });
+        })
+        .catch(function (e) {
+          // уже есть открытая заявка — показываем её, а не заводим вторую
+          if (typeof closeClientCard === 'function') closeClientCard();
+          if (typeof go === 'function') go('crm');
+          refreshLeads();
+          if (typeof toast === 'function') toast(e.message || 'Не удалось добавить', true);
+        });
+    };
+
     window.convertLead = function (id) {
       var l = findLead(id); if (!l) return;
       if (!confirm('Добавить «' + l.name + '» в базу клиентов и выдать карту? Заявка останется в воронке.')) return;
