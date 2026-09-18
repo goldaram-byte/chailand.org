@@ -72,7 +72,8 @@ clientsRouter.get(
               sc.last_buy,
               bd.next_days AS kid_bday_in,
               COALESCE(kc.n,0)::int AS kids_count,
-              COALESCE(pa.n,0)::int AS active_passes
+              COALESCE(pa.n,0)::int AS active_passes,
+              ol.id AS lead_id, ol.status AS lead_status, ol.owner_name AS lead_owner
          FROM clients c
          LEFT JOIN (SELECT client_id, count(*) AS buys, max(created_at) AS last_buy
                       FROM sales WHERE is_return=false AND client_id IS NOT NULL GROUP BY client_id) sc
@@ -86,6 +87,14 @@ clientsRouter.get(
          LEFT JOIN (SELECT client_id, count(*) AS n FROM passes
                      WHERE status='active' AND valid_to >= current_date GROUP BY client_id) pa
                 ON pa.client_id = c.id
+         -- открытая заявка по клиенту: чтобы в списке было видно, что им уже
+         -- занимаются, и второй сотрудник не тянул его в воронку повторно
+         LEFT JOIN LATERAL (
+           SELECT l.id, l.status, u.full_name AS owner_name
+             FROM leads l LEFT JOIN users u ON u.id = l.owner_id
+            WHERE l.client_id = c.id AND l.status NOT IN ('won','lost')
+            ORDER BY l.updated_at DESC LIMIT 1
+         ) ol ON true
         ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
         ORDER BY c.created_at DESC
         LIMIT 200`,

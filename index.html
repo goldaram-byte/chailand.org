@@ -381,6 +381,10 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 .lead-cli{display:inline-block;font-size:10.5px;font-weight:700;color:var(--green);background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:1px 7px;vertical-align:2px}
 .lead-own{display:inline-block;font-size:10.5px;font-weight:700;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:1px 7px}
 .lead-free{display:inline-block;font-size:10.5px;font-weight:700;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:1px 7px}
+/* клиент уже в воронке: видно в списке и в карточке, чтобы не тянуть повторно */
+.lead-in{display:inline-block;font-size:10.5px;font-weight:700;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:1px 8px;cursor:pointer;white-space:nowrap;vertical-align:1px}
+.lead-in.free{color:#b45309;background:#fffbeb;border-color:#fde68a}
+.lead-in:hover{filter:brightness(.95)}
 .crm-col.dragover{outline:2px dashed var(--orange);outline-offset:-2px;background:#fff7ed}
 .stage-chips{display:flex;gap:6px;flex-wrap:wrap}
 .stage-chips button{padding:8px 13px;border-radius:20px;background:#fff;border:1px solid var(--line);font-weight:600;font-size:12.5px;color:var(--dim)}
@@ -2327,11 +2331,18 @@ function addClient(){
   $('ncName').value=''; $('ncPhone').value='';
   renderClients(); toast('Клиент создан. Выдана карта '+card+' ⭐');
 }
+// Метка «уже в воронке»: кто ведёт и на каком этапе; клик открывает заявку
+function leadBadge(c){
+  if(!c.lead) return '';
+  const who = c.lead.owner ? 'ведёт '+c.lead.owner.split(' ')[0] : 'свободна';
+  return `<span class="lead-in ${c.lead.owner?'':'free'}" title="Заявка в воронке · этап «${c.lead.stage}»${c.lead.owner?' · ведёт '+c.lead.owner:' · никто не взял в работу'}"
+    onclick="event.stopPropagation(); openLeadCard(${c.lead.id})">🧲 ${who}</span>`;
+}
 function renderClients(){
   $('cliTbl').innerHTML = clients.map(c=>{
     const soon = (c.kids||[]).some(k=>daysToBirthday(k.birth)<=30);
     return `<tr style="cursor:pointer" onclick="openClientCard(${c.id})" title="Открыть карточку клиента">
-    <td>${c.name} ${soon?'<span title="Скоро день рождения ребёнка">🎂</span>':''}</td>
+    <td>${c.name} ${soon?'<span title="Скоро день рождения ребёнка">🎂</span>':''} ${leadBadge(c)}</td>
     <td>${c.phone}</td><td><b style="color:var(--orange)">${c.card}</b></td><td>${c.bonus}</td><td>${c.buys}</td>
     <td>${(kn=>kn>0?'👶 '+kn:'<span class="muted">—</span>')(c.kidsCount!=null?c.kidsCount:(c.kids||[]).length)}</td>
     <td>${c.passes?`<span class="pass-badge" title="Действующих абонементов: ${c.passes}">🎟 ${c.passes>1?c.passes+' шт.':'есть'}</span>`:'<span class="muted">—</span>'}</td>
@@ -2437,9 +2448,11 @@ function renderClientCard(){
       <div class="avatar" style="width:52px;height:52px;font-size:19px">${c.name.split(' ').map(w=>w[0]).slice(0,2).join('')}</div>
       <div style="flex:1">
         <div style="font-size:18px;font-weight:800">${c.name}</div>
-        <div class="muted" style="font-size:13px">${c.phone} · <b style="color:var(--orange)">${c.card}</b></div>
+        <div class="muted" style="font-size:13px">${c.phone} · <b style="color:var(--orange)">${c.card}</b> ${leadBadge(c)}</div>
       </div>
-      <button class="btn btn-orange btn-sm" title="Добавить клиента в воронку продаж" onclick="clientToFunnel(${c.id})">🧲 В воронку</button>
+      ${c.lead
+        ? `<button class="btn btn-ghost btn-sm" title="Заявка уже в воронке — открыть её" onclick="closeClientCard(); openLeadCard(${c.lead.id})">🧲 Открыть заявку</button>`
+        : `<button class="btn btn-orange btn-sm" title="Добавить клиента в воронку продаж" onclick="clientToFunnel(${c.id})">🧲 В воронку</button>`}
       ${role!=='cashier'?`<button class="btn btn-red btn-sm" title="Удалить клиента из базы" onclick="delClient(${c.id})">🗑 Удалить</button>`:''}
       <button onclick="closeClientCard()" style="font-size:20px;color:var(--dim);padding:4px 10px">✕</button>
     </div>
