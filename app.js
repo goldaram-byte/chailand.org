@@ -802,17 +802,42 @@
       if (el) el.value = v;
       return v;
     }
+    function kpiLocVal() {
+      var sel = document.getElementById('kpiLoc');
+      if (!sel) return curLoc() || '';
+      var all = window.ALL_LOCS || [];
+      if (sel.options.length !== all.length + 1) {
+        var keep = sel.value;
+        sel.innerHTML = '<option value="">Все парки</option>' + all.map(function (l) {
+          return '<option value="' + l.id + '">' + cardEsc(l.name) + '</option>';
+        }).join('');
+        // по умолчанию — парк этой кассы; если касса не привязана, первый парк
+        sel.value = keep || (curLoc() ? String(curLoc()) : (all[0] ? String(all[0].id) : ''));
+        if (!sel.value && all[0] && !keep) sel.value = String(all[0].id);
+      }
+      return sel.value;
+    }
+    var KPI_STATE_RU = { done: 'план выполнен', over: 'перевыполнен', below: 'план не выполнен', none: 'план не задан' };
     window.loadKpi = function () {
       if (!SERVER) return;
       var month = kpiMonthVal();
+      var loc = kpiLocVal();
+      var isBoss = !!(ME && (ME.role === 'owner' || ME.role === 'admin'));
       var box = document.getElementById('kpiGoalsBox');
-      if (box) box.hidden = !(ME && (ME.role === 'owner' || ME.role === 'admin'));
-      api('/reports/kpi-cashiers?month=' + month + (curLoc() ? '&location_id=' + curLoc() : '')).then(function (r) {
-        var g = r.goals || {};
-        ['Bookings', 'Passes', 'Water'].forEach(function (k) {
-          var el = document.getElementById('kpiGoal' + k);
-          if (el && document.activeElement !== el) el.value = g[k.toLowerCase()] || '';
-        });
+      var hint = document.getElementById('kpiAllHint');
+      api('/reports/kpi-cashiers?month=' + month + (loc ? '&location_id=' + loc : '')).then(function (r) {
+        var g = r.goals || null;
+        if (box) box.hidden = !(isBoss && loc);
+        if (hint) hint.hidden = !!loc;
+        if (isBoss && loc) {
+          var pl = (r.plans && r.plans[loc]) || g || {};
+          var pn = document.getElementById('kpiPlanLoc');
+          if (pn) pn.textContent = (typeof locName === 'function' && locName(loc)) || 'парк';
+          [['kpiGoalBookings', 'bookings'], ['kpiGoalPasses', 'passes'], ['kpiGoalWater', 'water'], ['kpiBonusPct', 'bonus_pct'], ['kpiBonusPctOver', 'bonus_pct_over']].forEach(function (f) {
+            var el = document.getElementById(f[0]);
+            if (el && document.activeElement !== el) el.value = pl[f[1]] || '';
+          });
+        }
         function cell(val, goal, sum) {
           var pct = goal ? Math.min(100, Math.round(val / goal * 100)) : 0;
           var done = goal && val >= goal;
@@ -821,32 +846,50 @@
             (goal ? '<div class="dbar' + (done ? ' ok' : '') + '"><span style="width:' + pct + '%"></span></div>' : '') +
             (sum ? '<div class="kp">' + fmtNum(sum) + '</div>' : '') + '</td>';
         }
+        function bonusCell(x) {
+          var b = Number(x.bonus || 0);
+          var html = '<td class="kpi-cell"><b' + (b ? ' style="color:var(--green)"' : '') + '>' + fmtNum(b) + '</b>';
+          if (loc) {
+            html += '<div class="kp">' + (x.bonus_pct ? x.bonus_pct + '% · ' : '') + (KPI_STATE_RU[x.bonus_state] || '') + '</div>';
+          } else {
+            (x.bonus_by_loc || []).forEach(function (p) {
+              html += '<div class="kp">' + cardEsc(p.location) + ': ' + p.bookings + (p.plan ? ' / ' + p.plan : '') +
+                (p.bonus ? ' · ' + p.pct + '% = ' + fmtNum(p.bonus) : (p.plan ? ' · ' + (KPI_STATE_RU[p.state] || '') : '')) + '</div>';
+            });
+          }
+          return html + '</td>';
+        }
         var tb = document.getElementById('kpiTbl'); if (!tb) return;
         var staff = r.staff || [];
         // сотрудников без единой продажи за месяц не показываем — кроме кассиров, у них план
         var rows = staff.filter(function (x) { return x.role === 'cashier' || x.bookings || x.passes || x.water || x.checks; });
-        var tot = { bookings: 0, passes: 0, water: 0, checks: 0, revenue: 0, bookings_sum: 0, passes_sum: 0, water_sum: 0 };
+        var tot = { bookings: 0, passes: 0, water: 0, checks: 0, revenue: 0, bookings_sum: 0, passes_sum: 0, water_sum: 0, bonus: 0 };
+        var gb = g ? g.bookings : 0, gp = g ? g.passes : 0, gw = g ? g.water : 0;
         tb.innerHTML = rows.map(function (x) {
           Object.keys(tot).forEach(function (k) { tot[k] += Number(x[k] || 0); });
           return '<tr><td><b>' + cardEsc(x.name) + '</b><div class="kp muted" style="font-size:11px">' + (ROLE_RU[x.role] || x.role) + (x.active === false ? ' · не работает' : '') + '</div></td>' +
-            cell(x.bookings, g.bookings, x.bookings_sum) + cell(x.passes, g.passes, x.passes_sum) + cell(x.water, g.water, x.water_sum) +
-            '<td>' + x.checks + '</td><td>' + fmtNum(x.revenue) + '</td></tr>';
-        }).join('') || '<tr><td colspan="6" class="muted">За этот месяц продаж ещё нет</td></tr>';
+            cell(x.bookings, gb, x.bookings_sum) + cell(x.passes, gp, x.passes_sum) + cell(x.water, gw, x.water_sum) +
+            '<td>' + x.checks + '</td><td>' + fmtNum(x.revenue) + '</td>' + bonusCell(x) + '</tr>';
+        }).join('') || '<tr><td colspan="7" class="muted">За этот месяц продаж ещё нет</td></tr>';
         if (rows.length > 1) {
           // план на всех: план одного кассира × число кассиров в таблице
           var nCash = rows.filter(function (x) { return x.role === 'cashier'; }).length;
           var tg = function (goal) { return goal && nCash ? goal * nCash : 0; };
           tb.insertAdjacentHTML('beforeend', '<tr style="background:var(--bg);font-weight:700"><td>Итого' +
-            (nCash ? '<div class="kp muted" style="font-size:11px;font-weight:400">план × ' + nCash + '</div>' : '') + '</td>' +
-            cell(tot.bookings, tg(g.bookings), tot.bookings_sum) + cell(tot.passes, tg(g.passes), tot.passes_sum) + cell(tot.water, tg(g.water), tot.water_sum) +
-            '<td>' + tot.checks + '</td><td>' + fmtNum(tot.revenue) + '</td></tr>');
+            (nCash && g ? '<div class="kp muted" style="font-size:11px;font-weight:400">план × ' + nCash + '</div>' : '') + '</td>' +
+            cell(tot.bookings, tg(gb), tot.bookings_sum) + cell(tot.passes, tg(gp), tot.passes_sum) + cell(tot.water, tg(gw), tot.water_sum) +
+            '<td>' + tot.checks + '</td><td>' + fmtNum(tot.revenue) + '</td><td class="kpi-cell"><b>' + fmtNum(tot.bonus) + '</b></td></tr>');
         }
       }).catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Не удалось загрузить KPI', true); });
     };
-    window.saveKpiGoals = function () {
-      var v = function (id) { return Math.max(0, Math.round(Number((document.getElementById(id) || {}).value || 0))); };
-      api('/settings', { method: 'PUT', body: { kpi_goals: { bookings: v('kpiGoalBookings'), passes: v('kpiGoalPasses'), water: v('kpiGoalWater') } } })
-        .then(function () { if (typeof toast === 'function') toast('План на месяц сохранён'); window.loadKpi(); })
+    window.saveKpiPlan = function () {
+      var loc = kpiLocVal();
+      if (!loc) { if (typeof toast === 'function') toast('Выберите парк — план задаётся для каждого отдельно', true); return; }
+      var v = function (id) { return Math.max(0, Number((document.getElementById(id) || {}).value || 0)); };
+      api('/reports/kpi-plans/' + loc, { method: 'PUT', body: {
+        bookings: Math.round(v('kpiGoalBookings')), passes: Math.round(v('kpiGoalPasses')), water: Math.round(v('kpiGoalWater')),
+        bonus_pct: v('kpiBonusPct'), bonus_pct_over: v('kpiBonusPctOver') } })
+        .then(function () { if (typeof toast === 'function') toast('План для парка сохранён'); window.loadKpi(); })
         .catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
     };
     var _goKpi = window.go;
