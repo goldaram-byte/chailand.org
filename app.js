@@ -828,15 +828,17 @@
         var tot = { bookings: 0, passes: 0, water: 0, checks: 0, revenue: 0, bookings_sum: 0, passes_sum: 0, water_sum: 0 };
         tb.innerHTML = rows.map(function (x) {
           Object.keys(tot).forEach(function (k) { tot[k] += Number(x[k] || 0); });
-          return '<tr><td><b>' + cardEsc(x.name) + '</b><div class="kp muted" style="font-size:11px">' + (ROLE_RU[x.role] || x.role) + '</div></td>' +
+          return '<tr><td><b>' + cardEsc(x.name) + '</b><div class="kp muted" style="font-size:11px">' + (ROLE_RU[x.role] || x.role) + (x.active === false ? ' · не работает' : '') + '</div></td>' +
             cell(x.bookings, g.bookings, x.bookings_sum) + cell(x.passes, g.passes, x.passes_sum) + cell(x.water, g.water, x.water_sum) +
             '<td>' + x.checks + '</td><td>' + fmtNum(x.revenue) + '</td></tr>';
         }).join('') || '<tr><td colspan="6" class="muted">За этот месяц продаж ещё нет</td></tr>';
         if (rows.length > 1) {
-          tb.insertAdjacentHTML('beforeend', '<tr style="background:var(--bg);font-weight:700"><td>Итого</td>' +
-            '<td>' + tot.bookings + ' <span class="kp muted">' + fmtNum(tot.bookings_sum) + '</span></td>' +
-            '<td>' + tot.passes + ' <span class="kp muted">' + fmtNum(tot.passes_sum) + '</span></td>' +
-            '<td>' + tot.water + ' <span class="kp muted">' + fmtNum(tot.water_sum) + '</span></td>' +
+          // план на всех: план одного кассира × число кассиров в таблице
+          var nCash = rows.filter(function (x) { return x.role === 'cashier'; }).length;
+          var tg = function (goal) { return goal && nCash ? goal * nCash : 0; };
+          tb.insertAdjacentHTML('beforeend', '<tr style="background:var(--bg);font-weight:700"><td>Итого' +
+            (nCash ? '<div class="kp muted" style="font-size:11px;font-weight:400">план × ' + nCash + '</div>' : '') + '</td>' +
+            cell(tot.bookings, tg(g.bookings), tot.bookings_sum) + cell(tot.passes, tg(g.passes), tot.passes_sum) + cell(tot.water, tg(g.water), tot.water_sum) +
             '<td>' + tot.checks + '</td><td>' + fmtNum(tot.revenue) + '</td></tr>');
         }
       }).catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Не удалось загрузить KPI', true); });

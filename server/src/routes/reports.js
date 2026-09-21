@@ -87,7 +87,7 @@ reportsRouter.get(
     }
     const onlyMe = !['owner', 'admin'].includes(req.user.role);
     const rows = await q(
-      `SELECT u.id, u.full_name, u.role_code,
+      `SELECT u.id, u.full_name, u.role_code, u.is_active,
               COALESCE(bk.n, 0)::int AS bookings, COALESCE(bk.sum, 0) AS bookings_sum,
               COALESCE(ps.n, 0)::int AS passes,   COALESCE(ps.sum, 0) AS passes_sum,
               COALESCE(wt.n, 0)::int AS water,    COALESCE(wt.sum, 0) AS water_sum,
@@ -113,7 +113,10 @@ reportsRouter.get(
                       FROM sales s
                      WHERE NOT s.is_return AND s.created_at >= $1 AND s.created_at < $2${locSale}
                      GROUP BY s.cashier_id) ch ON ch.uid = u.id
-        WHERE u.is_active ${onlyMe ? 'AND u.id = ' + Number(req.user.id) : ''}
+        -- уволенных показываем, только если в этом месяце у них были продажи:
+        -- иначе «Итого» не сойдётся с приходами за месяц
+        WHERE (u.is_active OR bk.n IS NOT NULL OR ps.n IS NOT NULL OR wt.n IS NOT NULL OR ch.n IS NOT NULL)
+          ${onlyMe ? 'AND u.id = ' + Number(req.user.id) : ''}
         ORDER BY (COALESCE(bk.n,0) + COALESCE(ps.n,0) + COALESCE(wt.n,0)) DESC, u.full_name`,
       params
     );
@@ -123,7 +126,7 @@ reportsRouter.get(
       month: `${y}-${String(mo).padStart(2, '0')}`,
       goals: { bookings: Number(goals.bookings || 0), passes: Number(goals.passes || 0), water: Number(goals.water || 0) },
       staff: rows.map((r) => ({
-        id: r.id, name: r.full_name, role: r.role_code,
+        id: r.id, name: r.full_name, role: r.role_code, active: r.is_active,
         bookings: r.bookings, bookings_sum: Number(r.bookings_sum),
         passes: r.passes, passes_sum: Number(r.passes_sum),
         water: r.water, water_sum: Number(r.water_sum),
