@@ -50,6 +50,7 @@ function publicClient(c) {
     bonus: Number(c.bonus || 0),
     referral_code: c.referral_code,
     app_installed: c.app_installed,
+    pass_temp: !!c.pass_temp,
   };
 }
 
@@ -171,7 +172,7 @@ clientAppRouter.post(
       return res.status(400).json({ error: 'Текущий пароль неверный' });
     }
     if (String(new_password || '').length < 4) return res.status(400).json({ error: 'Новый пароль — минимум 4 символа' });
-    await q('UPDATE clients SET pass_hash=$2 WHERE id=$1', [req.client.id, hashPassword(String(new_password))]);
+    await q('UPDATE clients SET pass_hash=$2, pass_temp=false WHERE id=$1', [req.client.id, hashPassword(String(new_password))]);
     res.json({ ok: true });
   })
 );

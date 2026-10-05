@@ -678,6 +678,17 @@
       } else { l.client_id = Date.now(); rc(); }
     };
     // Удаление клиента из базы (карточка клиента)
+    window.resetAppPassword = function (id) {
+      if (!confirm('Выдать клиенту новый временный пароль от приложения? Старый пароль перестанет работать.')) return;
+      api('/clients/' + id + '/app-password', { method: 'POST', body: {} }).then(function (r) {
+        var box = document.getElementById('appPwResult');
+        if (box) box.innerHTML = '<div style="background:var(--bg);border:1px dashed var(--orange);border-radius:12px;padding:12px 14px">' +
+          '<div class="muted" style="font-size:12px">Временный пароль для входа по номеру ' + cardEsc(r.phone || '') + '</div>' +
+          '<div style="font-size:28px;font-weight:800;letter-spacing:4px;margin:4px 0">' + cardEsc(r.password) + '</div>' +
+          '<div class="muted" style="font-size:12px">Сообщите гостю лично. После входа приложение попросит задать свой пароль.</div></div>';
+        if (typeof toast === 'function') toast('Временный пароль выдан');
+      }).catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Не удалось сбросить пароль', true); });
+    };
     window.delClient = function (id) {
       var c = clients.find(function (x) { return x.id === id; }); if (!c) return;
       if (!confirm('Удалить клиента «' + c.name + '» из базы?\nКарта, бонусы и данные о детях будут удалены безвозвратно. История продаж останется без привязки к клиенту.')) return;

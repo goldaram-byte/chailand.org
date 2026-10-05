@@ -2494,6 +2494,11 @@ function renderClientCard(){
         <div style="align-self:end"><button class="btn btn-orange btn-sm" onclick="giveBonus(${c.id})">Провести</button></div>
       </div>
     </div>`:''}
+    <div class="cc-sec"><h4>📱 Личный кабинет</h4>
+      <div class="muted" style="font-size:12.5px;margin-bottom:10px">Гость забыл пароль от приложения? Проверьте, что перед вами владелец карты (карта или телефон), и выдайте временный пароль. Он показывается один раз; после входа гость задаст свой.</div>
+      <button class="btn btn-ghost btn-sm" onclick="resetAppPassword(${c.id})">🔑 Выдать временный пароль</button>
+      <div id="appPwResult" style="margin-top:10px"></div>
+    </div>
     <div class="cc-sec"><h4>🧾 История покупок</h4>${histHtml}</div>
     <div class="cc-sec"><h4>🧒 Дети</h4>
       ${kidsHtml}
@@ -2543,6 +2548,7 @@ function renderReport(){
 /* ================= НАСТРОЙКИ ================= */
 // KPI кассиров — в app.js уходит на сервер; в демо только заглушка
 function loadKpi(){}
+function resetAppPassword(){ toast('Доступно при работе с сервером', true); }
 function saveKpiPlan(){ toast('Доступно при работе с сервером', true); }
 function setTab(t, btn){
   document.querySelectorAll('.set-pane').forEach(x=>x.hidden=true);
