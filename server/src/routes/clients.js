@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { q, q1, tx } from '../db.js';
-import { requireAuth, requirePerm } from '../auth.js';
+import { requireAuth, requirePerm, hashPassword } from '../auth.js';
+import { randomInt } from 'crypto';
 import { ah, audit } from '../util.js';
 import { createClient, phoneCanonical, findByPhoneDigits } from '../services/clients.js';
 
@@ -177,6 +178,27 @@ clientsRouter.get(
 // Только владелец/администратор: операция переносит деньги (бонусы) и историю.
 // Всё, что было у дубля — покупки, бонусные операции, абонементы, дети, брони
 // и заявки — переезжает на выбранную карту, дубль удаляется.
+// POST /api/clients/:id/app-password — гость забыл пароль от личного кабинета.
+// Сотрудник (после проверки личности по карте/телефону) выдаёт временный
+// 6-значный пароль; он показывается один раз, в системе хранится только хеш.
+// Клиент входит по нему и меняет пароль в приложении (флаг pass_temp).
+clientsRouter.post(
+  '/:id/app-password',
+  ah(async (req, res) => {
+    const id = Number(req.params.id);
+    const c = await q1('SELECT id, full_name, phone FROM clients WHERE id=$1', [id]);
+    if (!c) return res.status(404).json({ error: 'Клиент не найден' });
+    if (!c.phone) return res.status(400).json({ error: 'У клиента нет телефона — вход в приложение идёт по номеру' });
+    const password = String(randomInt(100000, 1000000));
+    await q(
+      `UPDATE clients SET pass_hash=$2, pass_temp=true, app_installed=true WHERE id=$1`,
+      [id, hashPassword(password)]
+    );
+    await audit(req, 'client.app_password_reset', { entity: 'client', entityId: id });
+    res.json({ ok: true, password, phone: c.phone });
+  })
+);
+
 clientsRouter.post(
   '/:id/merge',
   ah(async (req, res) => {

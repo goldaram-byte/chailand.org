@@ -324,6 +324,7 @@
 
       <div class="panel">
         <h2>🔒 Безопасность</h2>
+        <div id="pwTempHint" class="hidden" style="background:#fff7ed;border:1px solid #fdba74;border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:14px">Вы вошли по временному паролю, который выдали в парке. Задайте свой: введите временный как текущий и придумайте новый.</div>
         <label class="fld"><span class="lbl">Текущий пароль</span><input id="pwOld" type="password" autocomplete="current-password" /></label>
         <label class="fld"><span class="lbl">Новый пароль</span><input id="pwNew" type="password" autocomplete="new-password" /></label>
         <div style="margin-top:16px"><button class="btn ghost" onclick="changePw()">Сменить пароль</button></div>
@@ -411,6 +412,7 @@
       TK = r.token; localStorage.setItem(TKEY, TK);
       localStorage.removeItem('gab_lk_ref');
       enterApp();
+      if (r.client && r.client.pass_temp){ go('prof'); toast('Вы вошли по временному паролю — задайте свой в разделе «Безопасность»'); }
     }).catch(function(e){ toast(e.message, true); })
       .then(function(){ btn.disabled = false; });
   };
@@ -468,6 +470,7 @@
       $('cName').textContent = m.full_name || '—';
       $('cCard').textContent = m.card_no || '—';
       $('cBonus').textContent = fmt(m.bonus);
+      var th = $('pwTempHint'); if (th) th.className = m.pass_temp ? '' : 'hidden';
     }).catch(function(e){ toast(e.message, true); });
   }
 
@@ -623,7 +626,7 @@
     var o=$('pwOld').value, n=$('pwNew').value;
     if (n.length<4){ toast('Новый пароль — минимум 4 символа', true); return; }
     api('/me/password', { method:'POST', body:{ old_password:o, new_password:n } })
-      .then(function(){ $('pwOld').value=''; $('pwNew').value=''; toast('Пароль изменён'); })
+      .then(function(){ $('pwOld').value=''; $('pwNew').value=''; toast('Пароль изменён'); if (ME) ME.pass_temp=false; var th=$('pwTempHint'); if (th) th.className='hidden'; })
       .catch(function(e){ toast(e.message, true); });
   };
 

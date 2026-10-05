@@ -340,6 +340,8 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS pass_hash text;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS email     text;
 -- Разовый бонус за добавление ребёнка в приложении: когда начислен (NULL = ещё нет)
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS kid_bonus_at timestamptz;
+-- пароль приложения сброшен сотрудником: временный, клиенту нужно сменить его в приложении
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS pass_temp boolean NOT NULL DEFAULT false;
 -- Быстрый вход по телефону: сравниваем только цифры номера
 CREATE INDEX IF NOT EXISTS idx_clients_phone_digits
   ON clients ((regexp_replace(phone, '\D', '', 'g')));
