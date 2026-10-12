@@ -637,7 +637,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
       </div>
 
       <div class="card" style="margin-bottom:0">
-        <h3>🧾 Чек</h3>
+        <h3>🧾 Чек <button class="btn btn-ghost btn-sm" style="margin-left:auto" title="Продажа на произвольную сумму с комментарием, за что" onclick="openFreeSale()">✍️ Свободная продажа</button></h3>
         <div id="clientSlot"></div>
         <div id="checkLines"><div class="muted" style="padding:12px 0;text-align:center">Нажмите тариф слева</div></div>
         <div class="totrow big"><span>Итого:</span><span id="checkTotal">0 ₽</span></div>
@@ -1091,6 +1091,22 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 </div>
 
 <!-- Напоминание кассиру: предложить сопутствующий товар перед оплатой -->
+<!-- ============ СВОБОДНАЯ ПРОДАЖА ============ -->
+<div class="pay-overlay" id="freeOverlay" onclick="if(event.target===this)closeFreeSale()">
+  <div class="pay-modal" style="max-width:460px">
+    <div style="font-size:17px;font-weight:800;margin-bottom:4px">✍️ Свободная продажа</div>
+    <div class="muted" style="font-size:13px;margin-bottom:12px">Для услуги или товара, которых нет в тарифах. Сумма — любая, комментарий обязателен: он попадёт в чек и в отчёты как название позиции.</div>
+    <div class="frm" style="grid-template-columns:1fr;margin-bottom:0">
+      <div><label>Сумма, ₽</label><input type="number" id="fsAmount" min="1" step="1" placeholder="например, 1500" onkeydown="if(event.key==='Enter')addFreeSale()"></div>
+      <div><label>За что</label><input id="fsComment" maxlength="120" placeholder="например, аренда зала 1 час, доп. аниматор, утерянный браслет" onkeydown="if(event.key==='Enter')addFreeSale()"></div>
+    </div>
+    <div style="display:flex;gap:9px;margin-top:14px">
+      <button class="btn btn-orange btn-big" style="flex:1" onclick="addFreeSale()">Добавить в чек</button>
+      <button class="btn btn-ghost" onclick="closeFreeSale()">Отмена</button>
+    </div>
+  </div>
+</div>
+
 <div class="pay-overlay" id="upsOverlay" onclick="if(event.target===this)upsSkip()">
   <div class="pay-modal" style="max-width:520px">
     <div style="font-size:17px;font-weight:800;margin-bottom:4px">💡 Предложите гостю</div>
@@ -1555,6 +1571,25 @@ function posSellPass(typeId){
 // id позиции может быть и числом (билет, товар), и строкой (абонемент),
 // поэтому сравниваем как строки
 const sameId = (a,b) => String(a)===String(b);
+// Свободная продажа: позиция без тарифа — любая сумма и обязательный комментарий «за что».
+// В чеке и отчётах она видна как «Свободная продажа — <комментарий>».
+let freeSeq = 0;
+function openFreeSale(){
+  if(!shift) return toast('Сначала откройте смену', true);
+  $('fsAmount').value=''; $('fsComment').value='';
+  $('freeOverlay').classList.add('open');
+  setTimeout(()=>$('fsAmount').focus(), 50);
+}
+function closeFreeSale(){ $('freeOverlay').classList.remove('open'); }
+function addFreeSale(){
+  const amount = Math.round(Number($('fsAmount').value)*100)/100;
+  const note = $('fsComment').value.trim().replace(/\s+/g,' ');
+  if(!(amount>0) || amount>1000000) return toast('Введите сумму больше нуля', true);
+  if(note.length<3) return toast('Напишите, за что принимается оплата', true);
+  check.push({ t:{ id:'free-'+(++freeSeq), name:'Свободная продажа — '+note, price:amount, free:true, note }, qty:1 });
+  renderCheck(); closeFreeSale();
+  toast('Добавлено в чек: '+fmt(amount));
+}
 function addLine(t){
   const line = check.find(l=>sameId(l.t.id, t.id));
   if(line) line.qty++; else check.push({t, qty:1});
@@ -1575,8 +1610,9 @@ function chQty(tid,d){
 const checkTotal = () => check.reduce((a,l)=>a+l.t.price*l.qty,0);
 function renderCheck(){
   $('checkLines').innerHTML = check.length ? check.map(l=>`
-    <div class="cl"><span class="nm">${l.t.passType?'🎫 ':''}${l.t.name}</span>
-    <button onclick="chQty('${l.t.id}',-1)">−</button><span class="qty">${l.qty}</span><button onclick="chQty('${l.t.id}',1)">+</button>
+    <div class="cl"><span class="nm">${l.t.passType?'🎫 ':''}${l.t.free?'✍️ ':''}${l.t.name}</span>
+    ${l.t.free?`<button onclick="chQty('${l.t.id}',-1)" title="Убрать из чека">✕</button><span class="qty"></span><span></span>`
+      :`<button onclick="chQty('${l.t.id}',-1)">−</button><span class="qty">${l.qty}</span><button onclick="chQty('${l.t.id}',1)">+</button>`}
     <span style="min-width:72px;text-align:right;font-weight:700">${fmt(l.t.price*l.qty)}</span></div>`).join('')
     : '<div class="muted" style="padding:12px 0;text-align:center">Нажмите тариф слева</div>';
   $('checkTotal').textContent = fmt(checkTotal());
