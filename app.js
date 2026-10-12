@@ -2849,8 +2849,11 @@
       var items = check.map(function (l) {
         // абонемент — позиция чека без товара на складе: сервер выдаст карту сам
         if (l.t.passType) return { pass_type_id: l.t.passType, name: l.t.name, qty: l.qty, price: l.t.price };
+        // свободная продажа — позиция без товара: только название (с комментарием), количество и сумма
+        if (l.t.free) return { name: l.t.name, qty: l.qty, price: l.t.price };
         return { product_id: l.t.pid || l.t.id, group_id: l.t.group, name: l.t.name, qty: l.qty, price: l.t.price };
       });
+      var freeNotes = check.filter(function (l) { return l.t.free; }).map(function (l) { return l.t.note; }).join('; ');
       var cash = PAY.method === 'cash' ? toPay : 0;
       var card = PAY.method === 'cash' ? 0 : toPay;
       var payments = { cash: cash, card: card, bonus: PAY.bonusSpend || 0 };
@@ -2863,6 +2866,7 @@
             cash_amount: cash, card_amount: card, bonus_used: PAY.bonusSpend || 0,
             method: PAY.method === 'cash' ? 'cash' : 'card',
             location_id: deviceLoc(),
+            comment: freeNotes || undefined,
             fiscal: fiscal || undefined,
           },
         });
