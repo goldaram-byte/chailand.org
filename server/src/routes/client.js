@@ -9,6 +9,7 @@ import { q, q1, tx } from '../db.js';
 import { ah } from '../util.js';
 import { hashPassword, checkPassword, signClientToken, requireClient } from '../auth.js';
 import { createClient } from '../services/clients.js';
+import { getVapid, validSubscription, saveSubscription, removeSubscription, countSubscriptions } from '../services/push.js';
 
 export const clientAppRouter = Router();
 
@@ -128,6 +129,34 @@ clientAppRouter.post(
 
 // Дальше — только с токеном клиента
 clientAppRouter.use(requireClient);
+
+// ---------------------------------------------------------------------------
+// Push-уведомления: публичный VAPID-ключ, подписка и отписка устройства
+// ---------------------------------------------------------------------------
+clientAppRouter.get(
+  '/push/vapid-key',
+  ah(async (req, res) => {
+    const v = await getVapid();
+    res.json({ publicKey: v.publicKey });
+  })
+);
+clientAppRouter.post(
+  '/push/subscribe',
+  ah(async (req, res) => {
+    const sub = (req.body || {}).subscription || req.body;
+    if (!validSubscription(sub)) return res.status(400).json({ error: 'Некорректная подписка' });
+    await saveSubscription(req.client.id, sub, req.get('user-agent'));
+    res.json({ ok: true, devices: await countSubscriptions(req.client.id) });
+  })
+);
+clientAppRouter.post(
+  '/push/unsubscribe',
+  ah(async (req, res) => {
+    const endpoint = String((req.body || {}).endpoint || '');
+    if (endpoint) await removeSubscription(req.client.id, endpoint);
+    res.json({ ok: true, devices: await countSubscriptions(req.client.id) });
+  })
+);
 
 // Профиль + сводка (бонусы, дети, приглашённые, кто пригласил)
 clientAppRouter.get(

@@ -342,6 +342,22 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS email     text;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS kid_bonus_at timestamptz;
 -- пароль приложения сброшен сотрудником: временный, клиенту нужно сменить его в приложении
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS pass_temp boolean NOT NULL DEFAULT false;
+
+-- Push-подписки устройств из личного кабинета (Web Push). Одна строка —
+-- одно устройство/браузер; endpoint уникален. Мёртвые подписки (404/410
+-- от push-сервиса) удаляются при отправке.
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  client_id    bigint NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  endpoint     text NOT NULL UNIQUE,
+  p256dh       text NOT NULL,
+  auth         text NOT NULL,
+  user_agent   text,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  last_seen_at timestamptz NOT NULL DEFAULT now(),
+  last_sent_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS idx_push_subs_client ON push_subscriptions(client_id);
 -- Быстрый вход по телефону: сравниваем только цифры номера
 CREATE INDEX IF NOT EXISTS idx_clients_phone_digits
   ON clients ((regexp_replace(phone, '\D', '', 'g')));

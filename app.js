@@ -678,6 +678,43 @@
       } else { l.client_id = Date.now(); rc(); }
     };
     // Удаление клиента из базы (карточка клиента)
+    // Push-уведомления гостю из карточки: статус подписки и отправка
+    function pushStatusLoad(id) {
+      var el = document.getElementById('pushStatus'); if (!el) return;
+      api('/clients/' + id + '/push').then(function (r) {
+        el.innerHTML = r.devices
+          ? '🔔 Уведомления включены · устройств: <b>' + r.devices + '</b>'
+          : '🔕 Уведомления в приложении не включены — попросите гостя включить их в профиле приложения (раздел «Уведомления»)';
+      }).catch(function () { el.textContent = ''; });
+    }
+    function pushSend(id, title, body, url, after) {
+      api('/clients/' + id + '/push', { method: 'POST', body: { title: title, body: body, url: url } }).then(function (r) {
+        if (typeof toast === 'function') toast('Уведомление отправлено на ' + r.sent + ' устр.' + (r.gone ? ' (' + r.gone + ' отключились)' : ''));
+        if (after) after(true);
+      }).catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Не удалось отправить', true); if (after) after(false); });
+    }
+    window.sendClientPush = function (id) {
+      var inp = document.getElementById('pushText');
+      var text = (inp && inp.value || '').trim();
+      if (!text) { if (typeof toast === 'function') toast('Напишите текст уведомления', true); return; }
+      pushSend(id, 'ЧайЛэнд', text, '/lk/', function (ok) { if (ok && inp) inp.value = ''; });
+    };
+    window.sendBirthdayOffer = function (id, kidIdx) {
+      var c = (typeof clients !== 'undefined' ? clients : []).filter(function (x) { return x.id === id; })[0];
+      var k = c && c.kids && c.kids[kidIdx];
+      if (!k) return;
+      pushSend(id, '🎂 Скоро день рождения у ' + k.name + '!',
+        'Отпразднуйте в ЧайЛэнд: своя комната, аттракционы весь день, аниматоры и шоу. Выберите пакет и дату в приложении.',
+        '/lk/#party');
+    };
+    var _rccPush = window.renderClientCard;
+    if (typeof _rccPush === 'function') {
+      window.renderClientCard = function () {
+        var r = _rccPush.apply(this, arguments);
+        if (typeof cardClientId !== 'undefined' && cardClientId != null) pushStatusLoad(cardClientId);
+        return r;
+      };
+    }
     window.resetAppPassword = function (id) {
       if (!confirm('Выдать клиенту новый временный пароль от приложения? Старый пароль перестанет работать.')) return;
       api('/clients/' + id + '/app-password', { method: 'POST', body: {} }).then(function (r) {
@@ -1841,15 +1878,18 @@
         image: document.getElementById('newsImage').value || '',
         published: document.getElementById('newsPub').checked,
         pinned: document.getElementById('newsPin').checked,
+        push: !id && !!(document.getElementById('newsPush') || {}).checked,
       };
       if (!body.title) { if (typeof toast === 'function') toast('Укажите заголовок', true); return; }
       var req = id
         ? api('/news/' + id, { method: 'PUT', body: body })
         : api('/news', { method: 'POST', body: body });
-      req.then(function () {
+      req.then(function (r) {
         window.newsResetForm();
         window.renderNews();
-        if (typeof toast === 'function') toast(id ? 'Новость обновлена' : 'Новость добавлена');
+        var msg = id ? 'Новость обновлена' : 'Новость добавлена';
+        if (r && r.push) msg += r.push.total ? ' · пуш отправлен на ' + r.push.total + ' устр.' : ' · подписчиков уведомлений в приложении пока нет';
+        if (typeof toast === 'function') toast(msg);
       }).catch(function (e) { if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
     };
 

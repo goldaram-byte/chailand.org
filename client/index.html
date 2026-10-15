@@ -323,6 +323,13 @@
       </div>
 
       <div class="panel">
+        <h2>🔔 Уведомления</h2>
+        <p class="howto">Новости парка, акции и напоминания о празднике — прямо на телефон.</p>
+        <div id="pushStatus" class="muted" style="font-size:13.5px;margin-bottom:12px">Проверяем…</div>
+        <button class="btn primary" id="pushBtn" onclick="pushToggle()" style="display:none">Включить уведомления</button>
+      </div>
+
+      <div class="panel">
         <h2>🔒 Безопасность</h2>
         <div id="pwTempHint" class="hidden" style="background:#fff7ed;border:1px solid #fdba74;border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:14px">Вы вошли по временному паролю, который выдали в парке. Задайте свой: введите временный как текущий и придумайте новый.</div>
         <label class="fld"><span class="lbl">Текущий пароль</span><input id="pwOld" type="password" autocomplete="current-password" /></label>
@@ -429,6 +436,10 @@
     $('authScreen').className = 'hidden';
     $('appScreen').className = '';
     loadMe(); loadQR(); loadHistory(); loadPasses();
+    pushRefresh();
+    // ссылка из уведомления: /lk/#news или /lk/#party — открыть нужную вкладку
+    var h = (location.hash || '').replace('#','');
+    if (h && ['card','news','ref','party','prof'].indexOf(h) !== -1){ go(h); history.replaceState(null, '', location.pathname); }
   }
 
   window.go = function(v){
@@ -590,8 +601,79 @@
   };
 
   // ---- Профиль ----
+  // ---- Push-уведомления ----
+  var PUSH_SUB = null, PUSH_KEY = null;
+  function pushSupported(){ return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+  function isIosBrowserTab(){
+    return /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.navigator.standalone &&
+      !(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  }
+  function urlB64ToU8(b64){
+    var pad = '='.repeat((4 - b64.length % 4) % 4);
+    var raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+    var arr = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+    return arr;
+  }
+  function pushRenderStatus(){
+    var st = $('pushStatus'), btn = $('pushBtn');
+    if (!st || !btn) return;
+    btn.style.display = 'none';
+    if (!pushSupported()){
+      st.textContent = isIosBrowserTab()
+        ? 'На iPhone уведомления работают только из приложения на экране «Домой»: в Safari нажмите «Поделиться» → «На экран «Домой»», откройте приложение оттуда и включите уведомления здесь.'
+        : 'Ваш браузер не поддерживает уведомления.';
+      return;
+    }
+    if (Notification.permission === 'denied'){
+      st.textContent = 'Уведомления запрещены в настройках браузера. Разрешите их для сайта и обновите страницу.';
+      return;
+    }
+    if (PUSH_SUB){
+      st.textContent = '✅ Уведомления включены на этом устройстве.';
+      btn.textContent = 'Отключить на этом устройстве'; btn.className = 'btn ghost'; btn.style.display = '';
+    } else {
+      st.textContent = 'Уведомления выключены.';
+      btn.textContent = 'Включить уведомления'; btn.className = 'btn primary'; btn.style.display = '';
+    }
+  }
+  // при входе: если подписка уже есть — обновим её на сервере (привяжем к этому гостю)
+  function pushRefresh(){
+    if (!pushSupported()){ pushRenderStatus(); return; }
+    navigator.serviceWorker.ready.then(function(reg){ return reg.pushManager.getSubscription(); }).then(function(sub){
+      PUSH_SUB = (sub && Notification.permission === 'granted') ? sub : null;
+      if (PUSH_SUB) api('/push/subscribe', { method:'POST', body:{ subscription: PUSH_SUB.toJSON() } }).catch(function(){});
+      pushRenderStatus();
+    }).catch(function(){ pushRenderStatus(); });
+  }
+  window.pushToggle = function(){
+    var btn = $('pushBtn'); btn.disabled = true;
+    var done = function(){ btn.disabled = false; pushRenderStatus(); };
+    if (PUSH_SUB){
+      var ep = PUSH_SUB.endpoint;
+      PUSH_SUB.unsubscribe().catch(function(){}).then(function(){
+        PUSH_SUB = null;
+        return api('/push/unsubscribe', { method:'POST', body:{ endpoint: ep } }).catch(function(){});
+      }).then(function(){ toast('Уведомления отключены'); done(); });
+      return;
+    }
+    Notification.requestPermission().then(function(perm){
+      if (perm !== 'granted') throw new Error('Вы не разрешили уведомления');
+      return (PUSH_KEY ? Promise.resolve(PUSH_KEY) : api('/push/vapid-key').then(function(r){ PUSH_KEY = r.publicKey; return PUSH_KEY; }));
+    }).then(function(key){
+      return navigator.serviceWorker.ready.then(function(reg){
+        return reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: urlB64ToU8(key) });
+      });
+    }).then(function(sub){
+      PUSH_SUB = sub;
+      return api('/push/subscribe', { method:'POST', body:{ subscription: sub.toJSON() } });
+    }).then(function(){ toast('Уведомления включены 🎉'); done(); })
+      .catch(function(e){ toast(e.message || 'Не удалось включить уведомления', true); done(); });
+  };
+
   function fillProfile(){
     if (!ME) return;
+    pushRenderStatus();
     $('prName').value = ME.full_name || '';
     $('prPhone').value = ME.phone || '';
     $('prEmail').value = ME.email || '';

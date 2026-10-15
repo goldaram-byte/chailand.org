@@ -1,6 +1,6 @@
 // Service worker личного кабинета «Чайлэнд».
 // Кэшируем оболочку приложения, чтобы карта открывалась и без сети.
-const CACHE = 'gab-lk-v11';
+const CACHE = 'gab-lk-v12';
 const ASSETS = ['/lk/', '/lk/index.html', '/lk/manifest.webmanifest', '/logo.png', '/lk/driftland.svg', '/lk/driftland-mark.svg'];
 
 self.addEventListener('install', (e) => {
@@ -31,5 +31,37 @@ self.addEventListener('fetch', (e) => {
         })
         .catch(() => caches.match('/lk/'))
     )
+  );
+});
+
+// ---- Push-уведомления из парка (новости, акции, напоминания о празднике) ----
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(
+    self.registration.showNotification(d.title || 'ЧайЛэнд', {
+      body: d.body || '',
+      icon: d.icon || '/logo.png',
+      badge: '/logo.png',
+      tag: d.tag || undefined,
+      renotify: !!d.tag,
+      data: { url: d.url || '/lk/' },
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/lk/';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if (c.url.indexOf('/lk') !== -1 && 'focus' in c) {
+          if ('navigate' in c) c.navigate(url).catch(() => {});
+          return c.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    })
   );
 });
