@@ -4,6 +4,7 @@ import { requireAuth, requirePerm, hashPassword } from '../auth.js';
 import { randomInt } from 'crypto';
 import { ah, audit } from '../util.js';
 import { createClient, phoneCanonical, findByPhoneDigits } from '../services/clients.js';
+import { sendToClient, countSubscriptions, makePayload } from '../services/push.js';
 
 export const clientsRouter = Router();
 clientsRouter.use(requireAuth, requirePerm('clients'));
@@ -178,6 +179,32 @@ clientsRouter.get(
 // Только владелец/администратор: операция переносит деньги (бонусы) и историю.
 // Всё, что было у дубля — покупки, бонусные операции, абонементы, дети, брони
 // и заявки — переезжает на выбранную карту, дубль удаляется.
+// GET /api/clients/:id/push — включены ли у гостя уведомления (сколько устройств)
+clientsRouter.get(
+  '/:id/push',
+  ah(async (req, res) => {
+    res.json({ devices: await countSubscriptions(Number(req.params.id)) });
+  })
+);
+
+// POST /api/clients/:id/push {title, body, url} — отправить гостю push-уведомление
+// на все его устройства с включёнными уведомлениями.
+clientsRouter.post(
+  '/:id/push',
+  ah(async (req, res) => {
+    const id = Number(req.params.id);
+    const c = await q1('SELECT id, full_name FROM clients WHERE id=$1', [id]);
+    if (!c) return res.status(404).json({ error: 'Клиент не найден' });
+    const { title, body, url } = req.body || {};
+    if (!String(body || '').trim() && !String(title || '').trim()) return res.status(400).json({ error: 'Напишите текст уведомления' });
+    const payload = makePayload({ title: title || 'ЧайЛэнд', body, url, tag: 'client-' + id });
+    const r = await sendToClient(id, payload);
+    await audit(req, 'client.push', { entity: 'client', entityId: id, meta: { title: payload.title, ...r } });
+    if (!r.total) return res.status(409).json({ devices: 0, error: 'У гостя не включены уведомления в приложении' });
+    res.json({ ok: true, ...r });
+  })
+);
+
 // POST /api/clients/:id/app-password — гость забыл пароль от личного кабинета.
 // Сотрудник (после проверки личности по карте/телефону) выдаёт временный
 // 6-значный пароль; он показывается один раз, в системе хранится только хеш.

@@ -5,6 +5,7 @@ import { Router } from 'express';
 import { q, q1 } from '../db.js';
 import { requireAuth, requirePerm } from '../auth.js';
 import { ah, audit } from '../util.js';
+import { sendToAll, countSubscriptions, makePayload } from '../services/push.js';
 
 export const newsRouter = Router();
 newsRouter.use(requireAuth, requirePerm('news'));
@@ -23,7 +24,7 @@ const MAX_IMAGE = 6 * 1024 * 1024;
 newsRouter.post(
   '/',
   ah(async (req, res) => {
-    const { title, body, cover, image, pinned = false, published = true } = req.body || {};
+    const { title, body, cover, image, pinned = false, published = true, push = false } = req.body || {};
     if (!title || !String(title).trim()) return res.status(400).json({ error: 'Укажите заголовок новости' });
     if (image && String(image).length > MAX_IMAGE) return res.status(400).json({ error: 'Слишком большая картинка' });
     const row = await q1(
@@ -32,7 +33,16 @@ newsRouter.post(
       [String(title).trim(), String(body || ''), cover ? String(cover).slice(0, 300) : null, image ? String(image) : null, !!pinned, !!published]
     );
     await audit(req, 'news.create', { entity: 'news', entityId: row.id });
-    res.json(row);
+    // Пуш подписчикам приложения — только для опубликованной новости. Рассылка
+    // идёт в фоне (устройств может быть много), в ответ — сколько адресатов.
+    let pushInfo = null;
+    if (push && row.published) {
+      const total = await countSubscriptions();
+      pushInfo = { total };
+      const payload = makePayload({ title: (cover ? String(cover).trim() + ' ' : '') + row.title, body: String(row.body || '').replace(/\s+/g, ' ').slice(0, 200), url: '/lk/#news', tag: 'news-' + row.id });
+      setImmediate(() => sendToAll(payload).then((r) => console.log('[push] news', row.id, JSON.stringify(r))).catch((e) => console.error('[push] news', row.id, e.message)));
+    }
+    res.json({ ...row, push: pushInfo });
   })
 );
 
