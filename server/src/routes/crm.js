@@ -20,13 +20,15 @@ crmRouter.get(
 );
 
 // GET /api/crm/leads — с задачами и примечаниями
-// GET /api/crm/stats?from=YYYY-MM-DD&to=YYYY-MM-DD — картина воронки за период.
+// GET /api/crm/stats?from=YYYY-MM-DD&to=YYYY-MM-DD — картина воронки за период (только владелец).
 // «Поступило» — по дате создания, «взято в работу» — по first_touch_at,
 // «куплено/отказ» — по closed_at. «В работе сейчас» и «зависшие» — на текущий
 // момент, период на них не влияет.
 crmRouter.get(
   '/stats',
   ah(async (req, res) => {
+    // Картина воронки — только владельцу
+    if (req.user.role !== 'owner') return res.status(403).json({ error: 'Картина воронки доступна только владельцу' });
     const day = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null);
     const today = new Date();
     const ymd = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
