@@ -68,9 +68,8 @@ header{position:fixed;top:0;left:0;right:0;z-index:50;background:rgba(255,255,25
 
 /* ===== hero ===== */
 .hero{position:relative;min-height:100vh;display:flex;align-items:center;overflow:hidden;color:#fff;background:var(--purple)}
-.hero-media{position:absolute;inset:0;z-index:0}
-.hero-media video{width:100%;height:100%;object-fit:cover}
-.hero-shade{position:absolute;inset:0;z-index:1;background:linear-gradient(135deg,rgba(123,79,217,.88) 0%,rgba(244,98,42,.72) 55%,rgba(255,197,49,.55) 100%)}
+.hero-media{position:absolute;inset:0;z-index:0;background:url(birthday-banner.svg) center/cover no-repeat}
+.hero-shade{position:absolute;inset:0;z-index:1;background:radial-gradient(ellipse at center,rgba(58,20,90,.45) 0%,rgba(58,20,90,.2) 45%,rgba(58,20,90,0) 75%)}
 .hero-content{position:relative;z-index:2;width:100%;padding:130px 0 90px;text-align:center}
 .hero .kicker{display:inline-flex;align-items:center;gap:10px;background:rgba(255,255,255,.18);border:1.5px solid rgba(255,255,255,.45);border-radius:999px;padding:.55em 1.2em;font-family:var(--display);font-weight:700;font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;margin-bottom:26px}
 .hero h1{font-size:clamp(2.1rem,6vw,4.4rem);font-weight:900;max-width:960px;margin:0 auto 22px;text-shadow:0 8px 30px rgba(58,34,8,.35)}
@@ -79,11 +78,6 @@ header{position:fixed;top:0;left:0;right:0;z-index:50;background:rgba(255,255,25
 .hero-actions{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin-bottom:54px}
 .hero-badges{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
 .hero-badges span{background:rgba(255,255,255,.95);color:var(--grape);border-radius:999px;padding:.6em 1.15em;font-weight:600;font-size:.86rem;box-shadow:0 8px 22px rgba(58,34,8,.18)}
-/* летающие стикеры */
-.float{position:absolute;z-index:2;font-size:clamp(2rem,5vw,4.2rem);filter:drop-shadow(0 10px 20px rgba(0,0,0,.25));animation:bob 5s ease-in-out infinite;pointer-events:none;user-select:none}
-.float:nth-child(2n){animation-duration:6.5s;animation-delay:-2s}
-.float:nth-child(3n){animation-duration:7.5s;animation-delay:-4s}
-@keyframes bob{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-22px) rotate(6deg)}}
 .hero-wave{position:absolute;left:0;right:0;bottom:-2px;z-index:3;display:block;width:100%;height:70px}
 
 /* ===== стикеры «почему мы» ===== */
@@ -212,12 +206,12 @@ footer a{color:#FFEBD1;text-decoration:none}
   body{padding-bottom:70px}
 }
 @media(max-width:600px){
+  .hero-media{background-image:url(birthday-banner-m.svg)}
   .section{padding:62px 0}
   .why-grid,.prog-grid,.pk-grid,.steps,.parks{grid-template-columns:1fr}
   .svc-cols{columns:1}
   .gift,.rev-box{padding:28px 24px}
   .hero-content{padding:120px 0 70px}
-  .float{display:none}
 }
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -256,16 +250,8 @@ footer a{color:#FFEBD1;text-decoration:none}
 
 <!-- ================= HERO ================= -->
 <section class="hero" id="top">
-  <div class="hero-media">
-    <video autoplay muted loop playsinline><source src="banner.mp4" type="video/mp4"></video>
-  </div>
+  <div class="hero-media" role="img" aria-label="Праздничный баннер: шары, торт и подарки"></div>
   <div class="hero-shade"></div>
-  <span class="float" style="top:16%;left:6%">🎈</span>
-  <span class="float" style="top:22%;right:8%">🎉</span>
-  <span class="float" style="bottom:24%;left:10%">🎂</span>
-  <span class="float" style="bottom:18%;right:12%">🎁</span>
-  <span class="float" style="top:48%;left:3%">⭐</span>
-  <span class="float" style="top:55%;right:4%">🍭</span>
   <div class="wrap hero-content">
     <span class="kicker">🎂 Дни рождения в ЧайЛэнд · Люберцы</span>
     <h1>День рождения, о котором <span class="y">будут говорить</span> весь год</h1>
