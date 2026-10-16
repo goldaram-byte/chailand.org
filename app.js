@@ -1806,8 +1806,10 @@
       var me = (window.CURRENT_USER || {}).id;
       if (PEER_KIND === 'client') {
         var chtml = list.map(function (m) {
+          // свои ответы — без подписи, ответы коллег — с именем, сообщения гостя — с его именем
+          var who = m.from_staff ? (m.user_id === me ? '' : (m.user_name || 'Сотрудник')) : PEER_NAME;
           return '<div class="ch-m' + (m.from_staff ? ' mine' : '') + '" data-id="' + m.id + '">' +
-            '<div class="who">' + esc(m.from_staff ? (m.user_name || 'Сотрудник') : PEER_NAME) + '</div>' +
+            (who ? '<div class="who">' + esc(who) + '</div>' : '') +
             esc(m.text).replace(/\n/g, '<br>') + '<div class="tm">' + fmtTm(m.created_at) + '</div></div>';
         }).join('');
         if (append) box.insertAdjacentHTML('beforeend', chtml); else box.innerHTML = chtml || '<div class="muted" style="font-size:12.5px;text-align:center;padding:20px 0">Сообщений пока нет</div>';
