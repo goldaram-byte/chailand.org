@@ -780,7 +780,7 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
     <div class="card">
       <h3>👥 База клиентов</h3>
       <div class="muted" style="font-size:12.5px;margin-bottom:12px">📱 База клиентов общая с мобильным приложением — карты, бонусы и покупки синхронизируются.</div>
-      <div class="tbl-wrap"><table><thead><tr><th>Имя</th><th>Телефон</th><th>Карта</th><th>Бонусы</th><th>Покупок</th><th>Детей</th><th>Абонемент</th><th>Приложение</th></tr></thead>
+      <div class="tbl-wrap"><table><thead><tr><th>Имя</th><th>Телефон</th><th>Карта</th><th>Бонусы</th><th>Покупок</th><th>Детей</th><th>Абонемент</th><th>Приложение</th><th>Был(а)</th></tr></thead>
       <tbody id="cliTbl"></tbody></table></div>
     </div>
   </div>
@@ -2452,8 +2452,19 @@ function renderClients(){
     <td>${c.phone}</td><td><b style="color:var(--orange)">${c.card}</b></td><td>${c.bonus}</td><td>${c.buys}</td>
     <td>${(kn=>kn>0?'👶 '+kn:'<span class="muted">—</span>')(c.kidsCount!=null?c.kidsCount:(c.kids||[]).length)}</td>
     <td>${c.passes?`<span class="pass-badge" title="Действующих абонементов: ${c.passes}">🎟 ${c.passes>1?c.passes+' шт.':'есть'}</span>`:'<span class="muted">—</span>'}</td>
-    <td>${c.app?'<span class="app-badge">✓ есть</span>':'<span class="muted">—</span>'}</td></tr>`;
+    <td>${c.app?'<span class="app-badge">✓ есть</span>':'<span class="muted">—</span>'}</td>
+    <td>${lastVisitCell(c.lastVisit)}</td></tr>`;
   }).join('');
+}
+// «Был(а)»: дата последнего визита и сколько дней прошло; давно — подсвечиваем
+function lastVisitCell(v){
+  if(!v) return '<span class="muted" title="Покупок и визитов не было">—</span>';
+  const d=new Date(v); if(isNaN(d)) return '<span class="muted">—</span>';
+  const days=Math.floor((Date.now()-d.getTime())/86400000);
+  const ago=days<=0?'сегодня':days===1?'вчера':days+' дн. назад';
+  const date=d.toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit',year:'2-digit'});
+  const col=days>=90?'var(--red)':days>=30?'var(--orange)':'inherit';
+  return `<span style="white-space:nowrap;color:${col}" title="${date}">${ago}</span>`;
 }
 
 /* ===== КАРТОЧКА КЛИЕНТА ===== */

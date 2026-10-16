@@ -50,10 +50,13 @@ function searchClause(raw, add) {
 //   min_buys  — минимум покупок
 //   bday_days — у ребёнка ДР в ближайшие N дней
 //   referral  — invited (кто-то пришёл по его коду) | referred (сам пришёл по коду)
+//   inactive_days — давно не были: последний визит (покупка, проход по
+//                   абонементу или проведённый праздник) раньше, чем N дней
+//                   назад; значение never — ни разу не были
 clientsRouter.get(
   '/',
   ah(async (req, res) => {
-    const { search, app, min_bonus, min_buys, bday_days, referral } = req.query;
+    const { search, app, min_bonus, min_buys, bday_days, referral, inactive_days } = req.query;
     const where = [];
     const p = [];
     const add = (v) => { p.push(v); return '$' + p.length; };
@@ -67,11 +70,21 @@ clientsRouter.get(
     if (bday_days) where.push(`bd.next_days <= ${add(Number(bday_days))}`);
     if (referral === 'invited') where.push(`EXISTS (SELECT 1 FROM clients r WHERE r.referred_by = c.id)`);
     if (referral === 'referred') where.push(`c.referred_by IS NOT NULL`);
+    const LAST_VISIT = `GREATEST(sc.last_buy, pv.last_at, bk.last_at)`;
+    let order = 'c.created_at DESC';
+    if (inactive_days === 'never') {
+      where.push(`${LAST_VISIT} IS NULL`);
+    } else if (inactive_days && Number(inactive_days) > 0) {
+      where.push(`${LAST_VISIT} < now() - (${add(Number(inactive_days))} || ' days')::interval`);
+      // кто был позже всех — первым: таких проще вернуть
+      order = `${LAST_VISIT} DESC, c.created_at DESC`;
+    }
 
     const rows = await q(
       `SELECT c.*,
               COALESCE(sc.buys,0)::int AS buys,
               sc.last_buy,
+              ${LAST_VISIT} AS last_visit,
               bd.next_days AS kid_bday_in,
               COALESCE(kc.n,0)::int AS kids_count,
               COALESCE(pa.n,0)::int AS active_passes,
@@ -89,6 +102,12 @@ clientsRouter.get(
          LEFT JOIN (SELECT client_id, count(*) AS n FROM passes
                      WHERE status='active' AND valid_to >= current_date GROUP BY client_id) pa
                 ON pa.client_id = c.id
+         LEFT JOIN (SELECT p.client_id, max(v.at) AS last_at
+                      FROM pass_visits v JOIN passes p ON p.id = v.pass_id GROUP BY p.client_id) pv
+                ON pv.client_id = c.id
+         LEFT JOIN (SELECT client_id, max(date)::timestamptz AS last_at
+                      FROM bookings WHERE status='done' AND client_id IS NOT NULL GROUP BY client_id) bk
+                ON bk.client_id = c.id
          -- открытая заявка по клиенту: чтобы в списке было видно, что им уже
          -- занимаются, и второй сотрудник не тянул его в воронку повторно
          LEFT JOIN LATERAL (
@@ -98,7 +117,7 @@ clientsRouter.get(
             ORDER BY l.updated_at DESC LIMIT 1
          ) ol ON true
         ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-        ORDER BY c.created_at DESC
+        ORDER BY ${order}
         LIMIT 200`,
       p
     );
@@ -128,6 +147,12 @@ clientsRouter.get(
          LEFT JOIN (SELECT client_id, count(*) AS n FROM passes
                      WHERE status='active' AND valid_to >= current_date GROUP BY client_id) pa
                 ON pa.client_id = c.id
+         LEFT JOIN (SELECT p.client_id, max(v.at) AS last_at
+                      FROM pass_visits v JOIN passes p ON p.id = v.pass_id GROUP BY p.client_id) pv
+                ON pv.client_id = c.id
+         LEFT JOIN (SELECT client_id, max(date)::timestamptz AS last_at
+                      FROM bookings WHERE status='done' AND client_id IS NOT NULL GROUP BY client_id) bk
+                ON bk.client_id = c.id
         WHERE ${clause}
         ORDER BY CASE
                    WHEN ${dg} <> '' AND ltrim(${DIGITS('c.card_no')}, '0') = ${dg} THEN 0
