@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1600" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6E3FD6"/>
+      <stop offset=".55" stop-color="#F4622A"/>
+      <stop offset="1" stop-color="#FFC531"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".45" r=".6">
+      <stop offset="0" stop-color="#fff" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bRed" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#FF8A80"/><stop offset="1" stop-color="#E53950"/></radialGradient>
+    <radialGradient id="bYel" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#FFF0A6"/><stop offset="1" stop-color="#FFB300"/></radialGradient>
+    <radialGradient id="bBlu" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#9BE3FF"/><stop offset="1" stop-color="#2AA7E8"/></radialGradient>
+    <radialGradient id="bGrn" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#C6FFB0"/><stop offset="1" stop-color="#43C463"/></radialGradient>
+    <radialGradient id="bPnk" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#FFC2E8"/><stop offset="1" stop-color="#F0399B"/></radialGradient>
+    <radialGradient id="bPur" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#D9C8FF"/><stop offset="1" stop-color="#8A5CF6"/></radialGradient>
+    <g id="balloon">
+      <path d="M0 150 l-6 10 h12 z" fill="currentColor" opacity=".9"/>
+      <ellipse cx="0" cy="75" rx="52" ry="68"/>
+      <ellipse cx="-18" cy="42" rx="12" ry="22" fill="#fff" opacity=".45" transform="rotate(-20 -18 42)"/>
+    </g>
+    <g id="star"><path d="M0 -16 L4.7 -5 L16 -4.9 L7.6 2.7 L9.9 14 L0 8 L-9.9 14 L-7.6 2.7 L-16 -4.9 L-4.7 -5 Z"/></g>
+  </defs>
+  <rect width="900" height="1600" fill="url(#sky)"/>
+  <rect width="900" height="1600" fill="url(#glow)"/>
+  <g fill="none" stroke-width="7" stroke-linecap="round" opacity=".85">
+    <path d="M40 -20 c40 90 -60 150 -10 240 c45 80 -40 150 10 240" stroke="#FFE066"/>
+    <path d="M860 -10 c-50 90 50 160 0 250 c-45 85 40 150 -10 240" stroke="#8CE2FF"/>
+    <path d="M700 -30 c30 70 -40 110 -5 180 c30 60 -30 110 0 170" stroke="#FF9ED1"/>
+    <path d="M230 -30 c-30 70 40 110 5 180 c-30 60 30 110 0 170" stroke="#B6FF9C"/>
+  </g>
+  <g opacity=".9">
+    <rect x="150" y="300" width="18" height="10" rx="2" fill="#FFE066" transform="rotate(25 159 305)"/>
+    <rect x="420" y="120" width="18" height="10" rx="2" fill="#8CE2FF" transform="rotate(-35 429 125)"/>
+    <rect x="640" y="340" width="18" height="10" rx="2" fill="#FF9ED1" transform="rotate(50 649 345)"/>
+    <rect x="300" y="900" width="18" height="10" rx="2" fill="#B6FF9C" transform="rotate(-20 309 905)"/>
+    <rect x="760" y="820" width="18" height="10" rx="2" fill="#FFE066" transform="rotate(35 769 825)"/>
+    <rect x="120" y="1100" width="18" height="10" rx="2" fill="#fff" transform="rotate(-50 129 1105)"/>
+    <rect x="520" y="1250" width="18" height="10" rx="2" fill="#8CE2FF" transform="rotate(15 529 1255)"/>
+    <rect x="800" y="1350" width="18" height="10" rx="2" fill="#FF9ED1" transform="rotate(-25 809 1355)"/>
+    <circle cx="200" cy="600" r="7" fill="#fff" opacity=".8"/>
+    <circle cx="720" cy="560" r="7" fill="#fff" opacity=".8"/>
+    <circle cx="460" cy="260" r="6" fill="#FFE066"/>
+    <circle cx="600" cy="1050" r="6" fill="#8CE2FF"/>
+    <circle cx="260" cy="1300" r="6" fill="#FF9ED1"/>
+    <circle cx="700" cy="1450" r="7" fill="#FFE066"/>
+  </g>
+  <g fill="#FFF2A8">
+    <use href="#star" transform="translate(450 60) scale(1.3)"/>
+    <use href="#star" transform="translate(120 480) scale(1.1)"/>
+    <use href="#star" transform="translate(780 420) scale(1.2)"/>
+    <use href="#star" transform="translate(90 1250) scale(1.2)"/>
+    <use href="#star" transform="translate(820 1150) scale(1.1)"/>
+    <use href="#star" transform="translate(450 1520) scale(.9)"/>
+  </g>
+  <!-- шары по верхним углам -->
+  <g transform="translate(0 120)">
+    <use href="#balloon" fill="url(#bRed)" color="#E53950" transform="translate(110 40) rotate(-8) scale(.9)"/>
+    <use href="#balloon" fill="url(#bYel)" color="#FFB300" transform="translate(210 -10) rotate(6) scale(.8)"/>
+    <use href="#balloon" fill="url(#bBlu)" color="#2AA7E8" transform="translate(40 180) rotate(-14) scale(.75)"/>
+    <use href="#balloon" fill="url(#bPur)" color="#8A5CF6" transform="translate(790 40) rotate(10) scale(.9)"/>
+    <use href="#balloon" fill="url(#bGrn)" color="#43C463" transform="translate(690 -10) rotate(-8) scale(.8)"/>
+    <use href="#balloon" fill="url(#bPnk)" color="#F0399B" transform="translate(860 180) rotate(14) scale(.75)"/>
+  </g>
+  <!-- шары по нижним углам -->
+  <g>
+    <use href="#balloon" fill="url(#bPnk)" color="#F0399B" transform="translate(90 1180) rotate(10) scale(.95)"/>
+    <use href="#balloon" fill="url(#bGrn)" color="#43C463" transform="translate(20 1340) rotate(-6) scale(.75)"/>
+    <use href="#balloon" fill="url(#bYel)" color="#FFB300" transform="translate(810 1180) rotate(-10) scale(.95)"/>
+    <use href="#balloon" fill="url(#bBlu)" color="#2AA7E8" transform="translate(880 1340) rotate(8) scale(.75)"/>
+  </g>
+  <g transform="translate(120 1430) scale(.9)">
+    <ellipse cx="60" cy="78" rx="90" ry="14" fill="#000" opacity=".15"/>
+    <rect x="-20" y="20" width="160" height="56" rx="12" fill="#FF8FB1"/>
+    <path d="M-20 32 q20 -14 40 0 t40 0 t40 0 t40 0 v8 q-20 14 -40 0 t-40 0 t-40 0 t-40 0z" fill="#FFF3F7"/>
+    <rect x="5" y="-18" width="110" height="42" rx="10" fill="#8A5CF6"/>
+    <path d="M5 -8 q14 -12 28 0 t27 0 t27 0 t28 0 v8 q-14 12 -28 0 t-27 0 t-27 0 t-28 0z" fill="#E8DCFF"/>
+    <g stroke="#fff" stroke-width="5" stroke-linecap="round"><line x1="30" y1="-18" x2="30" y2="-42"/><line x1="60" y1="-18" x2="60" y2="-46"/><line x1="90" y1="-18" x2="90" y2="-42"/></g>
+    <g fill="#FFD23F"><ellipse cx="30" cy="-50" rx="6" ry="10"/><ellipse cx="60" cy="-54" rx="6" ry="10"/><ellipse cx="90" cy="-50" rx="6" ry="10"/></g>
+    <g fill="#FF6A00"><ellipse cx="30" cy="-52" rx="3" ry="5"/><ellipse cx="60" cy="-56" rx="3" ry="5"/><ellipse cx="90" cy="-52" rx="3" ry="5"/></g>
+  </g>
+  <g transform="translate(680 1440) scale(.9)">
+    <ellipse cx="50" cy="86" rx="80" ry="13" fill="#000" opacity=".15"/>
+    <rect x="-20" y="12" width="140" height="74" rx="10" fill="#2AA7E8"/>
+    <rect x="-28" y="0" width="156" height="26" rx="8" fill="#5BC8FF"/>
+    <rect x="38" y="0" width="24" height="86" fill="#FFE066"/>
+    <rect x="-28" y="6" width="156" height="14" fill="#FFE066"/>
+    <path d="M50 2 c-26 -30 -50 -14 -24 2 c-26 10 -6 22 24 -2 M50 2 c26 -30 50 -14 24 2 c26 10 6 22 -24 -2" fill="#FFE066" stroke="#F4B400" stroke-width="2"/>
+  </g>
+</svg>

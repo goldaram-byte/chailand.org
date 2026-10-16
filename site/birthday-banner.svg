@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6E3FD6"/>
+      <stop offset=".55" stop-color="#F4622A"/>
+      <stop offset="1" stop-color="#FFC531"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".5" cy=".45" r=".6">
+      <stop offset="0" stop-color="#fff" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bRed" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#FF8A80"/><stop offset="1" stop-color="#E53950"/></radialGradient>
+    <radialGradient id="bYel" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#FFF0A6"/><stop offset="1" stop-color="#FFB300"/></radialGradient>
+    <radialGradient id="bBlu" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#9BE3FF"/><stop offset="1" stop-color="#2AA7E8"/></radialGradient>
+    <radialGradient id="bGrn" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#C6FFB0"/><stop offset="1" stop-color="#43C463"/></radialGradient>
+    <radialGradient id="bPnk" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#FFC2E8"/><stop offset="1" stop-color="#F0399B"/></radialGradient>
+    <radialGradient id="bPur" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#D9C8FF"/><stop offset="1" stop-color="#8A5CF6"/></radialGradient>
+    <g id="balloon">
+      <path d="M0 150 l-6 10 h12 z" fill="currentColor" opacity=".9"/>
+      <ellipse cx="0" cy="75" rx="52" ry="68"/>
+      <ellipse cx="-18" cy="42" rx="12" ry="22" fill="#fff" opacity=".45" transform="rotate(-20 -18 42)"/>
+    </g>
+    <g id="star"><path d="M0 -16 L4.7 -5 L16 -4.9 L7.6 2.7 L9.9 14 L0 8 L-9.9 14 L-7.6 2.7 L-16 -4.9 L-4.7 -5 Z"/></g>
+  </defs>
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <rect width="1600" height="900" fill="url(#glow)"/>
+
+  <!-- серпантин -->
+  <g fill="none" stroke-width="7" stroke-linecap="round" opacity=".85">
+    <path d="M60 -20 c40 90 -60 150 -10 240 c45 80 -40 150 10 240" stroke="#FFE066"/>
+    <path d="M1540 -10 c-50 90 50 160 0 250 c-45 85 40 150 -10 240" stroke="#8CE2FF"/>
+    <path d="M1240 -30 c30 70 -40 110 -5 180 c30 60 -30 110 0 170" stroke="#FF9ED1"/>
+    <path d="M330 -30 c-30 70 40 110 5 180 c-30 60 30 110 0 170" stroke="#B6FF9C"/>
+  </g>
+
+  <!-- конфетти -->
+  <g opacity=".9">
+    <rect x="200" y="140" width="18" height="10" rx="2" fill="#FFE066" transform="rotate(25 209 145)"/>
+    <rect x="420" y="90" width="18" height="10" rx="2" fill="#8CE2FF" transform="rotate(-35 429 95)"/>
+    <rect x="640" y="60" width="18" height="10" rx="2" fill="#FF9ED1" transform="rotate(50 649 65)"/>
+    <rect x="900" y="120" width="18" height="10" rx="2" fill="#B6FF9C" transform="rotate(-20 909 125)"/>
+    <rect x="1100" y="70" width="18" height="10" rx="2" fill="#FFE066" transform="rotate(35 1109 75)"/>
+    <rect x="1350" y="150" width="18" height="10" rx="2" fill="#fff" transform="rotate(-50 1359 155)"/>
+    <rect x="150" y="520" width="18" height="10" rx="2" fill="#8CE2FF" transform="rotate(15 159 525)"/>
+    <rect x="1450" y="480" width="18" height="10" rx="2" fill="#FF9ED1" transform="rotate(-25 1459 485)"/>
+    <rect x="780" y="820" width="18" height="10" rx="2" fill="#fff" transform="rotate(40 789 825)"/>
+    <rect x="520" y="760" width="18" height="10" rx="2" fill="#FFE066" transform="rotate(-40 529 765)"/>
+    <rect x="1030" y="790" width="18" height="10" rx="2" fill="#B6FF9C" transform="rotate(20 1039 795)"/>
+    <circle cx="300" cy="300" r="7" fill="#fff" opacity=".8"/>
+    <circle cx="1300" cy="330" r="7" fill="#fff" opacity=".8"/>
+    <circle cx="760" cy="180" r="6" fill="#FFE066"/>
+    <circle cx="1000" cy="560" r="6" fill="#8CE2FF"/>
+    <circle cx="560" cy="600" r="6" fill="#FF9ED1"/>
+    <circle cx="1220" cy="700" r="7" fill="#FFE066"/>
+    <circle cx="380" cy="720" r="7" fill="#8CE2FF"/>
+  </g>
+
+  <!-- звёзды -->
+  <g fill="#FFF2A8">
+    <use href="#star" transform="translate(250 230) scale(1.3)"/>
+    <use href="#star" transform="translate(1380 260) scale(1.1)"/>
+    <use href="#star" transform="translate(700 110) scale(.9)"/>
+    <use href="#star" transform="translate(1180 160) scale(1.4)"/>
+    <use href="#star" transform="translate(120 640) scale(1.2)"/>
+    <use href="#star" transform="translate(1500 620) scale(1.1)"/>
+    <use href="#star" transform="translate(880 760) scale(.9)"/>
+  </g>
+
+  <!-- шары слева -->
+  <g>
+    <use href="#balloon" fill="url(#bRed)" color="#E53950" transform="translate(150 150) rotate(-8)"/>
+    <use href="#balloon" fill="url(#bYel)" color="#FFB300" transform="translate(240 90) rotate(6) scale(.9)"/>
+    <use href="#balloon" fill="url(#bBlu)" color="#2AA7E8" transform="translate(80 270) rotate(-14) scale(.85)"/>
+    <use href="#balloon" fill="url(#bPnk)" color="#F0399B" transform="translate(190 560) rotate(10) scale(1.05)"/>
+    <use href="#balloon" fill="url(#bGrn)" color="#43C463" transform="translate(90 660) rotate(-6) scale(.8)"/>
+    <path d="M150 310 q10 90 -20 180 M240 235 q-10 80 -40 170 M80 408 q20 70 10 150" fill="none" stroke="#fff" stroke-width="2.5" opacity=".75"/>
+  </g>
+  <!-- шары справа -->
+  <g>
+    <use href="#balloon" fill="url(#bPur)" color="#8A5CF6" transform="translate(1440 130) rotate(10)"/>
+    <use href="#balloon" fill="url(#bGrn)" color="#43C463" transform="translate(1350 70) rotate(-8) scale(.9)"/>
+    <use href="#balloon" fill="url(#bPnk)" color="#F0399B" transform="translate(1520 260) rotate(14) scale(.85)"/>
+    <use href="#balloon" fill="url(#bYel)" color="#FFB300" transform="translate(1420 560) rotate(-10) scale(1.05)"/>
+    <use href="#balloon" fill="url(#bBlu)" color="#2AA7E8" transform="translate(1520 660) rotate(8) scale(.8)"/>
+    <path d="M1440 290 q-10 90 20 180 M1350 215 q10 80 40 170 M1520 398 q-20 70 -10 150" fill="none" stroke="#fff" stroke-width="2.5" opacity=".75"/>
+  </g>
+
+  <!-- торт внизу слева -->
+  <g transform="translate(130 470) scale(1.05)">
+    <ellipse cx="60" cy="78" rx="90" ry="14" fill="#000" opacity=".15"/>
+    <rect x="-20" y="20" width="160" height="56" rx="12" fill="#FF8FB1"/>
+    <path d="M-20 32 q20 -14 40 0 t40 0 t40 0 t40 0 v8 q-20 14 -40 0 t-40 0 t-40 0 t-40 0z" fill="#FFF3F7"/>
+    <rect x="5" y="-18" width="110" height="42" rx="10" fill="#8A5CF6"/>
+    <path d="M5 -8 q14 -12 28 0 t27 0 t27 0 t28 0 v8 q-14 12 -28 0 t-27 0 t-27 0 t-28 0z" fill="#E8DCFF"/>
+    <g stroke="#fff" stroke-width="5" stroke-linecap="round">
+      <line x1="30" y1="-18" x2="30" y2="-42"/><line x1="60" y1="-18" x2="60" y2="-46"/><line x1="90" y1="-18" x2="90" y2="-42"/>
+    </g>
+    <g fill="#FFD23F"><ellipse cx="30" cy="-50" rx="6" ry="10"/><ellipse cx="60" cy="-54" rx="6" ry="10"/><ellipse cx="90" cy="-50" rx="6" ry="10"/></g>
+    <g fill="#FF6A00"><ellipse cx="30" cy="-52" rx="3" ry="5"/><ellipse cx="60" cy="-56" rx="3" ry="5"/><ellipse cx="90" cy="-52" rx="3" ry="5"/></g>
+  </g>
+
+  <!-- подарок внизу справа -->
+  <g transform="translate(1340 452)">
+    <ellipse cx="50" cy="86" rx="80" ry="13" fill="#000" opacity=".15"/>
+    <rect x="-20" y="12" width="140" height="74" rx="10" fill="#2AA7E8"/>
+    <rect x="-28" y="0" width="156" height="26" rx="8" fill="#5BC8FF"/>
+    <rect x="38" y="0" width="24" height="86" fill="#FFE066"/>
+    <rect x="-28" y="6" width="156" height="14" fill="#FFE066"/>
+    <path d="M50 2 c-26 -30 -50 -14 -24 2 c-26 10 -6 22 24 -2 M50 2 c26 -30 50 -14 24 2 c26 10 6 22 -24 -2" fill="#FFE066" stroke="#F4B400" stroke-width="2"/>
+  </g>
+</svg>
