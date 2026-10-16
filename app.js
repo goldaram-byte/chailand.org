@@ -1401,6 +1401,7 @@
       history: null, kids: null, kidBdayIn: c.kid_bday_in,
       kidsCount: Number(c.kids_count || 0),
       passes: Number(c.active_passes || 0),
+      lastVisit: c.last_visit || null,
       email: c.email || '', note: c.note || '',
       // открытая заявка в воронке и кто её ведёт
       lead: c.lead_id ? { id: c.lead_id, stage: stageRu(c.lead_status), owner: c.lead_owner || null } : null,
@@ -1442,6 +1443,7 @@
         '<select id="cfBuys"><option value="">Покупки: любые</option><option value="1">от 1</option><option value="5">от 5</option><option value="10">от 10</option></select>' +
         '<select id="cfBday"><option value="">ДР ребёнка: неважно</option><option value="7">ближайшие 7 дней</option><option value="14">14 дней</option><option value="30">30 дней</option></select>' +
         '<select id="cfRef"><option value="">Рефералы: все</option><option value="invited">Пригласившие</option><option value="referred">Приглашённые</option></select>' +
+        '<select id="cfInactive" title="Последний визит: покупка, проход по абонементу или проведённый праздник"><option value="">Давно не были: неважно</option><option value="30">не были 30+ дней</option><option value="60">не были 60+ дней</option><option value="90">не были 90+ дней</option><option value="180">не были полгода</option><option value="365">не были год</option><option value="never">ни разу не были</option></select>' +
         '<button class="btn btn-ghost btn-sm" id="cfReset">Сброс</button>' +
         '<span id="cfCount" class="muted"></span>';
       var anchor = card.querySelector('.tbl-wrap');
@@ -1449,11 +1451,11 @@
       var t = null;
       function deb() { clearTimeout(t); t = setTimeout(applyClientFilter, 250); }
       document.getElementById('cfSearch').addEventListener('input', deb);
-      ['cfApp', 'cfBonus', 'cfBuys', 'cfBday', 'cfRef'].forEach(function (id) {
+      ['cfApp', 'cfBonus', 'cfBuys', 'cfBday', 'cfRef', 'cfInactive'].forEach(function (id) {
         document.getElementById(id).addEventListener('change', applyClientFilter);
       });
       document.getElementById('cfReset').addEventListener('click', function () {
-        ['cfSearch', 'cfApp', 'cfBonus', 'cfBuys', 'cfBday', 'cfRef'].forEach(function (id) { document.getElementById(id).value = ''; });
+        ['cfSearch', 'cfApp', 'cfBonus', 'cfBuys', 'cfBday', 'cfRef', 'cfInactive'].forEach(function (id) { document.getElementById(id).value = ''; });
         applyClientFilter();
       });
     }
@@ -1461,7 +1463,7 @@
     function applyClientFilter() {
       if (!SERVER) return;
       var qs = [];
-      var m = { search: elv('cfSearch'), app: elv('cfApp'), min_bonus: elv('cfBonus'), min_buys: elv('cfBuys'), bday_days: elv('cfBday'), referral: elv('cfRef') };
+      var m = { search: elv('cfSearch'), app: elv('cfApp'), min_bonus: elv('cfBonus'), min_buys: elv('cfBuys'), bday_days: elv('cfBday'), referral: elv('cfRef'), inactive_days: elv('cfInactive') };
       Object.keys(m).forEach(function (k) { if (m[k]) qs.push(k + '=' + encodeURIComponent(m[k])); });
       api('/clients' + (qs.length ? '?' + qs.join('&') : '')).then(function (cl) {
         clients = cl.map(mapCli);
