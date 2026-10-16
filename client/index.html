@@ -144,6 +144,8 @@
   .cm.mine{align-self:flex-end;background:linear-gradient(135deg,rgba(255,154,31,.28),rgba(232,41,31,.22));border-color:rgba(255,154,31,.35)}
   .cm .who{font-size:11px;font-weight:800;color:var(--gold);margin-bottom:2px}
   .cm .tm{font-size:10.5px;color:var(--muted);margin-top:3px;text-align:right}
+  .cm .rd{margin-left:6px;opacity:.7}
+  .cm .rd.on{opacity:1;color:#7CE38B;font-weight:700}
   .chat-form{display:flex;gap:8px;margin-top:12px;align-items:flex-end}
   .chat-form textarea{flex:1;min-height:44px;max-height:120px;resize:none}
   .chat-form button{flex:none;width:48px;height:44px;border-radius:14px;border:0;background:linear-gradient(135deg,#FF9A1F,#E8291F);color:#fff;font-size:18px;cursor:pointer}
@@ -449,7 +451,7 @@
   };
 
   window.logout = function(){
-    TK = ''; ME = null; localStorage.removeItem(TKEY); CHAT_LAST = 0; if (CHAT_TIMER) clearInterval(CHAT_TIMER);
+    TK = ''; ME = null; localStorage.removeItem(TKEY); CHAT_LAST = 0; CHAT_READ_ID = 0; if (CHAT_TIMER) clearInterval(CHAT_TIMER);
     $('appScreen').className = 'hidden';
     $('authScreen').className = '';
     $('aPass').value = '';
@@ -487,11 +489,22 @@
   function chatDraw(list, append){
     var box=$('chatMsgs'); if(!box) return;
     var html=list.map(function(m){
-      return '<div class="cm'+(m.from_staff?'':' mine')+'">'+(m.from_staff?'<div class="who">'+chatEsc(m.staff_name||'Развлекательный центр')+'</div>':'')+
-        chatEsc(m.text).replace(/\n/g,'<br>')+'<div class="tm">'+chatTm(m.created_at)+'</div></div>';
+      return '<div class="cm'+(m.from_staff?'':' mine')+'" data-id="'+m.id+'">'+(m.from_staff?'<div class="who">'+chatEsc(m.staff_name||'Развлекательный центр')+'</div>':'')+
+        chatEsc(m.text).replace(/\n/g,'<br>')+'<div class="tm">'+chatTm(m.created_at)+(m.from_staff?'':' <span class="rd">✓ не прочитано</span>')+'</div></div>';
     }).join('');
     if(append) box.insertAdjacentHTML('beforeend', html); else box.innerHTML = html || '<div class="empty">Сообщений пока нет — напишите нам 👋</div>';
     box.scrollTop = box.scrollHeight;
+    chatApplyRead(CHAT_READ_ID);
+  }
+  // плашка «прочитано» на своих сообщениях: до какого сообщения прочитали в парке
+  var CHAT_READ_ID = 0;
+  function chatApplyRead(id){
+    CHAT_READ_ID = Math.max(CHAT_READ_ID, id||0);
+    document.querySelectorAll('#chatMsgs .cm.mine').forEach(function(m){
+      var rd=m.querySelector('.rd'); if(!rd) return;
+      var read = Number(m.getAttribute('data-id')) <= CHAT_READ_ID;
+      rd.textContent = read ? '✓✓ прочитано' : '✓ не прочитано'; rd.classList.toggle('on', read);
+    });
   }
   function chatLoad(){
     if(!TK) return;
@@ -503,7 +516,8 @@
   function chatPoll(){
     if(!TK || document.hidden) return;
     var onChat = !$('v-chat').className.includes('hidden');
-    if(onChat) chatLoad(); else api('/chat/unread').then(function(r){ chatBadge(r.unread||0); }).catch(function(){});
+    if(onChat) chatLoad();
+    api('/chat/unread').then(function(r){ if(!onChat) chatBadge(r.unread||0); chatApplyRead(r.staff_read_id||0); }).catch(function(){});
   }
   function chatStart(){ if(CHAT_TIMER) clearInterval(CHAT_TIMER); chatPoll(); CHAT_TIMER=setInterval(chatPoll, 10000); }
   window.chatSend = function(){
