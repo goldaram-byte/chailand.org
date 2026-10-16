@@ -158,6 +158,7 @@ aside nav{flex:1;padding:12px 10px;overflow-y:auto;display:flex;flex-direction:c
 .ch-m .del{position:absolute;top:2px;right:6px;color:var(--dim);cursor:pointer;font-size:11px;display:none;background:none;border:none}
 .ch-m:hover .del{display:block}
 #chatList{flex:1;overflow-y:auto;background:#fff}
+.ch-sec{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);padding:9px 14px 4px;background:#f8fafc}
 .ch-t{display:flex;align-items:center;gap:11px;padding:11px 14px;cursor:pointer;border-bottom:1px solid #f1f5f9}
 .ch-t:hover{background:#fff7ed}
 .ch-t .av{flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:800;color:#fff;font-size:15px}
@@ -2562,6 +2563,7 @@ function renderClientCard(){
     </div>`:''}
     <div class="cc-sec"><h4>📱 Личный кабинет</h4>
       <div class="muted" style="font-size:12.5px;margin-bottom:10px">Гость забыл пароль от приложения? Проверьте, что перед вами владелец карты (карта или телефон), и выдайте временный пароль. Он показывается один раз; после входа гость задаст свой.</div>
+      <button class="btn btn-ghost btn-sm" onclick="chatOpenClient(${c.id})">💬 Написать в чат</button>
       <button class="btn btn-ghost btn-sm" onclick="resetAppPassword(${c.id})">🔑 Выдать временный пароль</button>
       <div id="appPwResult" style="margin-top:10px"></div>
       <div id="pushStatus" class="muted" style="font-size:12.5px;margin:14px 0 8px">🔔 Уведомления: проверяем…</div>
@@ -2621,6 +2623,7 @@ function renderReport(){
 function loadKpi(){}
 function resetAppPassword(){ toast('Доступно при работе с сервером', true); }
 function sendClientPush(){ toast('Доступно при работе с сервером', true); }
+function chatOpenClient(){ toast('Доступно при работе с сервером', true); }
 function saveKpiPlan(){ toast('Доступно при работе с сервером', true); }
 function setTab(t, btn){
   document.querySelectorAll('.set-pane').forEach(x=>x.hidden=true);

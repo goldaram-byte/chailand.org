@@ -1734,7 +1734,10 @@
   function installChat() {
     var OPEN = false, TIMER = null;
     var PEER = undefined;            // undefined — список чатов, null — общий, число — собеседник
+    var PEER_KIND = 'staff';         // 'staff' — сотрудник/общий, 'client' — гость из приложения
     var PEER_NAME = '';
+    var CTHREADS = [];               // чаты с гостями
+    var CLIENT_LAST_ID = 0, CLIENT_INIT = false;
     var LAST_ID = 0;                 // последнее показанное сообщение открытого чата
     var THREADS = [];
     function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -1757,16 +1760,28 @@
     var ROLE_RU = { owner: 'владелец', admin: 'администратор', cashier: 'кассир' };
 
     function showList() {
-      PEER = undefined; PEER_NAME = ''; LAST_ID = 0;
+      PEER = undefined; PEER_KIND = 'staff'; PEER_NAME = ''; LAST_ID = 0;
       el('chatBack').hidden = true;
       el('chatTitle').textContent = '💬 Чаты';
       el('chatSub').textContent = '';
       el('chatList').hidden = false; el('chatMsgs').hidden = true; el('chatForm').hidden = true;
       drawThreads();
     }
+    function drawClientThreads() {
+      if (!CTHREADS.length) return '';
+      return '<div class="ch-sec">👤 Гости из приложения</div>' + CTHREADS.map(function (t) {
+        var ch = (t.name || '?').trim().charAt(0).toUpperCase();
+        return '<div class="ch-t" onclick="chatOpenClient(' + t.client_id + ',\'' + esc(t.name).replace(/'/g, '&#39;') + '\')">' +
+          '<span class="av" style="background:#0f766e">' + esc(ch) + '</span>' +
+          '<span class="ti"><span class="tn">' + esc(t.name) + '<small>' + esc(t.phone || '') + '</small></span>' +
+          '<span class="tp">' + (t.last_from_staff ? 'Вы: ' : '') + esc(t.last_text || '') + '</span></span>' +
+          (t.unread ? '<span class="un">' + (t.unread > 9 ? '9+' : t.unread) + '</span>' : '') +
+          '</div>';
+      }).join('') + '<div class="ch-sec">👥 Сотрудники</div>';
+    }
     function drawThreads() {
       var box = el('chatList'); if (!box || PEER !== undefined) return;
-      box.innerHTML = THREADS.map(function (t) {
+      box.innerHTML = drawClientThreads() + THREADS.map(function (t) {
         return '<div class="ch-t" onclick="chatOpen(' + (t.peer_id == null ? 'null' : t.peer_id) + ',\'' + esc(t.name).replace(/'/g, '&#39;') + '\')">' +
           ava(t) +
           '<span class="ti"><span class="tn">' + esc(t.name) +
@@ -1779,6 +1794,16 @@
     function drawMsgs(list, append) {
       var box = el('chatMsgs'); if (!box) return;
       var me = (window.CURRENT_USER || {}).id;
+      if (PEER_KIND === 'client') {
+        var chtml = list.map(function (m) {
+          return '<div class="ch-m' + (m.from_staff ? ' mine' : '') + '" data-id="' + m.id + '">' +
+            '<div class="who">' + esc(m.from_staff ? (m.user_name || 'Сотрудник') : PEER_NAME) + '</div>' +
+            esc(m.text).replace(/\n/g, '<br>') + '<div class="tm">' + fmtTm(m.created_at) + '</div></div>';
+        }).join('');
+        if (append) box.insertAdjacentHTML('beforeend', chtml); else box.innerHTML = chtml || '<div class="muted" style="font-size:12.5px;text-align:center;padding:20px 0">Сообщений пока нет</div>';
+        box.scrollTop = box.scrollHeight;
+        return;
+      }
       var html = list.map(function (m) {
         var mine = m.user_id === me;
         var canDel = mine || (ME && ME.role === 'owner' && PEER === null);
@@ -1795,16 +1820,30 @@
     }
     function pollThreads() {
       if (!SERVER || !localStorage.getItem(TOKEN_KEY)) return Promise.resolve();
-      return api('/chat/threads').then(function (list) {
-        THREADS = list || [];
-        updateFab(THREADS.reduce(function (a, t) { return a + (t.unread || 0); }, 0));
+      return Promise.all([
+        api('/chat/threads').catch(function () { return THREADS; }),
+        api('/chat/clients/threads').catch(function () { return CTHREADS; }),
+        api('/chat/clients/unread').catch(function () { return null; }),
+      ]).then(function (r) {
+        THREADS = r[0] || [];
+        CTHREADS = r[1] || [];
+        var un = r[2];
+        if (un) {
+          if (CLIENT_INIT && un.last_id > CLIENT_LAST_ID && un.unread > 0) {
+            if (typeof toast === 'function') toast('💬 Новое сообщение от гостя в чате');
+            if (typeof leadChime === 'function') { try { leadChime(); } catch (e) {} }
+          }
+          CLIENT_LAST_ID = Math.max(CLIENT_LAST_ID, un.last_id || 0); CLIENT_INIT = true;
+        }
+        updateFab(THREADS.reduce(function (a, t) { return a + (t.unread || 0); }, 0) + CTHREADS.reduce(function (a, t) { return a + (t.unread || 0); }, 0));
         if (OPEN && PEER === undefined) drawThreads();
       }).catch(function () {});
     }
     function pollThread() {
       if (PEER === undefined) return Promise.resolve();
       var qp = (PEER == null ? '' : 'peer_id=' + PEER + '&') + 'after_id=' + LAST_ID + '&mark_read=1';
-      return api('/chat?' + qp).then(function (list) {
+      var url = PEER_KIND === 'client' ? '/chat/clients/' + PEER + '?after_id=' + LAST_ID + '&mark_read=1' : '/chat?' + qp;
+      return api(url).then(function (list) {
         list = list || [];
         if (!list.length) return;
         var fresh = LAST_ID === 0;
@@ -1812,8 +1851,24 @@
         drawMsgs(list, !fresh);
       }).catch(function () {});
     }
+    window.chatOpenClient = function (clientId, name) {
+      if (!name) {
+        var c = (typeof clients !== 'undefined' ? clients : []).filter(function (x) { return x.id === clientId; })[0];
+        var t = CTHREADS.filter(function (x) { return x.client_id === clientId; })[0];
+        name = (c && c.name) || (t && t.name) || 'Гость';
+      }
+      var pnl = el('chatPanel'); if (pnl && !pnl.classList.contains('open')) { pnl.classList.add('open'); OPEN = true; }
+      PEER = clientId; PEER_KIND = 'client'; PEER_NAME = name || 'Гость'; LAST_ID = 0;
+      el('chatBack').hidden = false;
+      el('chatTitle').textContent = '👤 ' + PEER_NAME;
+      el('chatSub').textContent = 'гость · чат из приложения';
+      el('chatList').hidden = true; el('chatMsgs').hidden = false; el('chatForm').hidden = false;
+      el('chatMsgs').innerHTML = '';
+      pollThread().then(pollThreads);
+      setTimeout(function () { var t = el('chatText'); if (t) t.focus(); }, 80);
+    };
     window.chatOpen = function (peerId, name) {
-      PEER = peerId; PEER_NAME = name; LAST_ID = 0;
+      PEER = peerId; PEER_KIND = 'staff'; PEER_NAME = name; LAST_ID = 0;
       el('chatBack').hidden = false;
       el('chatTitle').textContent = peerId == null ? '📢 Общий чат' : name;
       el('chatSub').textContent = peerId == null ? 'видят все сотрудники' : 'личная переписка';
@@ -1834,10 +1889,12 @@
       var t = el('chatText'); if (!t) return;
       var text = t.value.trim(); if (!text) return;
       t.value = '';
-      api('/chat', { method: 'POST', body: {
-        text: text, recipient_id: PEER == null ? null : PEER,
-        location_id: (typeof deviceLoc === 'function') ? deviceLoc() : null,
-      } })
+      (PEER_KIND === 'client'
+        ? api('/chat/clients/' + PEER, { method: 'POST', body: { text: text } })
+        : api('/chat', { method: 'POST', body: {
+            text: text, recipient_id: PEER == null ? null : PEER,
+            location_id: (typeof deviceLoc === 'function') ? deviceLoc() : null,
+          } }))
         .then(function () { return pollThread(); })
         .catch(function (e) { t.value = text; if (typeof toast === 'function') toast(e.message || 'Ошибка', true); });
     };
