@@ -388,6 +388,23 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 .lead-in.free{color:#b45309;background:#fffbeb;border-color:#fde68a}
 .lead-in:hover{filter:brightness(.95)}
 .crm-col.dragover{outline:2px dashed var(--orange);outline-offset:-2px;background:#fff7ed}
+.crm-period{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.crm-period button{padding:6px 11px;border-radius:16px;background:#fff;border:1px solid var(--line);font-weight:600;font-size:12px;color:var(--dim)}
+.crm-period button.act{background:var(--orange);border-color:var(--orange);color:#fff}
+.crm-period input{padding:5px 8px;font-size:12px;border:1px solid var(--line);border-radius:10px}
+.crm-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px;margin-bottom:14px}
+.crm-tiles .stat .sv{font-size:24px}
+.crm-tiles .stat .sv.warn{color:var(--red)}
+.crm-tiles .stat .sub{font-size:11.5px;color:var(--dim);margin-top:3px}
+.crm-flow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.crm-flow div{flex:1;min-width:120px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.crm-flow b{font-size:20px;display:block}
+.crm-flow small{color:var(--dim);font-size:11.5px}
+.crm-flow .pct{font-size:11.5px;font-weight:700;color:var(--orange)}
+.crm-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:14px}
+@media(max-width:900px){.crm-grid{grid-template-columns:1fr}}
+.crm-grid h4{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.lead .lreason{font-size:11.5px;color:var(--red);margin-top:5px}
 .stage-chips{display:flex;gap:6px;flex-wrap:wrap}
 .stage-chips button{padding:8px 13px;border-radius:20px;background:#fff;border:1px solid var(--line);font-weight:600;font-size:12.5px;color:var(--dim)}
 .stage-chips button:hover{border-color:#fdba74;color:var(--orange)}
@@ -769,6 +786,18 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
       </div>
       <div id="lcliFound" class="card-found" style="margin-top:8px"></div>
       <div class="muted" style="font-size:12.5px">Ведите клиента по стадиям, ставьте задачи и переносите в базу клиентов при продаже. Постоянного гостя можно взять прямо из базы — телефон и карта подставятся сами.</div>
+    </div>
+    <div class="card" id="crmStatsCard">
+      <h3 style="flex-wrap:wrap">📊 Картина воронки
+        <div class="crm-period" id="crmPeriod" style="margin-left:auto">
+          <button data-p="today" onclick="crmPeriod('today')">Сегодня</button>
+          <button data-p="7" onclick="crmPeriod('7')">7 дней</button>
+          <button data-p="30" class="act" onclick="crmPeriod('30')">30 дней</button>
+          <button data-p="month" onclick="crmPeriod('month')">Этот месяц</button>
+          <input type="date" id="crmFrom" onchange="crmPeriod('custom')" title="С"> <input type="date" id="crmTo" onchange="crmPeriod('custom')" title="По">
+        </div>
+      </h3>
+      <div id="crmStatsBody"><div class="muted" style="font-size:12.5px">Доступно при работе с сервером</div></div>
     </div>
     <div class="crm-board" id="crmBoard"></div>
   </div>
@@ -2778,6 +2807,17 @@ function setLeadStage(id,stage){
   const l=leads.find(x=>x.id===id); if(!l||l.stage===stage) return;
   l.stage=stage; renderCrm();
 }
+function setLostReason(id){
+  const l=leads.find(x=>x.id===id); if(!l) return;
+  const r=prompt('Причина отказа (дорого, выбрали другое место, не дозвонились…)', l.lost_reason||'');
+  if(r===null) return; l.lost_reason=r.trim(); renderCrm();
+}
+let CRM_PERIOD='30';
+function crmPeriod(p){
+  CRM_PERIOD=p;
+  document.querySelectorAll('#crmPeriod button').forEach(b=>b.classList.toggle('act', b.getAttribute('data-p')===p));
+  if(typeof loadCrmStats==='function') loadCrmStats();
+}
 // --- Перетаскивание заявки между колонками воронки ---
 let dragLeadId=null;
 function leadDragStart(e,id){
@@ -2843,6 +2883,7 @@ function renderCrm(){
           <div class="lp">${l.phone||''}</div>
           ${l.source?`<div><span class="lsrc">${l.source}</span></div>`:''}
           ${l.note?`<div class="lnote lnote-clip">${l.note}</div>`:''}
+          ${l.stage==='Отказ'&&l.lost_reason?`<div class="lreason">✕ ${l.lost_reason}</div>`:''}
           <div class="lead-meta">${l.owner?`<span class="lead-own" title="Заявку ведёт ${l.owner}">🙋 ${l.owner.split(' ')[0]}</span>`:'<span class="lead-free" title="Никто не взял заявку в работу">свободна</span>'}${openTasks?`<span class="ltdue">☑ задач: ${openTasks}</span>`:''}${(l.notes&&l.notes.length)?`<span class="muted" style="font-size:11px">✎ ${l.notes.length}</span>`:''}</div>
         </div>`;
       }).join('') || '<div class="muted crm-empty" style="font-size:12px;padding:6px 2px">перетащите заявку сюда</div>'}
@@ -2870,6 +2911,7 @@ function renderLeadCard(){
     </div>
     <div style="font-size:11px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Этап воронки</div>
     <div class="stage-chips">${CRM_STAGES.map(st=>`<button class="${l.stage===st?'act':''}" onclick="setLeadStage(${l.id},'${st}')">${st}</button>`).join('')}</div>
+    ${l.stage==='Отказ'?`<div class="lreason" style="margin-top:8px;font-size:12.5px;color:var(--red)">Причина отказа: ${l.lost_reason||'не указана'} <button class="btn btn-ghost btn-sm" style="margin-left:6px" onclick="setLostReason(${l.id})">изменить</button></div>`:''}
     <div style="font-size:11px;color:var(--dim);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 7px">Кто ведёт заявку</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <select onchange="setLeadOwner(${l.id}, this.value)" style="min-width:210px">

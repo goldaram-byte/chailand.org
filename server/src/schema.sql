@@ -655,6 +655,26 @@ END $$;
 -- Кто взял заявку в работу: заявка без ответственного «висит», а с именем
 -- видно, с кого спрашивать на планёрке.
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS owner_id bigint REFERENCES users(id);
+-- Аналитика воронки: когда заявку взяли в работу (первый переход из «Новый»
+-- или назначение ответственного), когда закрыли (Купил/Отказ), причина отказа.
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS first_touch_at timestamptz;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS closed_at timestamptz;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS lost_reason text;
+-- Старые заявки: приближаем по дате последнего изменения, чтобы отчёт не был пустым
+UPDATE leads SET first_touch_at = updated_at WHERE first_touch_at IS NULL AND (status <> 'new' OR owner_id IS NOT NULL);
+UPDATE leads SET closed_at = updated_at WHERE closed_at IS NULL AND status IN ('won','lost');
+-- Журнал переходов по этапам — кто и когда двигал заявку
+CREATE TABLE IF NOT EXISTS lead_events (
+  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  lead_id     bigint NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  from_status text,
+  to_status   text NOT NULL,
+  user_id     bigint REFERENCES users(id),
+  reason      text,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_lead_events_lead ON lead_events(lead_id);
+CREATE INDEX IF NOT EXISTS idx_lead_events_at ON lead_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_leads_owner ON leads(owner_id);
 
 -- KPI кассиров: какие товары считаются «водой». Помечаем по названию только
