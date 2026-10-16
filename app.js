@@ -1738,6 +1738,15 @@
     var PEER_NAME = '';
     var CTHREADS = [];               // чаты с гостями
     var CLIENT_LAST_ID = 0, CLIENT_INIT = false;
+    var BIG = false;                 // развёрнутый режим: список слева, переписка справа
+    try { BIG = localStorage.getItem('chat_big') === '1'; } catch (e) {}
+    function applyBig() { var p = el('chatPanel'); if (p) p.classList.toggle('big', BIG); var b = el('chatBig'); if (b) b.textContent = BIG ? '⤡' : '⤢'; }
+    window.chatBigToggle = function () {
+      BIG = !BIG; try { localStorage.setItem('chat_big', BIG ? '1' : '0'); } catch (e) {}
+      applyBig(); drawThreads();
+      if (BIG && PEER !== undefined) { var m = el('chatMsgs'); if (m) m.scrollTop = m.scrollHeight; }
+    };
+    function isActive(kind, id) { return PEER !== undefined && PEER_KIND === kind && String(PEER) === String(id); }
     var LAST_ID = 0;                 // последнее показанное сообщение открытого чата
     var THREADS = [];
     function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -1771,7 +1780,7 @@
       if (!CTHREADS.length) return '';
       return '<div class="ch-sec">👤 Гости из приложения</div>' + CTHREADS.map(function (t) {
         var ch = (t.name || '?').trim().charAt(0).toUpperCase();
-        return '<div class="ch-t" onclick="chatOpenClient(' + t.client_id + ',\'' + esc(t.name).replace(/'/g, '&#39;') + '\')">' +
+        return '<div class="ch-t' + (isActive('client', t.client_id) ? ' on' : '') + '" onclick="chatOpenClient(' + t.client_id + ',\'' + esc(t.name).replace(/'/g, '&#39;') + '\')">' +
           '<span class="av" style="background:#0f766e">' + esc(ch) + '</span>' +
           '<span class="ti"><span class="tn">' + esc(t.name) + '<small>' + esc(t.phone || '') + '</small></span>' +
           '<span class="tp">' + (t.last_from_staff ? 'Вы: ' : '') + esc(t.last_text || '') + '</span></span>' +
@@ -1780,9 +1789,10 @@
       }).join('') + '<div class="ch-sec">👥 Сотрудники</div>';
     }
     function drawThreads() {
-      var box = el('chatList'); if (!box || PEER !== undefined) return;
+      var box = el('chatList'); if (!box) return;
+      if (PEER !== undefined && !BIG) return;
       box.innerHTML = drawClientThreads() + THREADS.map(function (t) {
-        return '<div class="ch-t" onclick="chatOpen(' + (t.peer_id == null ? 'null' : t.peer_id) + ',\'' + esc(t.name).replace(/'/g, '&#39;') + '\')">' +
+        return '<div class="ch-t' + (isActive('staff', t.peer_id) ? ' on' : '') + '" onclick="chatOpen(' + (t.peer_id == null ? 'null' : t.peer_id) + ',\'' + esc(t.name).replace(/'/g, '&#39;') + '\')">' +
           ava(t) +
           '<span class="ti"><span class="tn">' + esc(t.name) +
           (t.role ? '<small>' + (ROLE_RU[t.role] || t.role) + '</small>' : '<small>все сотрудники</small>') + '</span>' +
@@ -1852,6 +1862,7 @@
       }).catch(function () {});
     }
     window.chatOpenClient = function (clientId, name) {
+      applyBig();
       if (!name) {
         var c = (typeof clients !== 'undefined' ? clients : []).filter(function (x) { return x.id === clientId; })[0];
         var t = CTHREADS.filter(function (x) { return x.client_id === clientId; })[0];
@@ -1864,6 +1875,7 @@
       el('chatSub').textContent = 'гость · чат из приложения';
       el('chatList').hidden = true; el('chatMsgs').hidden = false; el('chatForm').hidden = false;
       el('chatMsgs').innerHTML = '';
+      drawThreads();
       pollThread().then(pollThreads);
       setTimeout(function () { var t = el('chatText'); if (t) t.focus(); }, 80);
     };
@@ -1874,6 +1886,7 @@
       el('chatSub').textContent = peerId == null ? 'видят все сотрудники' : 'личная переписка';
       el('chatList').hidden = true; el('chatMsgs').hidden = false; el('chatForm').hidden = false;
       el('chatMsgs').innerHTML = '';
+      drawThreads();
       pollThread().then(pollThreads);
       setTimeout(function () { var t = el('chatText'); if (t) t.focus(); }, 80);
     };
@@ -1882,6 +1895,7 @@
       var pnl = el('chatPanel'); if (!pnl) return;
       OPEN = !pnl.classList.contains('open');
       pnl.classList.toggle('open', OPEN);
+      applyBig();
       if (OPEN) { showList(); pollThreads(); }
     };
     window.chatSend = function () {

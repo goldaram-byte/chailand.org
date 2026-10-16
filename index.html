@@ -143,12 +143,27 @@ aside nav{flex:1;padding:12px 10px;overflow-y:auto;display:flex;flex-direction:c
 #chatFab:hover{background:var(--orange-h)}
 #chatFab .cb{position:absolute;top:-4px;right:-4px;min-width:20px;height:20px;border-radius:999px;background:var(--red);
   color:#fff;font-size:11.5px;font-weight:800;display:grid;place-items:center;padding:0 5px;border:2px solid #fff}
-#chatPanel{position:fixed;right:22px;bottom:88px;z-index:71;width:min(360px, calc(100vw - 44px));height:min(480px, calc(100vh - 130px));
+#chatPanel{position:fixed;right:22px;bottom:88px;z-index:71;width:min(400px, calc(100vw - 44px));height:min(620px, calc(100vh - 130px));
   background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(15,23,42,.35);display:none;flex-direction:column;overflow:hidden}
 #chatPanel.open{display:flex}
-#chatPanel .ch-head{background:var(--ink);color:#fff;padding:12px 16px;font-weight:800;font-size:14.5px;display:flex;align-items:center;gap:8px}
+#chatPanel [hidden]{display:none!important}
+#chatPanel .ch-head{background:var(--ink);color:#fff;padding:12px 16px;font-weight:800;font-size:14.5px;display:flex;align-items:center;gap:8px;flex:none}
 #chatPanel .ch-head small{font-weight:600;font-size:11.5px;opacity:.75}
-#chatPanel .ch-head button:last-child{margin-left:auto;color:#cbd5e1;font-size:18px;background:none;border:none;cursor:pointer;padding:2px 6px}
+#chatPanel .ch-head .hb{color:#cbd5e1;font-size:17px;background:none;border:none;cursor:pointer;padding:2px 6px}
+#chatPanel .ch-head .hb:hover{color:#fff}
+#chatPanel .ch-head #chatBig{margin-left:auto;font-size:15px}
+#chatPanel .ch-body{flex:1;display:flex;min-height:0}
+#chatPanel .ch-right{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+#chatPanel:not(.big) #chatList:not([hidden]) ~ .ch-right{display:none}
+#chatEmpty{display:none;flex:1;place-items:center;color:var(--dim);font-size:13px;background:#f8fafc}
+/* Развёрнутый режим: список слева, переписка справа */
+#chatPanel.big{width:min(1040px, calc(100vw - 60px));height:calc(100vh - 110px);right:30px;bottom:70px}
+#chatPanel.big #chatList{flex:0 0 340px;border-right:1px solid var(--line)}
+#chatPanel.big #chatList[hidden]{display:block!important}
+#chatPanel.big #chatBack{display:none!important}
+#chatPanel.big #chatMsgs[hidden] ~ #chatEmpty{display:grid}
+#chatPanel.big .ch-m{max-width:70%;font-size:13.5px}
+#chatPanel.big #chatText{height:48px}
 #chatMsgs{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px;background:#f8fafc}
 .ch-m{max-width:82%;padding:8px 12px;border-radius:12px;background:#fff;border:1px solid var(--line);font-size:13px;line-height:1.4;position:relative}
 .ch-m .who{font-size:11px;font-weight:800;color:var(--orange);margin-bottom:2px}
@@ -157,10 +172,11 @@ aside nav{flex:1;padding:12px 10px;overflow-y:auto;display:flex;flex-direction:c
 .ch-m.mine{align-self:flex-end;background:#fff7ed;border-color:#fed7aa}
 .ch-m .del{position:absolute;top:2px;right:6px;color:var(--dim);cursor:pointer;font-size:11px;display:none;background:none;border:none}
 .ch-m:hover .del{display:block}
-#chatList{flex:1;overflow-y:auto;background:#fff}
+#chatList{flex:1;overflow-y:auto;overflow-x:hidden;background:#fff}
 .ch-sec{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--dim);padding:9px 14px 4px;background:#f8fafc}
 .ch-t{display:flex;align-items:center;gap:11px;padding:11px 14px;cursor:pointer;border-bottom:1px solid #f1f5f9}
 .ch-t:hover{background:#fff7ed}
+.ch-t.on{background:#fff1e4;box-shadow:inset 3px 0 0 var(--orange)}
 .ch-t .av{flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-weight:800;color:#fff;font-size:15px}
 .ch-t .ti{flex:1;min-width:0}
 .ch-t .tn{font-weight:800;font-size:13.5px;display:flex;align-items:center;gap:6px}
@@ -169,7 +185,7 @@ aside nav{flex:1;padding:12px 10px;overflow-y:auto;display:flex;flex-direction:c
 .ch-t .un{flex:none;min-width:20px;height:20px;border-radius:999px;background:var(--red);color:#fff;
   font-size:11.5px;font-weight:800;display:grid;place-items:center;padding:0 6px}
 #chatBack{color:#cbd5e1;font-size:18px;background:none;border:none;cursor:pointer;padding:2px 8px 2px 0;margin:0}
-#chatForm{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line);background:#fff}
+#chatForm{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line);background:#fff;flex:none}
 #chatText{flex:1;border:1.5px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13.5px;font-family:inherit;resize:none;height:40px}
 #chatSend{background:var(--orange);color:#fff;border:none;border-radius:10px;padding:0 16px;font-weight:800;cursor:pointer}
 #chatSend:hover{background:var(--orange-h)}
@@ -1261,13 +1277,19 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
   <div class="ch-head">
     <button id="chatBack" hidden onclick="chatBack()" title="К списку чатов">←</button>
     <span id="chatTitle">💬 Чаты</span><small id="chatSub"></small>
-    <button onclick="chatToggle()" title="Свернуть">✕</button></div>
-  <div id="chatList"></div>
-  <div id="chatMsgs" hidden></div>
-  <div id="chatForm" hidden>
-    <textarea id="chatText" placeholder="Сообщение…" rows="1"
-      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatSend();}"></textarea>
-    <button id="chatSend" onclick="chatSend()">➤</button>
+    <button class="hb" id="chatBig" onclick="chatBigToggle()" title="Развернуть / свернуть окно">⤢</button>
+    <button class="hb" onclick="chatToggle()" title="Закрыть">✕</button></div>
+  <div class="ch-body">
+    <div id="chatList"></div>
+    <div class="ch-right">
+      <div id="chatMsgs" hidden></div>
+      <div id="chatEmpty">Выберите чат слева</div>
+      <div id="chatForm" hidden>
+        <textarea id="chatText" placeholder="Сообщение…" rows="1"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatSend();}"></textarea>
+        <button id="chatSend" onclick="chatSend()">➤</button>
+      </div>
+    </div>
   </div>
 </div>
 
