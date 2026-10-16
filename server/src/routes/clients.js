@@ -362,7 +362,15 @@ clientsRouter.post(
 clientsRouter.put(
   '/:id',
   ah(async (req, res) => {
-    const { full_name, phone, app_installed, note, email } = req.body || {};
+    const { full_name, phone, app_installed, note, email, max_url } = req.body || {};
+    // Ссылка на профиль в MAX: пустая строка стирает, иначе только max.ru / max://
+    let maxUrl;
+    if (max_url !== undefined) {
+      const v = String(max_url || '').trim();
+      if (!v) maxUrl = '';
+      else if (/^(https?:\/\/([a-z0-9-]+\.)*max\.ru\/|max:\/\/)/i.test(v)) maxUrl = v.slice(0, 300);
+      else return res.status(400).json({ error: 'Ссылка на MAX должна начинаться с https://max.ru/' });
+    }
     if (full_name != null && !String(full_name).trim()) {
       return res.status(400).json({ error: 'Имя клиента не может быть пустым' });
     }
@@ -385,10 +393,11 @@ clientsRouter.put(
          phone = COALESCE(NULLIF(trim($3),''), phone),
          app_installed = COALESCE($4, app_installed),
          note = COALESCE($5, note),
-         email = COALESCE($6, email)
+         email = COALESCE($6, email),
+         max_url = CASE WHEN $7::text IS NULL THEN max_url ELSE NULLIF($7::text,'') END
        WHERE id=$1 RETURNING *`,
       [req.params.id, full_name == null ? null : String(full_name), phoneNorm,
-       app_installed, note, email == null ? null : String(email).trim()]
+       app_installed, note, email == null ? null : String(email).trim(), maxUrl === undefined ? null : maxUrl]
     );
     if (!row) return res.status(404).json({ error: 'Клиент не найден' });
     await audit(req, 'client.update', { entity: 'client', entityId: row.id });

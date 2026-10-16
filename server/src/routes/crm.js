@@ -98,8 +98,18 @@ crmRouter.get(
   '/leads',
   ah(async (req, res) => {
     const leads = await q(
-      `SELECT l.*, u.full_name AS owner_name
+      `SELECT l.*, u.full_name AS owner_name, COALESCE(c.max_url, cp.max_url) AS client_max_url
          FROM leads l LEFT JOIN users u ON u.id = l.owner_id
+                      LEFT JOIN clients c ON c.id = l.client_id
+                      -- заявка без привязки к клиенту: ищем карту по телефону (последние 10 цифр),
+                      -- чтобы кнопка MAX открывала сохранённый профиль гостя
+                      LEFT JOIN LATERAL (
+                        SELECT x.max_url FROM clients x
+                         WHERE l.client_id IS NULL AND x.max_url IS NOT NULL
+                           AND length(regexp_replace(COALESCE(l.phone,''), '[^0-9]', '', 'g')) >= 10
+                           AND right(regexp_replace(x.phone, '[^0-9]', '', 'g'), 10) = right(regexp_replace(l.phone, '[^0-9]', '', 'g'), 10)
+                         ORDER BY x.id LIMIT 1
+                      ) cp ON true
         ORDER BY l.updated_at DESC`
     );
     const tasks = await q('SELECT * FROM lead_tasks ORDER BY due_date NULLS LAST, id');

@@ -342,6 +342,9 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS email     text;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS kid_bonus_at timestamptz;
 -- пароль приложения сброшен сотрудником: временный, клиенту нужно сменить его в приложении
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS pass_temp boolean NOT NULL DEFAULT false;
+-- Ссылка на профиль гостя в мессенджере MAX (max.ru/u/…): у MAX нет ссылки
+-- «написать по номеру», поэтому сотрудник сохраняет её один раз в карточке.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS max_url text;
 
 -- Push-подписки устройств из личного кабинета (Web Push). Одна строка —
 -- одно устройство/браузер; endpoint уникален. Мёртвые подписки (404/410

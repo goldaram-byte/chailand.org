@@ -399,6 +399,10 @@ td input,td select{padding:6px 9px;font-size:13px;border-radius:8px}
 .lead-mini.dragging{opacity:.45;transform:rotate(2deg)}
 .lead-mini .lnote-clip{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .lead-meta{display:flex;gap:8px;align-items:center;margin-top:7px}
+.msg-links{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.msg-links .msg-btn{text-decoration:none;display:inline-flex;align-items:center;gap:4px}
+.msg-links .tg{color:#1d7fc1;border-color:#9fd3f3;background:#eef8fe}
+.msg-links .mx{color:#6b3fd6;border-color:#c9b8f5;background:#f3eefe}
 .lead-cli{display:inline-block;font-size:10.5px;font-weight:700;color:var(--green);background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:1px 7px;vertical-align:2px}
 .lead-own{display:inline-block;font-size:10.5px;font-weight:700;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:1px 7px}
 .lead-free{display:inline-block;font-size:10.5px;font-weight:700;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:1px 7px}
@@ -2438,6 +2442,29 @@ function addClient(){
   renderClients(); toast('Клиент создан. Выдана карта '+card+' ⭐');
 }
 // Метка «уже в воронке»: кто ведёт и на каком этапе; клик открывает заявку
+/* Связь с гостем в мессенджерах: Telegram открывает чат по номеру (t.me/+7…),
+   у MAX такой ссылки нет — открываем сохранённый профиль (max.ru/u/…) либо
+   копируем номер и открываем MAX, чтобы найти гостя через поиск контактов. */
+function phoneIntl(p){
+  let d=String(p||'').replace(/\D/g,'');
+  if(d.length===11 && d[0]==='8') d='7'+d.slice(1);
+  if(d.length===10) d='7'+d;
+  return d.length>=11 ? '+'+d : '';
+}
+function contactLinks(phone, maxUrl, opts){
+  const intl=phoneIntl(phone); opts=opts||{};
+  if(!intl && !maxUrl) return '';
+  const tg = intl ? `<a class="btn btn-ghost btn-sm msg-btn tg" href="https://t.me/${intl}" target="_blank" rel="noopener" title="Написать в Telegram по номеру ${intl}">✈️ Telegram</a>` : '';
+  const mx = maxUrl
+    ? `<a class="btn btn-ghost btn-sm msg-btn mx" href="${String(maxUrl).replace(/"/g,'&quot;')}" target="_blank" rel="noopener" title="Открыть диалог в MAX">Ⓜ MAX</a>`
+    : (intl ? `<button class="btn btn-ghost btn-sm msg-btn mx" onclick="openMax('${intl}')" title="У MAX нет ссылки по номеру: скопируем номер и откроем MAX — вставьте его в поиск контактов">Ⓜ MAX</button>` : '');
+  const call = (intl && !opts.noCall) ? `<a class="btn btn-ghost btn-sm msg-btn" href="tel:${intl}" title="Позвонить">📞 Позвонить</a>` : '';
+  return `<div class="msg-links">${tg}${mx}${call}</div>`;
+}
+function openMax(intl){
+  const done=()=>{ toast('Номер '+intl+' скопирован. В MAX: Контакты → поиск → вставьте номер'); window.open('https://web.max.ru/', '_blank', 'noopener'); };
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(intl).then(done, done); else done();
+}
 function leadBadge(c){
   if(!c.lead) return '';
   const who = c.lead.owner ? 'ведёт '+c.lead.owner.split(' ')[0] : 'свободна';
@@ -2566,6 +2593,7 @@ function renderClientCard(){
       <div style="flex:1">
         <div style="font-size:18px;font-weight:800">${c.name}</div>
         <div class="muted" style="font-size:13px">${c.phone} · <b style="color:var(--orange)">${c.card}</b> ${leadBadge(c)}</div>
+        ${contactLinks(c.phone, c.maxUrl)}
       </div>
       ${c.lead
         ? `<button class="btn btn-ghost btn-sm" title="Заявка уже в воронке — открыть её" onclick="closeClientCard(); openLeadCard(${c.lead.id})">🧲 Открыть заявку</button>`
@@ -2585,6 +2613,7 @@ function renderClientCard(){
         <div><label>Телефон</label><input id="ecPhone" value="${String(c.phone||'').replace(/"/g,'&quot;')}"></div>
         <div><label>E-mail</label><input id="ecEmail" type="email" placeholder="не указан" value="${String(c.email||'').replace(/"/g,'&quot;')}"></div>
         <div><label>Примечание</label><input id="ecNote" placeholder="что важно помнить о клиенте" value="${String(c.note||'').replace(/"/g,'&quot;')}"></div>
+        <div style="grid-column:1/-1"><label>Профиль в MAX</label><input id="ecMax" placeholder="https://max.ru/u/… — гость может прислать ссылку «Поделиться профилем»" value="${String(c.maxUrl||'').replace(/"/g,'&quot;')}"></div>
       </div>
       <div style="margin-top:10px"><button class="btn btn-green btn-sm" onclick="saveClientCard(${c.id})">Сохранить изменения</button></div>
     </div>`:''}
@@ -2944,6 +2973,7 @@ function renderLeadCard(){
       <div style="flex:1">
         <div style="font-size:18px;font-weight:800">${l.name} ${l.client_id?'<span class="lead-cli">✓ в базе клиентов</span>':''}</div>
         <div class="muted" style="font-size:13px">${l.phone||'—'}${l.source?' · '+l.source:''}${l.created?' · заявка от '+l.created.split('-').reverse().join('.'):''}</div>
+        ${contactLinks(l.phone, l.maxUrl)}
       </div>
       <button onclick="closeLeadCard()" style="font-size:20px;color:var(--dim);padding:4px 10px">✕</button>
     </div>

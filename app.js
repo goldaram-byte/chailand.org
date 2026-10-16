@@ -202,6 +202,7 @@
       client_id: l.client_id || null,
       owner_id: l.owner_id || null, owner: l.owner_name || null,
       lost_reason: l.lost_reason || '',
+      maxUrl: l.client_max_url || '',
       tasks: (l.tasks || []).map(function (t) { return { id: t.id, text: t.title, done: t.done, due: t.due_date || '' }; }),
       notes: (l.notes || []).map(function (n) { return { id: n.id, text: n.text }; }),
       created: (l.created_at || '').slice(0, 10),
@@ -872,10 +873,11 @@
       var name = v('ecName');
       if (!name) { if (typeof toast === 'function') toast('Имя не может быть пустым', true); return; }
       var body = { full_name: name, phone: v('ecPhone'), email: v('ecEmail'), note: v('ecNote') };
+      if (document.getElementById('ecMax')) body.max_url = v('ecMax');
       if (!SERVER) return;
       api('/clients/' + id, { method: 'PUT', body: body })
         .then(function (r) {
-          c.name = r.full_name; c.phone = r.phone || ''; c.email = r.email || ''; c.note = r.note || '';
+          c.name = r.full_name; c.phone = r.phone || ''; c.email = r.email || ''; c.note = r.note || ''; c.maxUrl = r.max_url || '';
           if (typeof renderClients === 'function') renderClients();
           if (typeof renderClientCard === 'function') renderClientCard();
           if (typeof toast === 'function') toast('Данные клиента сохранены');
@@ -1402,6 +1404,7 @@
       kidsCount: Number(c.kids_count || 0),
       passes: Number(c.active_passes || 0),
       lastVisit: c.last_visit || null,
+      maxUrl: c.max_url || '',
       email: c.email || '', note: c.note || '',
       // открытая заявка в воронке и кто её ведёт
       lead: c.lead_id ? { id: c.lead_id, stage: stageRu(c.lead_status), owner: c.lead_owner || null } : null,
