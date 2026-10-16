@@ -487,7 +487,7 @@
   function chatDraw(list, append){
     var box=$('chatMsgs'); if(!box) return;
     var html=list.map(function(m){
-      return '<div class="cm'+(m.from_staff?'':' mine')+'">'+(m.from_staff?'<div class="who">'+chatEsc(m.staff_name||'ЧайЛэнд')+'</div>':'')+
+      return '<div class="cm'+(m.from_staff?'':' mine')+'">'+(m.from_staff?'<div class="who">'+chatEsc(m.staff_name||'Развлекательный центр')+'</div>':'')+
         chatEsc(m.text).replace(/\n/g,'<br>')+'<div class="tm">'+chatTm(m.created_at)+'</div></div>';
     }).join('');
     if(append) box.insertAdjacentHTML('beforeend', html); else box.innerHTML = html || '<div class="empty">Сообщений пока нет — напишите нам 👋</div>';
