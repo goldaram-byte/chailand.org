@@ -9,7 +9,7 @@ import { q, q1, tx } from '../db.js';
 import { ah } from '../util.js';
 import { hashPassword, checkPassword, signClientToken, requireClient } from '../auth.js';
 import { createClient } from '../services/clients.js';
-import { getVapid, validSubscription, saveSubscription, removeSubscription, countSubscriptions } from '../services/push.js';
+import { getVapid, validSubscription, saveSubscription, removeSubscription, countSubscriptions, sendToClient, makePayload } from '../services/push.js';
 
 export const clientAppRouter = Router();
 
@@ -205,6 +205,26 @@ clientAppRouter.post(
     const endpoint = String((req.body || {}).endpoint || '');
     if (endpoint) await removeSubscription(req.client.id, endpoint);
     res.json({ ok: true, devices: await countSubscriptions(req.client.id) });
+  })
+);
+// Тестовое уведомление самому себе — гость проверяет, что всё работает.
+// Не чаще 5 раз за 10 минут на гостя, чтобы не долбить push-сервисы.
+const pushTestLog = new Map();
+clientAppRouter.post(
+  '/push/test',
+  ah(async (req, res) => {
+    const now = Date.now();
+    const hist = (pushTestLog.get(req.client.id) || []).filter((t) => now - t < 10 * 60 * 1000);
+    if (hist.length >= 5) return res.status(429).json({ error: 'Слишком часто. Попробуйте через несколько минут.' });
+    hist.push(now);
+    pushTestLog.set(req.client.id, hist);
+    const devices = await countSubscriptions(req.client.id);
+    if (!devices) return res.status(409).json({ error: 'На этом устройстве уведомления ещё не включены', devices: 0 });
+    const r = await sendToClient(
+      req.client.id,
+      makePayload({ title: 'ЧайЛэнд', body: 'Уведомления работают! Так будут приходить новости и напоминания о празднике 🎉', url: '/lk/#prof', tag: 'push-test' })
+    );
+    res.json({ ok: true, ...r, devices: await countSubscriptions(req.client.id) });
   })
 );
 

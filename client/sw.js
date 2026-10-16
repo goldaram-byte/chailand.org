@@ -1,6 +1,6 @@
 // Service worker личного кабинета «Чайлэнд».
 // Кэшируем оболочку приложения, чтобы карта открывалась и без сети.
-const CACHE = 'gab-lk-v14';
+const CACHE = 'gab-lk-v15';
 const ASSETS = ['/lk/', '/lk/index.html', '/lk/manifest.webmanifest', '/logo.png', '/lk/driftland.svg', '/lk/driftland-mark.svg'];
 
 self.addEventListener('install', (e) => {
@@ -18,6 +18,19 @@ self.addEventListener('fetch', (e) => {
   // API и QR — всегда сеть, не кэшируем (данные должны быть свежими).
   if (url.pathname.startsWith('/api/')) return;
   if (e.request.method !== 'GET') return;
+  // Оболочка приложения (HTML) — сначала сеть, чтобы после обновления на сервере
+  // гость сразу видел новую версию; кэш — только когда сети нет.
+  if (e.request.mode === 'navigate' || url.pathname === '/lk/' || url.pathname === '/lk/index.html') {
+    e.respondWith(
+      fetch(e.request)
+        .then((resp) => {
+          if (resp.ok) { const copy = resp.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
+          return resp;
+        })
+        .catch(() => caches.match(e.request).then((c) => c || caches.match('/lk/')))
+    );
+    return;
+  }
   e.respondWith(
     caches.match(e.request).then((cached) =>
       cached ||

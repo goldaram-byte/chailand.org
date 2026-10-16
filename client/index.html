@@ -351,7 +351,13 @@
         <h2>🔔 Уведомления</h2>
         <p class="howto">Новости парка, акции и напоминания о празднике — прямо на телефон.</p>
         <div id="pushStatus" class="muted" style="font-size:13.5px;margin-bottom:12px">Проверяем…</div>
-        <button class="btn primary" id="pushBtn" onclick="pushToggle()" style="display:none">Включить уведомления</button>
+        <ol id="pushSteps" class="hidden" style="margin:0 0 12px;padding-left:20px;font-size:14px;line-height:1.5"></ol>
+        <div id="pushErr" class="hidden" style="background:#fef2f2;border:1px solid #fca5a5;border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:13.5px;color:#991b1b"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn primary" id="pushBtn" onclick="pushToggle()" style="display:none">Включить уведомления</button>
+          <button class="btn ghost" id="pushTestBtn" onclick="pushTest()" style="display:none">Прислать тестовое</button>
+        </div>
+        <div id="pushDiag" class="muted" style="font-size:11.5px;margin-top:10px;opacity:.7"></div>
       </div>
 
       <div class="panel">
@@ -674,11 +680,24 @@
 
   // ---- Профиль ----
   // ---- Push-уведомления ----
-  var PUSH_SUB = null, PUSH_KEY = null;
+  var PUSH_SUB = null, PUSH_KEY = null, PUSH_ERR = '';
+  var UA = navigator.userAgent || '';
+  // iPad на iPadOS представляется как Mac — отличаем по сенсорному экрану
+  function isIosDevice(){ return /iPhone|iPad|iPod/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1); }
+  function isStandalone(){ return !!window.navigator.standalone || !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches); }
+  function iosVersion(){ var m = /OS (\d+)[_.](\d+)/.exec(UA); return m ? Number(m[1]) + Number(m[2]) / 100 : 0; }
+  function iosVersionText(){ var m = /OS (\d+)[_.](\d+)/.exec(UA); return m ? m[1] + '.' + m[2] : '?'; }
   function pushSupported(){ return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
-  function isIosBrowserTab(){
-    return /iPhone|iPad|iPod/.test(navigator.userAgent) && !window.navigator.standalone &&
-      !(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  function isIosBrowserTab(){ return isIosDevice() && !isStandalone(); }
+  function browserName(){
+    if (/YaBrowser/.test(UA)) return 'Яндекс Браузер';
+    if (/EdgiOS|Edg\//.test(UA)) return 'Edge';
+    if (/OPR\/|OPiOS/.test(UA)) return 'Opera';
+    if (/SamsungBrowser/.test(UA)) return 'Samsung Internet';
+    if (/FxiOS|Firefox/.test(UA)) return 'Firefox';
+    if (/CriOS|Chrome/.test(UA)) return 'Chrome';
+    if (/Safari/.test(UA)) return 'Safari';
+    return 'браузер';
   }
   function urlB64ToU8(b64){
     var pad = '='.repeat((4 - b64.length % 4) % 4);
@@ -687,39 +706,86 @@
     for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
     return arr;
   }
+  // Понятное объяснение ошибки подписки вместо технического текста браузера
+  function pushErrorText(e){
+    var m = String((e && e.message) || e || '');
+    if (/push service|Registration failed|AbortError|service error/i.test(m))
+      return 'Push-сервис недоступен на этом устройстве. На Android так бывает без сервисов Google (например, Huawei) или когда их блокирует сеть — попробуйте другой браузер (Chrome, Яндекс Браузер) или подключение через мобильный интернет / другой Wi‑Fi. Техническая причина: ' + m;
+    if (/not allowed|permission|denied|NotAllowedError/i.test(m))
+      return 'Браузер не дал разрешение на уведомления. Проверьте настройки сайта/приложения и попробуйте снова. (' + m + ')';
+    if (/timeout|service worker/i.test(m))
+      return 'Приложение не смогло запустить фоновый сервис. Закройте его полностью, откройте снова и повторите. (' + m + ')';
+    if (/Failed to fetch|NetworkError|Load failed/i.test(m))
+      return 'Нет связи с сервером — проверьте интернет и попробуйте снова.';
+    return 'Не удалось включить уведомления: ' + (m || 'неизвестная ошибка');
+  }
+  function pushDiagText(){
+    var parts = [];
+    parts.push(isIosDevice() ? ('iOS ' + iosVersionText()) : (/Android/.test(UA) ? 'Android' : 'Компьютер'));
+    parts.push(browserName());
+    parts.push(isStandalone() ? 'открыто с экрана «Домой»' : 'открыто в браузере');
+    parts.push('push: ' + (pushSupported() ? 'есть' : 'нет'));
+    if ('Notification' in window) parts.push('разрешение: ' + ({granted:'дано', denied:'запрещено', default:'не спрашивали'}[Notification.permission] || Notification.permission));
+    return parts.join(' · ');
+  }
   function pushRenderStatus(){
-    var st = $('pushStatus'), btn = $('pushBtn');
+    var st = $('pushStatus'), btn = $('pushBtn'), test = $('pushTestBtn'), steps = $('pushSteps'), err = $('pushErr'), diag = $('pushDiag');
     if (!st || !btn) return;
-    btn.style.display = 'none';
+    btn.style.display = 'none'; test.style.display = 'none'; steps.className = 'hidden'; steps.innerHTML = '';
+    err.className = PUSH_ERR ? '' : 'hidden'; err.textContent = PUSH_ERR;
+    diag.textContent = pushDiagText();
     if (!pushSupported()){
-      st.textContent = isIosBrowserTab()
-        ? 'На iPhone уведомления работают только из приложения на экране «Домой»: в Safari нажмите «Поделиться» → «На экран «Домой»», откройте приложение оттуда и включите уведомления здесь.'
-        : 'Ваш браузер не поддерживает уведомления.';
+      if (isIosBrowserTab()){
+        if (iosVersion() && iosVersion() < 16.04){
+          st.textContent = 'На iPhone уведомления работают начиная с iOS 16.4. Обновите iOS в «Настройки → Основные → Обновление ПО».';
+          return;
+        }
+        st.textContent = 'На iPhone уведомления работают только из приложения на экране «Домой». Это займёт минуту:';
+        steps.className = '';
+        steps.innerHTML = '<li>Откройте эту страницу в <b>Safari</b> (адрес chailand.org/lk).</li>' +
+          '<li>Нажмите внизу кнопку <b>«Поделиться»</b> (квадрат со стрелкой вверх).</li>' +
+          '<li>Выберите <b>«На экран «Домой»»</b> и нажмите «Добавить».</li>' +
+          '<li>Откройте значок <b>«Чайлэнд»</b> на экране «Домой», войдите и нажмите здесь «Включить уведомления».</li>';
+        return;
+      }
+      st.textContent = 'Этот браузер не поддерживает уведомления. Откройте chailand.org/lk в Chrome или Яндекс Браузере' + (isIosDevice() ? '' : ' и добавьте приложение на главный экран') + '.';
       return;
     }
     if (Notification.permission === 'denied'){
-      st.textContent = 'Уведомления запрещены в настройках браузера. Разрешите их для сайта и обновите страницу.';
+      st.textContent = isIosDevice()
+        ? 'Уведомления запрещены. Откройте «Настройки» iPhone → «Уведомления» → «Чайлэнд» и включите «Допуск уведомлений», затем вернитесь сюда.'
+        : 'Уведомления запрещены в настройках браузера. Нажмите на замок рядом с адресом сайта, разрешите уведомления и обновите страницу.';
       return;
     }
     if (PUSH_SUB){
       st.textContent = '✅ Уведомления включены на этом устройстве.';
       btn.textContent = 'Отключить на этом устройстве'; btn.className = 'btn ghost'; btn.style.display = '';
+      test.style.display = '';
     } else {
       st.textContent = 'Уведомления выключены.';
       btn.textContent = 'Включить уведомления'; btn.className = 'btn primary'; btn.style.display = '';
     }
   }
+  // Готовый сервис-воркер: регистрируем сами (вдруг не успел при старте) и ждём не дольше 10 секунд,
+  // иначе кнопка «зависает» без объяснения.
+  function swReady(){
+    var reg = ('serviceWorker' in navigator) ? navigator.serviceWorker.register('/lk/sw.js', { scope:'/lk/' }).catch(function(){}) : Promise.resolve();
+    return Promise.race([
+      reg.then(function(){ return navigator.serviceWorker.ready; }),
+      new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('service worker timeout')); }, 10000); })
+    ]);
+  }
   // при входе: если подписка уже есть — обновим её на сервере (привяжем к этому гостю)
   function pushRefresh(){
     if (!pushSupported()){ pushRenderStatus(); return; }
-    navigator.serviceWorker.ready.then(function(reg){ return reg.pushManager.getSubscription(); }).then(function(sub){
+    swReady().then(function(reg){ return reg.pushManager.getSubscription(); }).then(function(sub){
       PUSH_SUB = (sub && Notification.permission === 'granted') ? sub : null;
       if (PUSH_SUB) api('/push/subscribe', { method:'POST', body:{ subscription: PUSH_SUB.toJSON() } }).catch(function(){});
       pushRenderStatus();
     }).catch(function(){ pushRenderStatus(); });
   }
   window.pushToggle = function(){
-    var btn = $('pushBtn'); btn.disabled = true;
+    var btn = $('pushBtn'); btn.disabled = true; PUSH_ERR = '';
     var done = function(){ btn.disabled = false; pushRenderStatus(); };
     if (PUSH_SUB){
       var ep = PUSH_SUB.endpoint;
@@ -729,18 +795,28 @@
       }).then(function(){ toast('Уведомления отключены'); done(); });
       return;
     }
-    Notification.requestPermission().then(function(perm){
-      if (perm !== 'granted') throw new Error('Вы не разрешили уведомления');
+    // requestPermission — строго в ответ на нажатие (iOS иначе отказывает)
+    var permP;
+    try { permP = Promise.resolve(Notification.requestPermission()); } catch(e){ permP = Promise.reject(e); }
+    permP.then(function(perm){
+      if (perm !== 'granted') throw new Error(perm === 'denied' ? 'Вы запретили уведомления' : 'Вы не разрешили уведомления');
       return (PUSH_KEY ? Promise.resolve(PUSH_KEY) : api('/push/vapid-key').then(function(r){ PUSH_KEY = r.publicKey; return PUSH_KEY; }));
     }).then(function(key){
-      return navigator.serviceWorker.ready.then(function(reg){
+      return swReady().then(function(reg){
         return reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: urlB64ToU8(key) });
       });
     }).then(function(sub){
       PUSH_SUB = sub;
       return api('/push/subscribe', { method:'POST', body:{ subscription: sub.toJSON() } });
     }).then(function(){ toast('Уведомления включены 🎉'); done(); })
-      .catch(function(e){ toast(e.message || 'Не удалось включить уведомления', true); done(); });
+      .catch(function(e){ PUSH_ERR = pushErrorText(e); toast('Не удалось включить уведомления', true); done(); });
+  };
+  window.pushTest = function(){
+    var b = $('pushTestBtn'); b.disabled = true;
+    api('/push/test', { method:'POST', body:{} }).then(function(r){
+      if (r.sent > 0) toast('Отправили — уведомление появится через несколько секунд');
+      else { PUSH_ERR = 'Сервер не смог доставить уведомление (ошибок: ' + (r.error||0) + ', устаревших подписок: ' + (r.gone||0) + '). Отключите и включите уведомления заново.'; toast('Не доставлено', true); pushRenderStatus(); }
+    }).catch(function(e){ toast(e.message, true); }).then(function(){ b.disabled = false; });
   };
 
   function fillProfile(){
