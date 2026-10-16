@@ -131,6 +131,48 @@ clientAppRouter.post(
 clientAppRouter.use(requireClient);
 
 // ---------------------------------------------------------------------------
+// Чат с парком: гость пишет из приложения, отвечает сотрудник из админки
+// ---------------------------------------------------------------------------
+clientAppRouter.get(
+  '/chat',
+  ah(async (req, res) => {
+    const after = Number(req.query.after_id) || 0;
+    const rows = await q(
+      `SELECT m.id, m.from_staff, m.text, m.created_at, u.full_name AS staff_name
+         FROM client_messages m LEFT JOIN users u ON u.id = m.user_id
+        WHERE m.client_id=$1 AND m.id > $2 ORDER BY m.id DESC LIMIT 100`,
+      [req.client.id, after]
+    );
+    rows.reverse();
+    if (rows.length) await q(`UPDATE client_messages SET client_read_at=now() WHERE client_id=$1 AND from_staff AND client_read_at IS NULL AND id <= $2`, [req.client.id, rows[rows.length - 1].id]);
+    res.json(rows);
+  })
+);
+clientAppRouter.get(
+  '/chat/unread',
+  ah(async (req, res) => {
+    const r = await q1(`SELECT count(*)::int AS n FROM client_messages WHERE client_id=$1 AND from_staff AND client_read_at IS NULL`, [req.client.id]);
+    res.json({ unread: r ? r.n : 0 });
+  })
+);
+clientAppRouter.post(
+  '/chat',
+  ah(async (req, res) => {
+    const text = noTags(String((req.body || {}).text || '')).trim();
+    if (!text) return res.status(400).json({ error: 'Напишите сообщение' });
+    if (text.length > 2000) return res.status(400).json({ error: 'Слишком длинное сообщение (до 2000 символов)' });
+    // защита от флуда: не больше 30 сообщений за 10 минут
+    const recent = await q1(`SELECT count(*)::int AS n FROM client_messages WHERE client_id=$1 AND NOT from_staff AND created_at > now() - interval '10 minutes'`, [req.client.id]);
+    if (recent && recent.n >= 30) return res.status(429).json({ error: 'Слишком много сообщений, подождите немного' });
+    const row = await q1(
+      `INSERT INTO client_messages (client_id, from_staff, text) VALUES ($1,false,$2) RETURNING id, from_staff, text, created_at`,
+      [req.client.id, text]
+    );
+    res.json(row);
+  })
+);
+
+// ---------------------------------------------------------------------------
 // Push-уведомления: публичный VAPID-ключ, подписка и отписка устройства
 // ---------------------------------------------------------------------------
 clientAppRouter.get(

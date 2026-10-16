@@ -358,6 +358,22 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   last_sent_at timestamptz
 );
 CREATE INDEX IF NOT EXISTS idx_push_subs_client ON push_subscriptions(client_id);
+
+-- Чат гостя с парком из личного кабинета. from_staff=false — написал гость,
+-- true — ответил сотрудник (user_id). staff_read_at — когда сотрудник прочитал
+-- сообщение гостя; client_read_at — когда гость прочитал ответ.
+CREATE TABLE IF NOT EXISTS client_messages (
+  id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  client_id      bigint NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  from_staff     boolean NOT NULL DEFAULT false,
+  user_id        bigint REFERENCES users(id) ON DELETE SET NULL,
+  text           text NOT NULL,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  staff_read_at  timestamptz,
+  client_read_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS idx_client_messages_client ON client_messages(client_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_client_messages_unread ON client_messages(from_staff, staff_read_at) WHERE staff_read_at IS NULL;
 -- Быстрый вход по телефону: сравниваем только цифры номера
 CREATE INDEX IF NOT EXISTS idx_clients_phone_digits
   ON clients ((regexp_replace(phone, '\D', '', 'g')));

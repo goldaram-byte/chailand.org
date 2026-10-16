@@ -8,6 +8,7 @@ import { Router } from 'express';
 import { q, q1 } from '../db.js';
 import { requireAuth } from '../auth.js';
 import { ah, audit } from '../util.js';
+import { sendToClient, makePayload } from '../services/push.js';
 
 export const chatRouter = Router();
 chatRouter.use(requireAuth);
@@ -84,6 +85,72 @@ chatRouter.get(
     const head = threads.slice(0, 1);
     const tail = threads.slice(1).sort((a, b) => String(b.last_at || '').localeCompare(String(a.last_at || '')));
     res.json(head.concat(tail));
+  })
+);
+
+// ---- Чаты с гостями (личный кабинет) ----
+// GET /api/chat/clients/threads — гости, которые писали: последнее сообщение
+// и сколько их сообщений ещё не прочитано сотрудниками (общая очередь).
+chatRouter.get(
+  '/clients/threads',
+  ah(async (req, res) => {
+    const rows = await q(
+      `SELECT c.id AS client_id, c.full_name AS name, c.phone, c.card_no,
+              l.text AS last_text, l.created_at AS last_at, l.from_staff AS last_from_staff,
+              (SELECT count(*)::int FROM client_messages u WHERE u.client_id=c.id AND NOT u.from_staff AND u.staff_read_at IS NULL) AS unread
+         FROM clients c
+         JOIN LATERAL (SELECT text, created_at, from_staff FROM client_messages m WHERE m.client_id=c.id ORDER BY m.id DESC LIMIT 1) l ON true
+        ORDER BY unread DESC, l.created_at DESC
+        LIMIT 200`
+    );
+    res.json(rows);
+  })
+);
+// GET /api/chat/clients/unread — сколько сообщений гостей ждут ответа (для бейджа)
+chatRouter.get(
+  '/clients/unread',
+  ah(async (req, res) => {
+    const r = await q1(`SELECT count(*)::int AS n, COALESCE(max(id),0)::int AS last_id FROM client_messages WHERE NOT from_staff AND staff_read_at IS NULL`);
+    res.json({ unread: r ? r.n : 0, last_id: r ? r.last_id : 0 });
+  })
+);
+// GET /api/chat/clients/:id?after_id=M&mark_read=1 — переписка с гостем
+chatRouter.get(
+  '/clients/:id',
+  ah(async (req, res) => {
+    const cid = Number(req.params.id);
+    const after = Number(req.query.after_id) || 0;
+    const rows = await q(
+      `SELECT m.id, m.from_staff, m.user_id, m.text, m.created_at, u.full_name AS user_name
+         FROM client_messages m LEFT JOIN users u ON u.id = m.user_id
+        WHERE m.client_id=$1 AND m.id > $2 ORDER BY m.id DESC LIMIT 100`,
+      [cid, after]
+    );
+    rows.reverse();
+    if (req.query.mark_read && rows.length) {
+      await q(`UPDATE client_messages SET staff_read_at=now() WHERE client_id=$1 AND NOT from_staff AND staff_read_at IS NULL AND id <= $2`, [cid, rows[rows.length - 1].id]);
+    }
+    res.json(rows);
+  })
+);
+// POST /api/chat/clients/:id {text} — ответ гостю; уходит и пушем в приложение
+chatRouter.post(
+  '/clients/:id',
+  ah(async (req, res) => {
+    const cid = Number(req.params.id);
+    const c = await q1('SELECT id, full_name FROM clients WHERE id=$1', [cid]);
+    if (!c) return res.status(404).json({ error: 'Клиент не найден' });
+    const text = String((req.body || {}).text || '').trim();
+    if (!text) return res.status(400).json({ error: 'Пустое сообщение' });
+    if (text.length > 2000) return res.status(400).json({ error: 'Слишком длинное сообщение (до 2000 символов)' });
+    const row = await q1(
+      `INSERT INTO client_messages (client_id, from_staff, user_id, text) VALUES ($1,true,$2,$3) RETURNING id, from_staff, user_id, text, created_at`,
+      [cid, req.user.id, text]
+    );
+    // всё непрочитанное от гостя считаем прочитанным — на него ответили
+    await q(`UPDATE client_messages SET staff_read_at=now() WHERE client_id=$1 AND NOT from_staff AND staff_read_at IS NULL`, [cid]);
+    sendToClient(cid, makePayload({ title: '💬 ЧайЛэнд', body: text.slice(0, 200), url: '/lk/#chat', tag: 'chat-' + cid })).catch(() => {});
+    res.json({ ...row, user_name: req.user.name });
   })
 );
 

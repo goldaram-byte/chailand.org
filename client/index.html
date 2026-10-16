@@ -137,6 +137,16 @@
   .tab{flex:1;background:none;border:0;color:var(--muted);padding:8px 2px 6px;font-size:11px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
   .tab .ic{font-size:22px;line-height:1}
   .tab.active{color:#FF9A1F}
+  .tab{position:relative}
+  .tab .tb{position:absolute;top:2px;right:calc(50% - 22px);min-width:18px;height:18px;border-radius:999px;background:#E8291F;color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 5px}
+  .chat-msgs{display:flex;flex-direction:column;gap:8px;min-height:200px;max-height:55vh;overflow-y:auto;padding:4px 2px}
+  .cm{max-width:84%;padding:9px 13px;border-radius:14px;font-size:14.5px;line-height:1.4;background:rgba(255,255,255,.08);border:1px solid var(--line);align-self:flex-start}
+  .cm.mine{align-self:flex-end;background:linear-gradient(135deg,rgba(255,154,31,.28),rgba(232,41,31,.22));border-color:rgba(255,154,31,.35)}
+  .cm .who{font-size:11px;font-weight:800;color:var(--gold);margin-bottom:2px}
+  .cm .tm{font-size:10.5px;color:var(--muted);margin-top:3px;text-align:right}
+  .chat-form{display:flex;gap:8px;margin-top:12px;align-items:flex-end}
+  .chat-form textarea{flex:1;min-height:44px;max-height:120px;resize:none}
+  .chat-form button{flex:none;width:48px;height:44px;border-radius:14px;border:0;background:linear-gradient(135deg,#FF9A1F,#E8291F);color:#fff;font-size:18px;cursor:pointer}
 
   /* Auth */
   .authwrap{max-width:440px;margin:0 auto;padding:0 20px calc(30px + env(safe-area-inset-bottom));min-height:100vh;display:flex;flex-direction:column;justify-content:center}
@@ -301,6 +311,19 @@
       </div>
     </div>
 
+    <!-- ВКЛАДКА: ЧАТ С ПАРКОМ -->
+    <div id="v-chat" class="view hidden">
+      <div class="panel">
+        <h2>💬 Чат с парком</h2>
+        <p class="howto">Вопрос по празднику, абонементу или бонусам? Напишите — администратор ответит здесь, а ответ придёт уведомлением.</p>
+        <div class="chat-msgs" id="chatMsgs"><div class="empty">Сообщений пока нет — напишите нам 👋</div></div>
+        <div class="chat-form">
+          <textarea id="chatText" placeholder="Ваше сообщение…" rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatSend();}"></textarea>
+          <button onclick="chatSend()" aria-label="Отправить">➤</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ВКЛАДКА: ПРОФИЛЬ -->
     <div id="v-prof" class="view hidden">
       <div class="panel">
@@ -347,6 +370,7 @@
     <button class="tab" data-v="news" onclick="go('news')"><span class="ic">📰</span>Новости</button>
     <button class="tab" data-v="ref" onclick="go('ref')"><span class="ic">👥</span>Друзья</button>
     <button class="tab" data-v="party" onclick="go('party')"><span class="ic">🎉</span>Праздник</button>
+    <button class="tab" data-v="chat" onclick="go('chat')"><span class="ic">💬</span>Чат<span class="tb" id="chatTabBadge" hidden></span></button>
     <button class="tab" data-v="prof" onclick="go('prof')"><span class="ic">👤</span>Профиль</button>
   </nav>
 </section>
@@ -425,7 +449,7 @@
   };
 
   window.logout = function(){
-    TK = ''; ME = null; localStorage.removeItem(TKEY);
+    TK = ''; ME = null; localStorage.removeItem(TKEY); CHAT_LAST = 0; if (CHAT_TIMER) clearInterval(CHAT_TIMER);
     $('appScreen').className = 'hidden';
     $('authScreen').className = '';
     $('aPass').value = '';
@@ -436,14 +460,14 @@
     $('authScreen').className = 'hidden';
     $('appScreen').className = '';
     loadMe(); loadQR(); loadHistory(); loadPasses();
-    pushRefresh();
-    // ссылка из уведомления: /lk/#news или /lk/#party — открыть нужную вкладку
+    pushRefresh(); chatStart();
+    // ссылка из уведомления: /lk/#news, /lk/#party, /lk/#chat — открыть нужную вкладку
     var h = (location.hash || '').replace('#','');
-    if (h && ['card','news','ref','party','prof'].indexOf(h) !== -1){ go(h); history.replaceState(null, '', location.pathname); }
+    if (h && ['card','news','ref','party','chat','prof'].indexOf(h) !== -1){ go(h); history.replaceState(null, '', location.pathname); }
   }
 
   window.go = function(v){
-    ['card','news','ref','party','prof'].forEach(function(k){
+    ['card','news','ref','party','chat','prof'].forEach(function(k){
       $('v-'+k).className = 'view' + (k===v?'':' hidden');
     });
     var tabs = document.querySelectorAll('.tab');
@@ -451,7 +475,41 @@
     if (v==='news') loadNews();
     if (v==='ref') loadReferrals();
     if (v==='prof') fillProfile();
+    if (v==='chat') chatLoad();
     window.scrollTo(0,0);
+  };
+
+  // ---- Чат с парком ----
+  var CHAT_LAST = 0, CHAT_TIMER = null;
+  function chatEsc(t){ return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function chatTm(ts){ var d=new Date(ts), today=new Date().toDateString()===d.toDateString(); var hm=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); return today?hm:(String(d.getDate()).padStart(2,'0')+'.'+String(d.getMonth()+1).padStart(2,'0')+' '+hm); }
+  function chatBadge(n){ var b=$('chatTabBadge'); if(!b) return; if(n>0){ b.textContent=n>9?'9+':n; b.hidden=false; } else b.hidden=true; }
+  function chatDraw(list, append){
+    var box=$('chatMsgs'); if(!box) return;
+    var html=list.map(function(m){
+      return '<div class="cm'+(m.from_staff?'':' mine')+'">'+(m.from_staff?'<div class="who">'+chatEsc(m.staff_name||'ЧайЛэнд')+'</div>':'')+
+        chatEsc(m.text).replace(/\n/g,'<br>')+'<div class="tm">'+chatTm(m.created_at)+'</div></div>';
+    }).join('');
+    if(append) box.insertAdjacentHTML('beforeend', html); else box.innerHTML = html || '<div class="empty">Сообщений пока нет — напишите нам 👋</div>';
+    box.scrollTop = box.scrollHeight;
+  }
+  function chatLoad(){
+    if(!TK) return;
+    api('/chat?after_id='+CHAT_LAST).then(function(list){
+      list=list||[]; if(!list.length){ if(CHAT_LAST===0) chatDraw([],false); return; }
+      var fresh=CHAT_LAST===0; CHAT_LAST=list[list.length-1].id; chatDraw(list, !fresh); chatBadge(0);
+    }).catch(function(){});
+  }
+  function chatPoll(){
+    if(!TK || document.hidden) return;
+    var onChat = !$('v-chat').className.includes('hidden');
+    if(onChat) chatLoad(); else api('/chat/unread').then(function(r){ chatBadge(r.unread||0); }).catch(function(){});
+  }
+  function chatStart(){ if(CHAT_TIMER) clearInterval(CHAT_TIMER); chatPoll(); CHAT_TIMER=setInterval(chatPoll, 10000); }
+  window.chatSend = function(){
+    var t=$('chatText'); var text=t.value.trim(); if(!text) return;
+    t.value='';
+    api('/chat',{method:'POST',body:{text:text}}).then(function(){ chatLoad(); }).catch(function(e){ t.value=text; toast(e.message||'Не удалось отправить', true); });
   };
 
   // ---- Новости (публичные, читаются и без входа) ----
