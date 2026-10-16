@@ -573,6 +573,10 @@
     var crmStatsTimer = null;
     window.loadCrmStats = function () {
       if (!SERVER) return;
+      var card = document.getElementById('crmStatsCard');
+      var isOwner = !!(ME && ME.role === 'owner');
+      if (card) card.hidden = !isOwner;
+      if (!isOwner) return;
       var box = document.getElementById('crmStatsBody'); if (!box) return;
       clearTimeout(crmStatsTimer);
       crmStatsTimer = setTimeout(function () {
