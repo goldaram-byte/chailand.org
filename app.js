@@ -201,6 +201,7 @@
       stage: stageRu(l.status), note: l.note || '', converted: !!l.client_id && l.status === 'won',
       client_id: l.client_id || null,
       owner_id: l.owner_id || null, owner: l.owner_name || null,
+      lost_reason: l.lost_reason || '',
       tasks: (l.tasks || []).map(function (t) { return { id: t.id, text: t.title, done: t.done, due: t.due_date || '' }; }),
       notes: (l.notes || []).map(function (n) { return { id: n.id, text: n.text }; }),
       created: (l.created_at || '').slice(0, 10),
@@ -540,9 +541,87 @@
     var _setStage = window.setLeadStage;
     window.setLeadStage = function (id, stage) {
       var l = findLead(id); if (!l || l.stage === stage) return;
+      var body = { status: STAGE_CODE[stage] || 'new' };
+      if (stage === 'Отказ') {
+        var r = prompt('Причина отказа (дорого, выбрали другое место, не дозвонились…)', l.lost_reason || '');
+        if (r === null) return;
+        body.lost_reason = r.trim(); l.lost_reason = body.lost_reason;
+      }
       if (typeof _setStage === 'function') _setStage(id, stage); else { l.stage = stage; rc(); }
-      if (SERVER) api('/crm/leads/' + id, { method: 'PUT', body: { status: STAGE_CODE[stage] || 'new' } }).then(refreshClients).catch(function () {});
+      if (SERVER) api('/crm/leads/' + id, { method: 'PUT', body: body }).then(function () { refreshClients(); window.loadCrmStats(); }).catch(function () {});
     };
+    window.setLostReason = function (id) {
+      var l = findLead(id); if (!l) return;
+      var r = prompt('Причина отказа', l.lost_reason || '');
+      if (r === null) return;
+      l.lost_reason = r.trim(); rc();
+      if (SERVER) api('/crm/leads/' + id, { method: 'PUT', body: { lost_reason: l.lost_reason } }).then(function () { window.loadCrmStats(); }).catch(function () {});
+    };
+
+    // --- Картина воронки: цифры за период ---
+    function crmRange() {
+      var p = (typeof CRM_PERIOD !== 'undefined') ? CRM_PERIOD : '30';
+      var ymd = function (d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+      var now = new Date(), from, to = ymd(now);
+      if (p === 'today') from = to;
+      else if (p === '7') from = ymd(new Date(now.getTime() - 6 * 86400000));
+      else if (p === 'month') from = ymd(new Date(now.getFullYear(), now.getMonth(), 1));
+      else if (p === 'custom') { from = (document.getElementById('crmFrom') || {}).value || to; to = (document.getElementById('crmTo') || {}).value || to; }
+      else from = ymd(new Date(now.getTime() - 29 * 86400000));
+      return { from: from, to: to };
+    }
+    var crmStatsTimer = null;
+    window.loadCrmStats = function () {
+      if (!SERVER) return;
+      var box = document.getElementById('crmStatsBody'); if (!box) return;
+      clearTimeout(crmStatsTimer);
+      crmStatsTimer = setTimeout(function () {
+        var r = crmRange();
+        api('/crm/stats?from=' + r.from + '&to=' + r.to).then(renderCrmStats).catch(function (e) { box.innerHTML = '<div class="muted">' + cardEsc(e.message || 'Не удалось загрузить') + '</div>'; });
+      }, 150);
+    };
+    function pctBar(n, of) { var p = of ? Math.min(100, Math.round(n / of * 100)) : 0; return '<div class="dbar"><span style="width:' + p + '%"></span></div>'; }
+    function hrs(h) { if (h == null) return '—'; return h < 1 ? Math.round(h * 60) + ' мин' : (h < 48 ? (Math.round(h * 10) / 10) + ' ч' : Math.round(h / 24) + ' дн'); }
+    function renderCrmStats(d) {
+      var box = document.getElementById('crmStatsBody'); if (!box) return;
+      var closed = d.won + d.lost;
+      var tiles =
+        '<div class="crm-tiles">' +
+        '<div class="stat"><div class="sv">' + d.created + '</div><div class="sl">Поступило заявок</div><div class="sub">за период</div></div>' +
+        '<div class="stat"><div class="sv">' + d.touched + '</div><div class="sl">Обработано</div><div class="sub">взяты в работу · ' + d.processed_pct + '% от поступивших</div></div>' +
+        '<div class="stat"><div class="sv gr">' + d.won + '</div><div class="sl">Купили</div><div class="sub">' + fmtNum(d.won_amount) + '</div></div>' +
+        '<div class="stat"><div class="sv">' + d.lost + '</div><div class="sl">Отказались</div><div class="sub">' + (closed ? 'конверсия закрытых ' + d.conversion_closed_pct + '%' : 'закрытых пока нет') + '</div></div>' +
+        '<div class="stat"><div class="sv">' + hrs(d.avg_reaction_h) + '</div><div class="sl">Среднее время до взятия в работу</div><div class="sub">цель — 15 минут</div></div>' +
+        '<div class="stat"><div class="sv' + (d.open.stale_new ? ' warn' : '') + '">' + d.open.stale_new + '</div><div class="sl">Зависли без ответа</div><div class="sub">новые дольше 24 ч · без ответственного: ' + d.open.unassigned + '</div></div>' +
+        '</div>';
+      var flow =
+        '<div class="crm-flow">' +
+        '<div><small>Сейчас новых</small><b>' + d.open.new + '</b></div>' +
+        '<div><small>В работе</small><b>' + d.open.contact + '</b>' + (d.open.stale_open ? '<span class="pct" style="color:var(--red)">' + d.open.stale_open + ' без движения 3+ дня</span>' : '') + '</div>' +
+        '<div><small>Записаны</small><b>' + d.open.booking + '</b></div>' +
+        '<div><small>Итого открытых</small><b>' + d.open.total + '</b></div>' +
+        '<div><small>Купили за период</small><b>' + d.won + '</b><span class="pct">' + d.conversion_created_pct + '% от поступивших</span></div>' +
+        '</div>';
+      var users = (d.by_user || []).length
+        ? '<div class="tbl-wrap"><table><thead><tr><th>Сотрудник</th><th>Взял</th><th>Купили</th><th>Отказ</th><th>В работе</th><th>Конверсия</th><th>Сумма</th></tr></thead><tbody>' +
+          d.by_user.map(function (u) { var c = u.won + u.lost; return '<tr><td><b>' + cardEsc(u.name) + '</b><div class="kp muted" style="font-size:11px">' + (ROLE_RU[u.role] || u.role) + ' · переходов: ' + u.moves + '</div></td><td>' + u.taken + '</td><td style="color:var(--green);font-weight:700">' + u.won + '</td><td>' + u.lost + '</td><td>' + u.open + '</td><td>' + (c ? Math.round(u.won / c * 100) + '%' : '—') + pctBar(u.won, c) + '</td><td>' + fmtNum(u.won_amount) + '</td></tr>'; }).join('') +
+          '</tbody></table></div>'
+        : '<div class="muted" style="font-size:12.5px">Ни у одной заявки нет ответственного — назначайте «Кто ведёт заявку», и здесь появится работа каждого сотрудника.</div>';
+      var src = (d.by_source || []).length
+        ? '<div class="tbl-wrap"><table><thead><tr><th>Источник</th><th>Заявок</th><th>Купили</th><th>Отказ</th><th>Конверсия</th></tr></thead><tbody>' +
+          d.by_source.map(function (x) { var c = x.won + x.lost; return '<tr><td>' + cardEsc(x.source) + '</td><td>' + x.created + '</td><td style="color:var(--green);font-weight:700">' + x.won + '</td><td>' + x.lost + '</td><td>' + (c ? Math.round(x.won / c * 100) + '%' : '—') + '</td></tr>'; }).join('') +
+          '</tbody></table></div>'
+        : '<div class="muted" style="font-size:12.5px">За период заявок нет</div>';
+      var reasons = (d.lost_reasons || []).length
+        ? '<div style="margin-top:12px"><h4>Почему отказываются</h4>' + d.lost_reasons.map(function (x) { return '<div style="font-size:12.5px;padding:3px 0"><b>' + x.n + '</b> · ' + cardEsc(x.reason) + '</div>'; }).join('') + '</div>'
+        : '';
+      box.innerHTML = tiles + flow + '<div class="crm-grid"><div><h4>По сотрудникам</h4>' + users + '</div><div><h4>По источникам</h4>' + src + reasons + '</div></div>' +
+        '<div class="muted" style="font-size:11.5px;margin-top:10px">Поступило — по дате заявки; обработано — когда её взяли в работу (сменили этап или назначили ответственного); купили и отказ — по дате закрытия. Открытые и зависшие считаются на сейчас.</div>';
+    }
+    var _rcStats = window.renderCrm;
+    if (typeof _rcStats === 'function') {
+      window.renderCrm = function () { var r = _rcStats.apply(this, arguments); window.loadCrmStats(); return r; };
+    }
     window.moveLead = function (id, dir) {
       var l = findLead(id); if (!l) return;
       var i = STAGES.indexOf(l.stage) + dir; if (i < 0 || i >= STAGES.length) return;
