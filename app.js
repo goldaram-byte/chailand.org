@@ -1738,6 +1738,21 @@
     var PEER_NAME = '';
     var CTHREADS = [];               // чаты с гостями
     var CLIENT_LAST_ID = 0, CLIENT_INIT = false;
+    var CLIENT_READ_ID = 0;          // до какого нашего сообщения гость дочитал (плашка «прочитано»)
+    function applyReadState(readId) {
+      CLIENT_READ_ID = Math.max(CLIENT_READ_ID, readId || 0);
+      var box = el('chatMsgs'); if (!box || PEER_KIND !== 'client') return;
+      box.querySelectorAll('.ch-m.mine').forEach(function (m) {
+        var rd = m.querySelector('.rd'); if (!rd) return;
+        var read = Number(m.getAttribute('data-id')) <= CLIENT_READ_ID;
+        rd.textContent = read ? '✓✓ прочитано' : '✓ не прочитано';
+        rd.classList.toggle('on', read);
+      });
+    }
+    function pollReadState() {
+      if (PEER_KIND !== 'client' || PEER === undefined) return Promise.resolve();
+      return api('/chat/clients/' + PEER + '/state').then(function (r) { applyReadState(r.client_read_id || 0); }).catch(function () {});
+    }
     var BIG = false;                 // развёрнутый режим: список слева, переписка справа
     try { BIG = localStorage.getItem('chat_big') === '1'; } catch (e) {}
     function applyBig() { var p = el('chatPanel'); if (p) p.classList.toggle('big', BIG); var b = el('chatBig'); if (b) b.textContent = BIG ? '⤡' : '⤢'; }
@@ -1810,10 +1825,12 @@
           var who = m.from_staff ? (m.user_id === me ? '' : (m.user_name || 'Сотрудник')) : PEER_NAME;
           return '<div class="ch-m' + (m.from_staff ? ' mine' : '') + '" data-id="' + m.id + '">' +
             (who ? '<div class="who">' + esc(who) + '</div>' : '') +
-            esc(m.text).replace(/\n/g, '<br>') + '<div class="tm">' + fmtTm(m.created_at) + '</div></div>';
+            esc(m.text).replace(/\n/g, '<br>') + '<div class="tm">' + fmtTm(m.created_at) +
+            (m.from_staff ? ' <span class="rd" title="Прочитал ли гость">✓ не прочитано</span>' : '') + '</div></div>';
         }).join('');
         if (append) box.insertAdjacentHTML('beforeend', chtml); else box.innerHTML = chtml || '<div class="muted" style="font-size:12.5px;text-align:center;padding:20px 0">Сообщений пока нет</div>';
         box.scrollTop = box.scrollHeight;
+        applyReadState(CLIENT_READ_ID);
         return;
       }
       var html = list.map(function (m) {
@@ -1857,10 +1874,12 @@
       var url = PEER_KIND === 'client' ? '/chat/clients/' + PEER + '?after_id=' + LAST_ID + '&mark_read=1' : '/chat?' + qp;
       return api(url).then(function (list) {
         list = list || [];
-        if (!list.length) return;
-        var fresh = LAST_ID === 0;
-        LAST_ID = list[list.length - 1].id;
-        drawMsgs(list, !fresh);
+        if (list.length) {
+          var fresh = LAST_ID === 0;
+          LAST_ID = list[list.length - 1].id;
+          drawMsgs(list, !fresh);
+        }
+        return pollReadState();
       }).catch(function () {});
     }
     window.chatOpenClient = function (clientId, name) {
@@ -1871,7 +1890,7 @@
         name = (c && c.name) || (t && t.name) || 'Гость';
       }
       var pnl = el('chatPanel'); if (pnl && !pnl.classList.contains('open')) { pnl.classList.add('open'); OPEN = true; }
-      PEER = clientId; PEER_KIND = 'client'; PEER_NAME = name || 'Гость'; LAST_ID = 0;
+      PEER = clientId; PEER_KIND = 'client'; PEER_NAME = name || 'Гость'; LAST_ID = 0; CLIENT_READ_ID = 0;
       el('chatBack').hidden = false;
       el('chatTitle').textContent = '👤 ' + PEER_NAME;
       el('chatSub').textContent = 'гость · чат из приложения';

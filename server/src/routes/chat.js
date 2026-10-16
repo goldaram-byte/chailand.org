@@ -133,6 +133,21 @@ chatRouter.get(
     res.json(rows);
   })
 );
+// GET /api/chat/clients/:id/state — до какого сообщения гость прочитал наши ответы
+// (для плашки «прочитано») и до какого мы прочитали его сообщения
+chatRouter.get(
+  '/clients/:id/state',
+  ah(async (req, res) => {
+    const cid = Number(req.params.id);
+    const r = await q1(
+      `SELECT COALESCE(max(id) FILTER (WHERE from_staff AND client_read_at IS NOT NULL),0)::int AS client_read_id,
+              COALESCE(max(id) FILTER (WHERE NOT from_staff AND staff_read_at IS NOT NULL),0)::int AS staff_read_id
+         FROM client_messages WHERE client_id=$1`,
+      [cid]
+    );
+    res.json(r || { client_read_id: 0, staff_read_id: 0 });
+  })
+);
 // POST /api/chat/clients/:id {text} — ответ гостю; уходит и пушем в приложение
 chatRouter.post(
   '/clients/:id',

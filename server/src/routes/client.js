@@ -153,8 +153,14 @@ clientAppRouter.get(
 clientAppRouter.get(
   '/chat/unread',
   ah(async (req, res) => {
-    const r = await q1(`SELECT count(*)::int AS n FROM client_messages WHERE client_id=$1 AND from_staff AND client_read_at IS NULL`, [req.client.id]);
-    res.json({ unread: r ? r.n : 0 });
+    const r = await q1(
+      `SELECT count(*) FILTER (WHERE from_staff AND client_read_at IS NULL)::int AS n,
+              COALESCE(max(id) FILTER (WHERE NOT from_staff AND staff_read_at IS NOT NULL),0)::int AS staff_read_id
+         FROM client_messages WHERE client_id=$1`,
+      [req.client.id]
+    );
+    // staff_read_id — до какого своего сообщения гость может видеть «прочитано»
+    res.json({ unread: r ? r.n : 0, staff_read_id: r ? r.staff_read_id : 0 });
   })
 );
 clientAppRouter.post(
