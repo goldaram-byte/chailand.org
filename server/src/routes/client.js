@@ -138,7 +138,9 @@ clientAppRouter.get(
   ah(async (req, res) => {
     const after = Number(req.query.after_id) || 0;
     const rows = await q(
-      `SELECT m.id, m.from_staff, m.text, m.created_at, u.full_name AS staff_name
+      `-- гостю не показываем, что отвечал владелец: подпись «Развлекательный центр»
+       SELECT m.id, m.from_staff, m.text, m.created_at,
+              CASE WHEN u.role_code='owner' OR u.id IS NULL THEN 'Развлекательный центр' ELSE u.full_name END AS staff_name
          FROM client_messages m LEFT JOIN users u ON u.id = m.user_id
         WHERE m.client_id=$1 AND m.id > $2 ORDER BY m.id DESC LIMIT 100`,
       [req.client.id, after]
